@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cafeshopping
+      POSTGRES_PASSWORD: cafeshopping
+      POSTGRES_DB: cafe_shopping
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cafeshopping -d cafe_shopping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://cafeshopping:cafeshopping@postgres:5432/cafe_shopping
+      PORT: 3000
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      BACKUP_INTERVAL_DAYS: ${BACKUP_INTERVAL_DAYS:-3}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      # Opcional: URL publica desde donde se puede ver el link de la factura
+      # en un navegador. Ya NO es necesaria para el envio por WhatsApp (eso lo
+      # hace send_whatsapp_agent.ahk pegando el PNG directo en WhatsApp
+      # Desktop). Se llena a mano copiando la URL que imprime el servicio
+      # "tunnel" (ver abajo) y reiniciando el backend. Ver README.
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    volumes:
+      - backend_uploads:/app/uploads
+      - ./backend/prisma:/app/prisma
+      - ${BACKUP_HOST_DIR:-./backups}:/app/backups
+
+  # Expone el backend a internet con una URL publica real, SIN crear cuenta
+  # ni loguearte en nada (Cloudflare "quick tunnel"). Opcional: solo hace
+  # falta si quieres que el link de descarga de la factura funcione fuera de
+  # tu propia PC. El envio por WhatsApp NO depende de esto (send_whatsapp_
+  # agent.ahk envia el PNG directo, sin links).
+  #
+  # Limitacion: la URL cambia cada vez que se reinicia este contenedor. Hay
+  # que copiarla a mano al archivo .env (BACKEND_PUBLIC_URL) y reiniciar el
+  # backend despues de cada `docker compose up`. Ver README.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --url http://backend:3000
+    depends_on:
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:3000/api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '5173:80'
+
+volumes:
+  postgres_data:
+  backend_uploads:

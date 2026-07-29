@@ -1,0 +1,33 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+build/
+
+# Entornos
+.env
+.env.local
+backend/.env
+frontend/.env
+
+# Prisma
+backend/node_modules/.prisma
+
+# Uploads locales (fallback de desarrollo)
+backend/uploads/
+
+# Logs
+npm-debug.log*
+*.log
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+
+# Respaldos locales (nunca deben subirse a git ni a la nube publica)
+/backups/

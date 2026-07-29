@@ -1,0 +1,70 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { MetodoPago } from '@prisma/client';
+
+export class SaleItemDto {
+  @ApiProperty({ required: false, description: 'ID del producto si viene del catalogo' })
+  @IsOptional()
+  @IsString()
+  productId?: string;
+
+  @ApiProperty({ example: 'Cafe con leche 12oz' })
+  @IsString()
+  descripcion: string;
+
+  @ApiProperty({ example: 2 })
+  @IsInt()
+  @Min(1, { message: 'La cantidad debe ser al menos 1.' })
+  cantidad: number;
+
+  @ApiProperty({ example: 120.0 })
+  @IsNumber()
+  @IsPositive({ message: 'El precio unitario debe ser mayor a cero.' })
+  precioUnitario: number;
+}
+
+export class CreateSaleDto {
+  @ApiProperty({ required: false, description: 'Cliente asociado (requerido si metodoPago=CREDITO)' })
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
+  @ApiProperty({ enum: MetodoPago })
+  @IsEnum(MetodoPago, { message: 'Metodo de pago invalido.' })
+  metodoPago: MetodoPago;
+
+  @ApiProperty({ type: [SaleItemDto] })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'La venta debe tener al menos un item.' })
+  @ValidateNested({ each: true })
+  @Type(() => SaleItemDto)
+  items: SaleItemDto[];
+
+  @ApiProperty({ required: false, description: 'Tasa de impuesto a aplicar (0.18 = 18%). Si se omite se usa la tasa del negocio.' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tasaImpuesto?: number;
+
+  @ApiProperty({ required: false, description: 'Fecha limite de pago si metodoPago=CREDITO' })
+  @IsOptional()
+  @IsISO8601()
+  fechaVencimiento?: string;
+
+  @ApiProperty({ required: false, default: true, description: 'Genera automaticamente el PNG de la factura al crear la venta' })
+  @IsOptional()
+  generarFactura?: boolean;
+}
