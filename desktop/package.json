@@ -1,6 +1,6 @@
 {
   "name": "cafe-shopping-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Cafe Shopping - aplicacion de escritorio (Docker + WhatsApp agente en una sola ventana)",
   "main": "main.js",
   "private": true,
@@ -10,7 +10,8 @@
   },
   "devDependencies": {
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "electron-updater": "^6.1.7"
   },
   "build": {
     "appId": "com.cafeshopping.desktop",
@@ -45,6 +46,11 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Cafe Shopping"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "tu-usuario-github",
+      "repo": "cafe-shopping"
     }
   }
 }
