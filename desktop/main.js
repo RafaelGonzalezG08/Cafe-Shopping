@@ -120,13 +120,20 @@ async function ensureDockerRunning() {
 
 function dockerComposeUp() {
   return new Promise((resolve, reject) => {
+    // "--build": sin esto, si el auto-updater reemplazo los archivos del
+    // proyecto (backend/frontend nuevos) pero las imagenes de Docker locales
+    // quedaron viejas, "up -d" arrancaria igual los contenedores VIEJOS —
+    // la app se actualizaria de nombre pero seguiria corriendo el codigo
+    // anterior por dentro. Con --build, Docker reconstruye solo lo que
+    // cambio (usa cache de capas, asi que en la mayoria de los arranques
+    // sin cambios es casi instantaneo de todos modos).
     execFile(
       'docker',
-      ['compose', '-p', COMPOSE_PROJECT_NAME, 'up', '-d'],
-      { cwd: PROJECT_DIR, windowsHide: true, timeout: 5 * 60 * 1000 },
+      ['compose', '-p', COMPOSE_PROJECT_NAME, 'up', '-d', '--build'],
+      { cwd: PROJECT_DIR, windowsHide: true, timeout: 10 * 60 * 1000 },
       (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(`docker compose up -d fallo:\n${stderr || error.message}`));
+          reject(new Error(`docker compose up -d --build fallo:\n${stderr || error.message}`));
         } else {
           resolve();
         }
@@ -192,51 +199,129 @@ function createMainWindow() {
 }
 
 function setupAutoUpdater() {
-  // Configurar electron-updater en modo no-automático: nosotros controlamos
-  // cuándo verificar y cuándo instalar.
-  if (!app.isPackaged) {
-    autoUpdater.forceDevUpdateConfig = true;
+  const fs = require('fs');
+  const logFile = path.join(app.getPath('userData'), 'update-log.txt');
+  
+  function log(msg) {
+    const timestamp = new Date().toISOString();
+    const line = `[${timestamp}] ${msg}\n`;
+    console.log(line);
+    fs.appendFileSync(logFile, line);
   }
+
+  log('=== INICIANDO AUTO-UPDATER ===');
   autoUpdater.checkForUpdatesAndNotify = false;
 
-  autoUpdater.on('update-available', (info) => {
-    setSplashStatus('Se encontró una actualización. Descargando...');
+  autoUpdater.on('checking-for-update', () => {
+    log('Buscando actualizaciones...');
+    setSplashStatus('Buscando actualizaciones...');
   });
 
-  autoUpdater.on('update-downloaded', (info) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+  autoUpdater.on('update-available', (info) => {
+    log(`Actualización disponible: v${info.version}`);
+    setSplashStatus(`Actualización ${info.version} disponible. Descargando...`);
+  });
 
-    dialog
-      .showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Actualización disponible',
-        message: `Cafe Shopping ${info.version} está disponible.`,
-        detail: 'La actualización se instalará la próxima vez que reinicies la aplicación.',
-        buttons: ['Instalar ahora y reiniciar', 'Instalar después'],
-        defaultId: 0,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          // Instalar y reiniciar
-          setImmediate(() => autoUpdater.quitAndInstall());
-        }
-      });
+  autoUpdater.on('update-not-available', (info) => {
+    log('No hay actualización disponible');
+    setSplashStatus('Ya está la última versión.');
   });
 
   autoUpdater.on('error', (error) => {
-    // Silenciar errores de actualización (ej. sin conexión a internet)
-    // La app sigue funcionando de todos modos
-    console.error('Update error:', error);
+    log(`Error: ${error.message}`);
+    setSplashStatus(`Error: ${error.message}`);
+  });
+}
+
+/**
+ * Mata el agente de WhatsApp (send_whatsapp_agent.exe) si esta corriendo.
+ *
+ * Necesario ANTES de instalar una actualizacion: el .exe vive dentro de la
+ * carpeta de instalacion de la app (resources/app-project/...), y mientras
+ * ese proceso siga corriendo, Windows no deja que el instalador de NSIS
+ * sobreescriba esa carpeta — se queda "pegado" hasta que alguien lo cierra
+ * a mano. Matandolo primero, el instalador puede actualizar sin trabarse.
+ * (Se vuelve a abrir solo en el proximo arranque, ver launchWhatsappAgent().)
+ */
+function killWhatsappAgent() {
+  return new Promise((resolve) => {
+    execFile('taskkill', ['/F', '/IM', 'send_whatsapp_agent.exe', '/T'], { windowsHide: true }, () => {
+      // Da igual si taskkill no encontro el proceso (no estaba corriendo);
+      // solo nos interesa que no siga vivo antes de instalar.
+      resolve();
+    });
   });
 }
 
 async function checkForUpdates() {
-  setSplashStatus('Verificando actualizaciones...');
-  try {
-    await autoUpdater.checkForUpdates();
-  } catch {
-    // Si falla la verificación, simplemente continuamos — no es crítico
+  const fs = require('fs');
+  const logFile = path.join(app.getPath('userData'), 'update-log.txt');
+  function log(msg) {
+    const line = `[${new Date().toISOString()}] ${msg}\n`;
+    console.log(line);
+    fs.appendFileSync(logFile, line);
   }
+
+  setSplashStatus('Verificando actualizaciones...');
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      autoUpdater.removeListener('update-not-available', onNotAvailable);
+      autoUpdater.removeListener('update-downloaded', onDownloaded);
+      autoUpdater.removeListener('error', onError);
+    };
+
+    const onNotAvailable = () => {
+      cleanup();
+      resolve();
+    };
+
+    const onError = () => {
+      cleanup();
+      resolve();
+    };
+
+    // IMPORTANTE: el dialogo (y todo lo que decida el usuario) vive aqui
+    // adentro, y la promesa de checkForUpdates() NO se resuelve hasta que
+    // el usuario responde. Antes, el dialogo se mostraba desde un listener
+    // aparte (permanente) mientras esta funcion resolvia de una vez al
+    // descargarse el update — eso dejaba que startup() siguiera de largo y
+    // abriera la ventana principal ENCIMA del dialogo, tapandolo.
+    const onDownloaded = (info) => {
+      cleanup();
+      log(`Actualización descargada: v${info.version}`);
+
+      const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+      dialog
+        .showMessageBox(parentWin, {
+          type: 'info',
+          title: 'Actualización disponible',
+          message: `Cafe Shopping ${info.version} está disponible.`,
+          detail: 'La actualización se instalará la próxima vez que reinicies la aplicación.',
+          buttons: ['Instalar ahora y reiniciar', 'Instalar después'],
+          defaultId: 0,
+        })
+        .then(async (result) => {
+          if (result.response === 0) {
+            setSplashStatus('Cerrando el agente de WhatsApp antes de instalar...');
+            await killWhatsappAgent();
+            setImmediate(() => autoUpdater.quitAndInstall());
+            // No resolvemos: la app esta a punto de cerrarse para instalar,
+            // no hace falta (ni conviene) seguir abriendo la ventana principal.
+          } else {
+            resolve();
+          }
+        });
+    };
+
+    autoUpdater.once('update-downloaded', onDownloaded);
+    autoUpdater.once('update-not-available', onNotAvailable);
+    autoUpdater.once('error', onError);
+
+    autoUpdater.checkForUpdates().catch(() => {
+      cleanup();
+      resolve();
+    });
+  });
 }
 
 async function startup() {
@@ -253,11 +338,16 @@ async function startup() {
     setSplashStatus('Esperando a que la app este lista...');
     await waitForFrontend();
 
-    setSplashStatus('Iniciando el agente de WhatsApp...');
-    launchWhatsappAgent();
-
     setSplashStatus('Verificando actualizaciones...');
     await checkForUpdates();
+
+    // El agente se abre AQUI (despues de la verificacion/instalacion de
+    // actualizaciones), no antes: si abriera primero y luego el usuario
+    // decidiera instalar una actualizacion, tocaria cerrarlo de nuevo antes
+    // de poder instalar (por el file-lock, ver killWhatsappAgent()). Asi
+    // evitamos ese abrir-y-cerrar innecesario en el caso mas comun.
+    setSplashStatus('Iniciando el agente de WhatsApp...');
+    launchWhatsappAgent();
 
     setSplashStatus('Abriendo Cafe Shopping...');
     createMainWindow();
