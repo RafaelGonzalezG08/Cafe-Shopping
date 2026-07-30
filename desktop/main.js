@@ -9,6 +9,7 @@
 //   5) Muestra la app en una ventana nativa.
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { spawn, execFile } = require('child_process');
 const net = require('net');
 const path = require('path');
@@ -190,8 +191,58 @@ function createMainWindow() {
   mainWindow.loadURL(FRONTEND_URL);
 }
 
+function setupAutoUpdater() {
+  // Configurar electron-updater en modo no-automático: nosotros controlamos
+  // cuándo verificar y cuándo instalar.
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+  }
+  autoUpdater.checkForUpdatesAndNotify = false;
+
+  autoUpdater.on('update-available', (info) => {
+    setSplashStatus('Se encontró una actualización. Descargando...');
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Actualización disponible',
+        message: `Cafe Shopping ${info.version} está disponible.`,
+        detail: 'La actualización se instalará la próxima vez que reinicies la aplicación.',
+        buttons: ['Instalar ahora y reiniciar', 'Instalar después'],
+        defaultId: 0,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          // Instalar y reiniciar
+          setImmediate(() => autoUpdater.quitAndInstall());
+        }
+      });
+  });
+
+  autoUpdater.on('error', (error) => {
+    // Silenciar errores de actualización (ej. sin conexión a internet)
+    // La app sigue funcionando de todos modos
+    console.error('Update error:', error);
+  });
+}
+
+async function checkForUpdates() {
+  setSplashStatus('Verificando actualizaciones...');
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch {
+    // Si falla la verificación, simplemente continuamos — no es crítico
+  }
+}
+
 async function startup() {
   createSplashWindow();
+  setupAutoUpdater();
+
   try {
     setSplashStatus('Verificando Docker Desktop...');
     await ensureDockerRunning();
@@ -204,6 +255,9 @@ async function startup() {
 
     setSplashStatus('Iniciando el agente de WhatsApp...');
     launchWhatsappAgent();
+
+    setSplashStatus('Verificando actualizaciones...');
+    await checkForUpdates();
 
     setSplashStatus('Abriendo Cafe Shopping...');
     createMainWindow();
