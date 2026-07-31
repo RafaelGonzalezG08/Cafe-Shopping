@@ -1,6 +1,6 @@
 {
   "name": "cafe-shopping-desktop",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Cafe Shopping - aplicacion de escritorio (Docker + WhatsApp agente en una sola ventana)",
   "main": "main.js",
   "private": true,
