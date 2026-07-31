@@ -40,6 +40,42 @@ const PROJECT_DIR = app.isPackaged
 let splashWindow = null;
 let mainWindow = null;
 
+// ---------------------------------------------------------------------
+// Actualizaciones: marcador de "actualizacion descargada, pendiente de
+// instalar en el proximo reinicio". Ver explicacion completa donde se
+// usa, en checkForUpdates() y startup().
+// ---------------------------------------------------------------------
+let autoInstallPendingUpdate = false;
+
+function pendingUpdateMarkerPath() {
+  return path.join(app.getPath('userData'), 'pending-update.json');
+}
+
+function markUpdatePending(version) {
+  try {
+    fs.writeFileSync(
+      pendingUpdateMarkerPath(),
+      JSON.stringify({ version, downloadedAt: new Date().toISOString() }),
+    );
+  } catch {
+    // Si falla escribir el marcador no es grave: en el peor caso, la
+    // proxima vez que haya conexion se vuelve a preguntar como si fuera
+    // una actualizacion nueva.
+  }
+}
+
+function clearUpdatePendingMarker() {
+  try {
+    fs.unlinkSync(pendingUpdateMarkerPath());
+  } catch {
+    // No existia o ya se habia borrado, no pasa nada.
+  }
+}
+
+function hasPendingUpdateMarker() {
+  return fs.existsSync(pendingUpdateMarkerPath());
+}
+
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 420,
@@ -201,7 +237,7 @@ function createMainWindow() {
 function setupAutoUpdater() {
   const fs = require('fs');
   const logFile = path.join(app.getPath('userData'), 'update-log.txt');
-  
+
   function log(msg) {
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] ${msg}\n`;
@@ -211,6 +247,21 @@ function setupAutoUpdater() {
 
   log('=== INICIANDO AUTO-UPDATER ===');
   autoUpdater.checkForUpdatesAndNotify = false;
+
+  // CRITICO: por defecto electron-updater instala solo, en silencio, en
+  // cuanto la app se cierre por CUALQUIER motivo — no solo cuando el
+  // usuario elige "Instalar ahora" — si ya hay una version descargada
+  // pendiente. Eso era el bug: el usuario elegia "Instalar despues",
+  // seguia usando el programa, y al cerrarlo (como cualquier dia normal)
+  // el instalador se disparaba solo, sin pasar por killWhatsappAgent()
+  // primero (por eso a veces quedaba pegado/raro: el .exe del agente
+  // todavia estaba corriendo y bloqueando su propio archivo).
+  //
+  // Lo desactivamos aqui y controlamos nosotros el momento exacto de
+  // instalar, siempre pasando por killWhatsappAgent() antes. Ver
+  // markUpdatePending()/hasPendingUpdateMarker() y su uso en
+  // checkForUpdates() + startup().
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('checking-for-update', () => {
     log('Buscando actualizaciones...');
@@ -253,6 +304,14 @@ function killWhatsappAgent() {
   });
 }
 
+/** Secuencia segura de instalacion: SIEMPRE cierra el agente primero. */
+async function installNow() {
+  clearUpdatePendingMarker();
+  setSplashStatus('Cerrando el agente de WhatsApp antes de instalar...');
+  await killWhatsappAgent();
+  setImmediate(() => autoUpdater.quitAndInstall());
+}
+
 async function checkForUpdates() {
   const fs = require('fs');
   const logFile = path.join(app.getPath('userData'), 'update-log.txt');
@@ -286,9 +345,19 @@ async function checkForUpdates() {
     // aparte (permanente) mientras esta funcion resolvia de una vez al
     // descargarse el update — eso dejaba que startup() siguiera de largo y
     // abriera la ventana principal ENCIMA del dialogo, tapandolo.
-    const onDownloaded = (info) => {
+    const onDownloaded = async (info) => {
       cleanup();
       log(`Actualización descargada: v${info.version}`);
+
+      if (autoInstallPendingUpdate) {
+        // Ya se le pregunto en una sesion anterior y eligio "Instalar
+        // despues" — no lo volvemos a interrumpir con el mismo dialogo.
+        // Se instala ahora, al reiniciar, tal como se le prometio.
+        log('Instalando automaticamente (el usuario ya habia aceptado en una sesion anterior).');
+        await installNow();
+        // No resolvemos: la app esta a punto de cerrarse para instalar.
+        return;
+      }
 
       const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
       dialog
@@ -302,12 +371,10 @@ async function checkForUpdates() {
         })
         .then(async (result) => {
           if (result.response === 0) {
-            setSplashStatus('Cerrando el agente de WhatsApp antes de instalar...');
-            await killWhatsappAgent();
-            setImmediate(() => autoUpdater.quitAndInstall());
-            // No resolvemos: la app esta a punto de cerrarse para instalar,
-            // no hace falta (ni conviene) seguir abriendo la ventana principal.
+            await installNow();
+            // No resolvemos: la app esta a punto de cerrarse para instalar.
           } else {
+            markUpdatePending(info.version);
             resolve();
           }
         });
@@ -327,6 +394,15 @@ async function checkForUpdates() {
 async function startup() {
   createSplashWindow();
   setupAutoUpdater();
+
+  // Si en la sesion anterior el usuario eligio "Instalar despues", queda
+  // este marcador. Lo leemos ahora para saber que, cuando checkForUpdates()
+  // vuelva a encontrar/descargar esa misma actualizacion mas abajo, hay que
+  // instalarla directo sin volver a preguntar (ver onDownloaded arriba).
+  autoInstallPendingUpdate = hasPendingUpdateMarker();
+  if (autoInstallPendingUpdate) {
+    setSplashStatus('Terminando de instalar la actualización pendiente...');
+  }
 
   try {
     setSplashStatus('Verificando Docker Desktop...');
@@ -361,8 +437,12 @@ async function startup() {
 app.whenReady().then(startup);
 
 app.on('window-all-closed', () => {
-  // No hacemos "docker compose down" al cerrar: los contenedores se quedan
-  // corriendo en segundo plano (asi la proxima apertura es instantanea, y
-  // el agente de WhatsApp sigue procesando envios aunque cierres la ventana).
-  if (process.platform !== 'darwin') app.quit();
+  // A diferencia de los contenedores de Docker (esos SI se quedan corriendo
+  // a proposito, para que la proxima apertura sea instantanea), el agente
+  // de WhatsApp se cierra junto con la app: si no, se queda corriendo en
+  // segundo plano sin que el usuario lo sepa, y puede seguir "activo"
+  // aunque la persona crea que cerro todo.
+  killWhatsappAgent().finally(() => {
+    if (process.platform !== 'darwin') app.quit();
+  });
 });
