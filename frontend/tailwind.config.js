@@ -8,55 +8,56 @@ export default {
         display: ['Sora', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // Negro carbon / vitrina de joyeria (antes tonos cafe "espresso")
+        // Negro-ciruela profundo (vitrina de joyeria, tono rosado elegante en
+        // vez de negro carbon puro — antes "espresso" cafetero)
         espresso: {
-          950: '#050506',
-          900: '#0D0C10',
-          800: '#18161C',
-          700: '#2A2530',
+          950: '#170B12',
+          900: '#22101A',
+          800: '#34172A',
+          700: '#4A2438',
         },
-        // Marfil / perla (antes "porcelain")
+        // Blanco perla con fondo rosa palido (antes "porcelain" marfil/cafe)
         porcelain: {
           50: '#FFFFFF',
-          100: '#FAF8F3',
-          200: '#EFE8DA',
-          300: '#E1D6BF',
+          100: '#FBF2F1',
+          200: '#F3E0E1',
+          300: '#E6C7C9',
         },
-        // Oro / laton (antes tonos cobre) — mas saturado que el original
+        // Oro rosa / rose gold — acento principal (antes cobre/oro de cafeteria)
         copper: {
-          50: '#FBF2DC',
-          100: '#EFD98A',
-          400: '#D9A81A',
-          500: '#C4900D',
-          600: '#9C7208',
-          700: '#785705',
+          50: '#FBEDEB',
+          100: '#F4D2CD',
+          400: '#C97B79',
+          500: '#B75D66',
+          600: '#96434C',
+          700: '#723038',
         },
-        // Esmeralda (exito / saldado) — mas saturado que el original
+        // Esmeralda (exito / saldado) — se mantiene distinto del rosa a proposito,
+        // para que "pagado"/"positivo" siga leyendose claro entre tanto tono rosa
         sage: {
           100: '#D2ECDD',
           500: '#0E8A5F',
           600: '#0A6B49',
           700: '#075136',
         },
-        // Rubi (alertas / deuda) — mas saturado que el original
+        // Vino / borgoña (alertas, deuda) — mas profundo que un rosa para
+        // distinguirse del acento principal
         brick: {
-          100: '#F8DCE1',
-          500: '#C21F42',
-          600: '#9C1834',
-          700: '#771228',
+          100: '#F3D8DC',
+          500: '#A32347',
+          600: '#841C3A',
+          700: '#63152C',
         },
-        // Rosa cuarzo, tono suave para variar el acento (uso puntual: estado
-        // "con abonos" en Cobros, algun detalle secundario). A proposito
-        // mas apagado/mauve que un rosa chicle, para que combine con el
-        // negro/oro sin que el conjunto se sienta demasiado femenino.
+        // Rosa cuarzo — acento secundario, protagonista del tema (badges,
+        // estados intermedios, detalles). Rosa elegante, no rosa chicle.
         rose: {
-          100: '#F5DEE6',
-          400: '#D0728F',
-          500: '#BC4E71',
-          600: '#96395A',
+          100: '#F8DCE6',
+          400: '#DE84A4',
+          500: '#C15C84',
+          600: '#9C4468',
         },
-        ink: '#15120D',
-        muted: '#8A8172',
+        ink: '#241019',
+        muted: '#93767C',
       },
       boxShadow: {
         ticket: '0 1px 0 rgba(42,33,24,0.04), 0 8px 24px -12px rgba(42,33,24,0.18)',

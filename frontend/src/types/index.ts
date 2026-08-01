@@ -31,9 +31,27 @@ export interface Product {
   sku: string;
   nombre: string;
   precioUnitario: number;
+  // Solo presente cuando el backend responde a un usuario ADMIN.
+  costoUnitario?: number;
   stock: number;
   imageUrl?: string | null;
   activo: boolean;
+}
+
+export interface ProductMargin {
+  productId: string | null;
+  nombre: string;
+  sku: string | null;
+  unidades: number;
+  ingresos: number;
+  costo: number;
+  utilidad: number;
+  margenPct: number;
+}
+
+export interface CostsReport {
+  totales: { ingresos: number; costo: number; utilidad: number; margenPct: number };
+  productos: ProductMargin[];
 }
 
 export interface SaleItem {

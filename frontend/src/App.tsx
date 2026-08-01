@@ -10,6 +10,7 @@ import Cobros from './pages/cobros/Cobros';
 import Sales from './pages/sales/Sales';
 import Expenses from './pages/expenses/Expenses';
 import Reports from './pages/reports/Reports';
+import Costs from './pages/costs/Costs';
 import Settings from './pages/settings/Settings';
 
 export default function App() {
@@ -65,6 +66,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN', 'CONTABILIDAD']}>
                 <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/costos"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <Costs />
               </ProtectedRoute>
             }
           />

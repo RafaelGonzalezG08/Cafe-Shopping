@@ -23,6 +23,16 @@ export class CreateProductDto {
   @IsPositive({ message: 'El precio debe ser mayor a cero.' })
   precioUnitario: number;
 
+  @ApiPropertyOptional({
+    example: 65.0,
+    description: 'Costo de adquisicion de la pieza (solo ADMIN puede verlo/editarlo). Se usa para calcular margen.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  costoUnitario?: number;
+
   @ApiProperty({ example: 50 })
   @Type(() => Number)
   @IsInt()

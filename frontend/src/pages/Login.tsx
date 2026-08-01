@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Coffee, Loader2 } from 'lucide-react';
+import { Gem, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth.store';
 import { Button } from '../components/ui';
@@ -33,7 +33,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-copper-500">
-            <Coffee size={24} className="text-porcelain-50" />
+            <Gem size={24} className="text-porcelain-50" />
           </div>
           <h1 className="font-display text-xl font-bold text-porcelain-50">Cafe Shopping</h1>
           <p className="mt-1 text-sm text-porcelain-300/60">Inicia sesion para continuar</p>

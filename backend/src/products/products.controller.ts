@@ -31,13 +31,22 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  findAll(@Query('all') all?: string) {
-    return this.productsService.findAll(all !== 'true');
+  async findAll(@Query('all') all?: string, @CurrentUser() user?: AuthenticatedUser) {
+    const products = await this.productsService.findAll(all !== 'true');
+    return products.map((p) => this.stripCostForNonAdmin(p, user));
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user?: AuthenticatedUser) {
+    const product = await this.productsService.findOne(id);
+    return this.stripCostForNonAdmin(product, user);
+  }
+
+  /** El costo de adquisicion es sensible (margen del negocio): solo ADMIN lo recibe en la respuesta. */
+  private stripCostForNonAdmin<T extends { costoUnitario?: unknown }>(product: T, user?: AuthenticatedUser): T {
+    if (user?.role === Role.ADMIN) return product;
+    const { costoUnitario, ...rest } = product;
+    return rest as T;
   }
 
   @Post()

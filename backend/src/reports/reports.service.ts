@@ -54,6 +54,85 @@ export class ReportsService {
       .sort((a, b) => a.periodo.localeCompare(b.periodo));
   }
 
+  /**
+   * Costo/margen por producto en un periodo, a partir de lo realmente vendido
+   * (usa el costo copiado en cada SaleItem al momento de la venta, no el
+   * costo actual del catalogo, para que ediciones posteriores del costo no
+   * distorsionen el margen historico). Solo lo consume el apartado de
+   * Costos, restringido a ADMIN en el controller.
+   */
+  async productMargins(from?: string, to?: string) {
+    const { fromDate, toDate } = this.defaultRange(from, to);
+    const items = await this.prisma.saleItem.findMany({
+      where: { sale: { fecha: { gte: fromDate, lte: toDate } } },
+      select: {
+        productId: true,
+        descripcion: true,
+        cantidad: true,
+        precioUnitario: true,
+        costoUnitario: true,
+        total: true,
+        product: { select: { sku: true } },
+      },
+    });
+
+    interface ProductBucket {
+      productId: string | null;
+      nombre: string;
+      sku: string | null;
+      unidades: number;
+      ingresos: number;
+      costo: number;
+    }
+
+    const buckets = new Map<string, ProductBucket>();
+    for (const item of items) {
+      const key = item.productId ?? `manual:${item.descripcion}`;
+      const entry = buckets.get(key) ?? {
+        productId: item.productId,
+        nombre: item.descripcion,
+        sku: item.product?.sku ?? null,
+        unidades: 0,
+        ingresos: 0,
+        costo: 0,
+      };
+      entry.unidades += item.cantidad;
+      entry.ingresos += Number(item.total);
+      entry.costo += item.cantidad * Number(item.costoUnitario);
+      buckets.set(key, entry);
+    }
+
+    const productos = Array.from(buckets.values())
+      .map((b) => {
+        const utilidad = b.ingresos - b.costo;
+        return {
+          productId: b.productId,
+          nombre: b.nombre,
+          sku: b.sku,
+          unidades: b.unidades,
+          ingresos: round(b.ingresos),
+          costo: round(b.costo),
+          utilidad: round(utilidad),
+          margenPct: b.ingresos > 0 ? round((utilidad / b.ingresos) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.utilidad - a.utilidad);
+
+    const ingresos = productos.reduce((sum, p) => sum + p.ingresos, 0);
+    const costo = productos.reduce((sum, p) => sum + p.costo, 0);
+    const utilidad = ingresos - costo;
+
+    return {
+      totales: {
+        ingresos: round(ingresos),
+        costo: round(costo),
+        utilidad: round(utilidad),
+        margenPct: ingresos > 0 ? round((utilidad / ingresos) * 100) : 0,
+      },
+      productos,
+    };
+  }
+
   async clientDebts() {
     const debts = await this.prisma.clientDebt.findMany({
       where: { status: { not: EstadoDeuda.PAGADA } },

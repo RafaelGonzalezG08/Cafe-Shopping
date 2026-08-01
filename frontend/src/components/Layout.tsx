@@ -8,9 +8,9 @@ import {
   Receipt,
   Wallet,
   BarChart3,
+  PiggyBank,
   Settings,
   LogOut,
-  Coffee,
   HandCoins,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
@@ -33,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/gastos', label: 'Gastos', icon: Wallet, roles: ['ADMIN', 'CONTABILIDAD'] },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['ADMIN', 'CONTABILIDAD'] },
+  { to: '/costos', label: 'Costos', icon: PiggyBank, roles: ['ADMIN'] },
   { to: '/configuracion', label: 'Configuracion', icon: Settings, roles: ['ADMIN'] },
 ];
 
@@ -60,7 +61,7 @@ export function Layout() {
             {logoSrc ? (
               <img src={logoSrc} alt="Logo" className="h-full w-full object-cover" />
             ) : (
-              <Coffee size={18} strokeWidth={2.25} className="text-porcelain-50" />
+              <Gem size={18} strokeWidth={2.25} className="text-porcelain-50" />
             )}
           </div>
           <div>

@@ -44,6 +44,12 @@ export class ReportsController {
     res.send(csv);
   }
 
+  @Get('costs')
+  @Roles(Role.ADMIN)
+  productMargins(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.reportsService.productMargins(from, to);
+  }
+
   @Get('clients/debts')
   clientDebts() {
     return this.reportsService.clientDebts();

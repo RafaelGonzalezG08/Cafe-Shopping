@@ -136,14 +136,14 @@ export default function Reports() {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesReport}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E7DFD3" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#8A7A68' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#8A7A68' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E6C7C9" />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#93767C' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#93767C' }} />
                 <Tooltip
                   formatter={(value: number) => `RD$ ${formatMoney(value)}`}
-                  contentStyle={{ borderRadius: 8, borderColor: '#E7DFD3', fontSize: 13 }}
+                  contentStyle={{ borderRadius: 8, borderColor: '#E6C7C9', fontSize: 13 }}
                 />
-                <Bar dataKey="total" fill="#C4900D" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" fill="#B75D66" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

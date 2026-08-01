@@ -4,12 +4,13 @@ import toast from 'react-hot-toast';
 import { Plus, ImagePlus, Gem, X, Pencil, Search } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
-import { Button, Card, PageHeader, EmptyState } from '../../components/ui';
+import { Button, Card, PageHeader, EmptyState, Badge } from '../../components/ui';
 import type { Product } from '../../types';
 
 type ProductFormValues = {
   nombre: string;
   precioUnitario: string;
+  costoUnitario: string;
   stock: string;
   file: File | null;
 };
@@ -18,9 +19,15 @@ function buildFormData(values: ProductFormValues) {
   const formData = new FormData();
   formData.append('nombre', values.nombre.trim());
   formData.append('precioUnitario', values.precioUnitario);
+  formData.append('costoUnitario', String(Number(values.costoUnitario) || 0));
   formData.append('stock', String(Number(values.stock) || 0));
   if (values.file) formData.append('file', values.file);
   return formData;
+}
+
+function margenPct(product: Product): number | null {
+  if (product.costoUnitario === undefined || product.precioUnitario <= 0) return null;
+  return ((product.precioUnitario - product.costoUnitario) / product.precioUnitario) * 100;
 }
 
 export default function Products() {
@@ -129,6 +136,13 @@ export default function Products() {
                   </span>
                   <span className="text-xs text-muted">Stock: {product.stock}</span>
                 </div>
+                {margenPct(product) !== null && (
+                  <div className="mt-1.5">
+                    <Badge tone={margenPct(product)! < 20 ? 'brick' : margenPct(product)! < 40 ? 'copper' : 'sage'}>
+                      Margen {margenPct(product)!.toFixed(0)}%
+                    </Badge>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -153,6 +167,7 @@ export default function Products() {
           initial={{
             nombre: editing.nombre,
             precioUnitario: String(editing.precioUnitario),
+            costoUnitario: String(editing.costoUnitario ?? ''),
             stock: String(editing.stock),
             file: null,
           }}
@@ -183,7 +198,7 @@ function ProductModal({
   onSubmit: (values: ProductFormValues) => void;
 }) {
   const [form, setForm] = useState<ProductFormValues>(
-    initial ?? { nombre: '', precioUnitario: '', stock: '', file: null },
+    initial ?? { nombre: '', precioUnitario: '', costoUnitario: '', stock: '', file: null },
   );
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -269,6 +284,23 @@ function ProductModal({
                 className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
               />
             </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+              Costo de adquisicion
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.costoUnitario}
+              onChange={(e) => setForm((f) => ({ ...f, costoUnitario: e.target.value }))}
+              placeholder="0.00"
+              className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              Solo lo ves tu (ADMIN). Se usa para calcular el margen en el apartado de Costos.
+            </p>
           </div>
           <Button type="submit" className="w-full" disabled={isPending}>
             {isPending ? 'Guardando...' : submitLabel}

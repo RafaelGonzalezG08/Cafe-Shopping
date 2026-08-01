@@ -82,6 +82,9 @@ model Product {
   sku            String   @unique
   nombre         String
   precioUnitario Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  // Costo de adquisicion de la pieza. Solo visible/editable por ADMIN (ver
+  // ProductsController) - se usa para calcular margen en el apartado de Costos.
+  costoUnitario  Decimal  @default(0) @map("costo_unitario") @db.Decimal(10, 2)
   stock          Int      @default(0)
   imageUrl       String?  @map("image_url")
   activo         Boolean  @default(true)
@@ -122,6 +125,10 @@ model SaleItem {
   descripcion    String
   cantidad       Int
   precioUnitario Decimal @map("precio_unitario") @db.Decimal(10, 2)
+  // Copia del costo del producto al momento de la venta (igual que
+  // precioUnitario), para que el margen historico no cambie si luego se
+  // edita el costo del producto en el catalogo.
+  costoUnitario  Decimal @default(0) @map("costo_unitario") @db.Decimal(10, 2)
   total          Decimal @db.Decimal(10, 2)
 
   sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)

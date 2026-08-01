@@ -40,6 +40,7 @@ export class SalesService {
 
     const tasaImpuesto = dto.tasaImpuesto ?? (await this.getTasaImpuestoDefault());
     const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    const costByProductId = await this.getCostByProductId(dto.items);
 
     const sale = await this.prisma.$transaction(async (tx) => {
       const created = await tx.sale.create({
@@ -57,6 +58,10 @@ export class SalesService {
               descripcion: item.descripcion,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
+              // Copiado del catalogo al momento de vender (nunca del cliente) para
+              // que el margen reportado en Costos no cambie si luego se edita el
+              // costo del producto.
+              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -142,6 +147,7 @@ export class SalesService {
 
     const tasaImpuesto = existing.subtotal.gt(0) ? Number(existing.impuestos) / Number(existing.subtotal) : await this.getTasaImpuestoDefault();
     const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    const costByProductId = await this.getCostByProductId(dto.items);
 
     if (existingDebt && totals.total < Number(existingDebt.amountPaid)) {
       throw new BadRequestException(
@@ -176,6 +182,7 @@ export class SalesService {
               descripcion: item.descripcion,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
+              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -251,6 +258,17 @@ export class SalesService {
     });
     if (!sale) throw new NotFoundException('Venta no encontrada.');
     return sale;
+  }
+
+  /** Trae el costo actual del catalogo para los items que vienen de un producto (ignora items manuales). */
+  private async getCostByProductId(items: { productId?: string }[]): Promise<Map<string, number>> {
+    const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))];
+    if (productIds.length === 0) return new Map();
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, costoUnitario: true },
+    });
+    return new Map(products.map((p) => [p.id, Number(p.costoUnitario)]));
   }
 
   private async getTasaImpuestoDefault(): Promise<number> {
