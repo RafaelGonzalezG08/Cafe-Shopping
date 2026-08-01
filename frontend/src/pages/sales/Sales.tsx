@@ -232,8 +232,11 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
     sale.items.map((i) => ({
       productId: i.productId ?? undefined,
       descripcion: i.descripcion,
-      cantidad: i.cantidad,
-      precioUnitario: i.precioUnitario,
+      // Los Decimal de Prisma llegan como string por JSON (ej. "650.00"); si no se
+      // normalizan aqui, una linea que el usuario nunca toca (p.ej. porque solo
+      // borro otra) se manda como string y el backend la rechaza al validar.
+      cantidad: Number(i.cantidad),
+      precioUnitario: Number(i.precioUnitario),
     })),
   );
   const [adminPassword, setAdminPassword] = useState('');

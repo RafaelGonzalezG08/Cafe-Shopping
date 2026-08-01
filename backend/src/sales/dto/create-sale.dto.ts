@@ -26,11 +26,13 @@ export class SaleItemDto {
   descripcion: string;
 
   @ApiProperty({ example: 2 })
+  @Type(() => Number)
   @IsInt()
   @Min(1, { message: 'La cantidad debe ser al menos 1.' })
   cantidad: number;
 
   @ApiProperty({ example: 120.0 })
+  @Type(() => Number)
   @IsNumber()
   @IsPositive({ message: 'El precio unitario debe ser mayor a cero.' })
   precioUnitario: number;
