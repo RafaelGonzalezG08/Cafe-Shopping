@@ -215,7 +215,7 @@ function launchWhatsappAgent() {
   }
 }
 
-function createMainWindow() {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -230,6 +230,19 @@ function createMainWindow() {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
     mainWindow.show();
   });
+
+  // index.html (a diferencia de los archivos hasheados en /assets/) no
+  // manda Cache-Control, asi que Chromium puede quedarse con una copia
+  // vieja en su cache HTTP persistente entre una version de la app y la
+  // siguiente. Se limpia SIEMPRE antes de cargar para garantizar que se
+  // vea el build que Docker acaba de servir, no uno cacheado de una
+  // instalacion anterior.
+  try {
+    await mainWindow.webContents.session.clearCache();
+  } catch {
+    // Si falla no es grave: en el peor caso queda el comportamiento
+    // anterior (cache posiblemente vieja), no bloqueamos el arranque por esto.
+  }
 
   mainWindow.loadURL(FRONTEND_URL);
 }
@@ -426,7 +439,7 @@ async function startup() {
     launchWhatsappAgent();
 
     setSplashStatus('Abriendo Cafe Shopping...');
-    createMainWindow();
+    await createMainWindow();
   } catch (error) {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
     dialog.showErrorBox('Cafe Shopping', String(error.message || error));
