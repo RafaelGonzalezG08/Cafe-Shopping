@@ -17,7 +17,11 @@ const fs = require('fs');
 
 const FRONTEND_URL = 'http://localhost:5173';
 const FRONTEND_PORT = 5173;
-const MAX_WAIT_DOCKER_MS = 90000;
+// 3 minutos y no 90s: en un arranque en frio (Docker Desktop apagado, WSL2
+// levantando la maquina virtual) se han medido esperas de mas de 90s en esta
+// misma PC. Con el limite anterior la app se rendia con un error justo
+// cuando Docker estaba a punto de quedar listo.
+const MAX_WAIT_DOCKER_MS = 180000;
 const MAX_WAIT_FRONTEND_MS = 60000;
 const POLL_MS = 2000;
 
@@ -152,6 +156,96 @@ async function ensureDockerRunning() {
   throw new Error(
     'Docker Desktop no respondio a tiempo.\nAbrelo manualmente, espera a que diga "Docker Desktop is running" y vuelve a intentar.',
   );
+}
+
+// ---------------------------------------------------------------------
+// Copia de respaldos a OneDrive
+//
+// El backend genera los respaldos dentro del contenedor, en /app/backups,
+// que docker-compose monta desde la carpeta "backups" del proyecto. Esa
+// carpeta vive en el MISMO disco que todo lo demas: si el disco falla, lo
+// roban o entra un ransomware, se pierden las ventas y los respaldos juntos.
+//
+// Por que copiar y no montar OneDrive directo en Docker: se probo y NO
+// funciona. La carpeta de OneDrive es un punto de reanalisis (ReparsePoint)
+// por "Archivos a petición", y Docker con WSL2 no puede montar a traves de
+// ese filtro de nube — el contenedor se queda colgado en estado "Created"
+// sin arrancar nunca. Copiando desde el proceso de Windows (que si lee y
+// escribe esa carpeta con normalidad) se evita el problema por completo, y
+// ademas los respaldos siguen funcionando aunque OneDrive este pausado o
+// desinstalado.
+// ---------------------------------------------------------------------
+
+/** Carpeta de OneDrive del usuario que tiene la sesion abierta, o null. */
+function resolveOneDriveBackupDir() {
+  const candidatos = [
+    process.env.OneDrive,
+    process.env.OneDriveCommercial,
+    process.env.OneDriveConsumer,
+    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'OneDrive') : null,
+  ].filter(Boolean);
+
+  const raiz = candidatos.find((dir) => {
+    try {
+      return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+  if (!raiz) return null;
+
+  const destino = path.join(raiz, 'CafeShopping', 'Respaldos');
+  try {
+    fs.mkdirSync(destino, { recursive: true });
+    return destino;
+  } catch (error) {
+    console.error(`No se pudo preparar la carpeta de respaldos en OneDrive: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Copia a OneDrive los respaldos que todavia no estan alli.
+ *
+ * Solo copia lo que falta (compara nombre y tamaño), asi que repetirlo es
+ * barato. No borra nada en OneDrive: la limpieza por retencion la hace el
+ * backend sobre la carpeta local, y aqui preferimos conservar de mas — el
+ * objetivo de esta copia es justamente sobrevivir a un desastre local.
+ */
+function syncBackupsToOneDrive() {
+  const destino = resolveOneDriveBackupDir();
+  if (!destino) {
+    console.log('Sin OneDrive detectado: los respaldos quedan solo en la carpeta local.');
+    return { copiados: 0, destino: null };
+  }
+
+  const origen = path.join(PROJECT_DIR, 'backups');
+  if (!fs.existsSync(origen)) return { copiados: 0, destino };
+
+  let copiados = 0;
+  for (const nombre of fs.readdirSync(origen)) {
+    if (!/\.(sql|tar)\.gz$/i.test(nombre)) continue; // solo los archivos de respaldo
+
+    const src = path.join(origen, nombre);
+    const dst = path.join(destino, nombre);
+    try {
+      const infoSrc = fs.statSync(src);
+      if (fs.existsSync(dst) && fs.statSync(dst).size === infoSrc.size) continue;
+
+      // Se escribe a un temporal y se renombra para que OneDrive nunca
+      // sincronice un archivo a medio copiar (que al restaurar estaria
+      // corrupto justo cuando mas se necesita).
+      const tmp = `${dst}.parcial`;
+      fs.copyFileSync(src, tmp);
+      fs.renameSync(tmp, dst);
+      copiados += 1;
+    } catch (error) {
+      console.error(`No se pudo copiar el respaldo ${nombre} a OneDrive: ${error}`);
+    }
+  }
+
+  if (copiados > 0) console.log(`Respaldos copiados a OneDrive (${destino}): ${copiados}`);
+  return { copiados, destino };
 }
 
 function dockerComposeUp() {
@@ -427,19 +521,55 @@ async function startup() {
     setSplashStatus('Esperando a que la app este lista...');
     await waitForFrontend();
 
-    setSplashStatus('Verificando actualizaciones...');
-    await checkForUpdates();
+    // Caso especial: si en la sesion anterior el usuario eligio "Instalar
+    // despues", esa instalacion SI se hace antes de abrir la ventana. Ya la
+    // acepto, y dejarla para el fondo significaria cerrarle la app encima
+    // cuando quiza ya esta cobrando una venta.
+    if (autoInstallPendingUpdate) {
+      setSplashStatus('Terminando de instalar la actualizacion pendiente...');
+      await checkForUpdates();
+    }
 
-    // El agente se abre AQUI (despues de la verificacion/instalacion de
-    // actualizaciones), no antes: si abriera primero y luego el usuario
-    // decidiera instalar una actualizacion, tocaria cerrarlo de nuevo antes
-    // de poder instalar (por el file-lock, ver killWhatsappAgent()). Asi
-    // evitamos ese abrir-y-cerrar innecesario en el caso mas comun.
     setSplashStatus('Iniciando el agente de WhatsApp...');
     launchWhatsappAgent();
 
     setSplashStatus('Abriendo Cafe Shopping...');
     await createMainWindow();
+
+    // Copia de seguridad fuera de la PC. Va despues de abrir la ventana y sin
+    // await: copiar archivos grandes no debe retrasar el momento en que se
+    // puede empezar a facturar. Se repite cada hora porque el respaldo
+    // automatico del backend corre a las 3 AM cada pocos dias, y la app puede
+    // llevar horas abierta cuando eso ocurra.
+    setTimeout(() => {
+      try {
+        syncBackupsToOneDrive();
+      } catch (error) {
+        console.error(`Fallo la copia de respaldos a OneDrive: ${error}`);
+      }
+    }, 5000);
+
+    setInterval(() => {
+      try {
+        syncBackupsToOneDrive();
+      } catch (error) {
+        console.error(`Fallo la copia de respaldos a OneDrive: ${error}`);
+      }
+    }, 60 * 60 * 1000);
+
+    // La busqueda normal de actualizaciones va DESPUES de abrir la ventana y
+    // sin await: antes bloqueaba el arranque completo. electron-updater
+    // descarga el instalador entero (~100 MB) antes de emitir
+    // 'update-downloaded', asi que en un dia con actualizacion disponible el
+    // usuario se quedaba mirando la pantalla de carga durante toda la
+    // descarga, sin poder facturar. Ahora la app ya esta usable y la descarga
+    // ocurre de fondo (installNow() sigue cerrando el agente de WhatsApp
+    // antes de instalar, ver killWhatsappAgent()).
+    if (!autoInstallPendingUpdate) {
+      checkForUpdates().catch(() => {
+        // Un fallo buscando actualizaciones no debe afectar la sesion de venta.
+      });
+    }
   } catch (error) {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
     dialog.showErrorBox('Cafe Shopping', String(error.message || error));

@@ -11,6 +11,12 @@ build/
 /backups/
 *.sql
 *.sql.gz
+
+# ...pero las migraciones de Prisma SI van al repo. La regla "*.sql" de arriba
+# es para los volcados de respaldo (pg_dump), y sin esta excepcion se tragaba
+# tambien las migraciones: al clonar o hacer pull en otra PC llegaba el codigo
+# nuevo pero no el SQL que crea las tablas que ese codigo necesita.
+!backend/prisma/migrations/**/*.sql
 /uploads/
 
 # Archivos de registros y temporales
