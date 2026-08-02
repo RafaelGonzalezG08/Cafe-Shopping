@@ -29,3 +29,6 @@ backend/prisma/*.db.anterior
 
 # JS compilado que se cuela en src/ al compilar el seed
 backend/src/**/*.js
+
+# Cliente de Prisma generado solo para leer Postgres durante la migracion
+backend/prisma/cliente-postgres/
