@@ -26,3 +26,6 @@ desktop/dist/
 backend/prisma/*.db
 backend/prisma/*.db-journal
 backend/prisma/*.db.anterior
+
+# JS compilado que se cuela en src/ al compilar el seed
+backend/src/**/*.js
