@@ -68,10 +68,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Backend
 // ---------------------------------------------------------------------
 
-function startBackend(onLog) {
+async function startBackend(onLog) {
   const proyecto = projectDir();
   const datos = dataDir();
   const entrada = path.join(proyecto, 'backend', 'dist', 'main.js');
+
+  // El puerto del backend no se puede cambiar sobre la marcha: el frontend se
+  // compila apuntando a el. Si esta ocupado, casi siempre es porque quedo una
+  // copia anterior a medio cerrar, asi que se explica en esos terminos en vez
+  // de mostrar "EADDRINUSE".
+  if (await puertoAbierto(BACKEND_PORT)) {
+    throw new Error(
+      'Parece que Cafe Shopping ya esta abierto (o quedo a medio cerrar).\n\n' +
+        'Cierra la ventana que este abierta y vuelve a intentar. Si no ves ninguna, ' +
+        'reinicia la computadora y abre la aplicacion de nuevo.',
+    );
+  }
 
   if (!fs.existsSync(entrada)) {
     throw new Error(
@@ -299,10 +311,29 @@ function startFrontend() {
     fs.createReadStream(archivo).pipe(res);
   });
 
-  return new Promise((resolve, reject) => {
-    frontendServer.once('error', reject);
-    frontendServer.listen(FRONTEND_PORT, '127.0.0.1', () => resolve(`http://localhost:${FRONTEND_PORT}`));
-  });
+  // Si el puerto esta ocupado se prueba el siguiente, en vez de reventar con
+  // "EADDRINUSE" — un error tecnico que al usuario no le dice nada. La
+  // interfaz puede vivir en cualquier puerto porque la ventana carga la URL
+  // que devolvemos aqui; el del backend NO (viene fijo en la compilacion del
+  // frontend), por eso alli si se avisa con un mensaje claro.
+  const intentar = (puerto, quedan) =>
+    new Promise((resolve, reject) => {
+      const alFallar = (error) => {
+        frontendServer.removeListener('error', alFallar);
+        if (error.code === 'EADDRINUSE' && quedan > 0) {
+          resolve(intentar(puerto + 1, quedan - 1));
+        } else {
+          reject(error);
+        }
+      };
+      frontendServer.once('error', alFallar);
+      frontendServer.listen(puerto, '127.0.0.1', () => {
+        frontendServer.removeListener('error', alFallar);
+        resolve(`http://localhost:${puerto}`);
+      });
+    });
+
+  return intentar(FRONTEND_PORT, 10);
 }
 
 // ---------------------------------------------------------------------

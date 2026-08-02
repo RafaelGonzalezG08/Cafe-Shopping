@@ -519,7 +519,7 @@ async function startup() {
     // maquina virtual despierte. El backend es un proceso hijo y el frontend
     // se sirve desde disco (ver nativo.js).
     setSplashStatus('Iniciando el servicio...');
-    nativo.startBackend((linea) => console.log(`[backend] ${linea}`));
+    await nativo.startBackend((linea) => console.log(`[backend] ${linea}`));
 
     setSplashStatus('Preparando la base de datos...');
     const backendListo = await nativo.waitForBackend(setSplashStatus);
@@ -589,7 +589,30 @@ async function startup() {
   }
 }
 
-app.whenReady().then(startup);
+/**
+ * Una sola instancia a la vez.
+ *
+ * Sin esto, abrir el acceso directo dos veces (o hacer doble clic impaciente
+ * mientras carga) lanzaba una segunda copia que chocaba con la primera por el
+ * puerto, y Windows mostraba un error tecnico ilegible:
+ * "listen EADDRINUSE: address already in use 127.0.0.1:5183".
+ *
+ * Ahora la segunda copia se cierra sola y, en vez de un error, se trae al
+ * frente la ventana que ya estaba abierta — que es lo que la persona queria.
+ */
+const instanciaUnica = app.requestSingleInstanceLock();
+if (!instanciaUnica) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(startup);
+}
 
 app.on('window-all-closed', () => {
   // Todo se cierra junto con la app. En la version con Docker los
