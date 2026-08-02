@@ -25,6 +25,11 @@ services:
     environment:
       DATABASE_URL: postgresql://cafeshopping:cafeshopping@postgres:5432/cafe_shopping
       PORT: 3000
+      # Zona horaria del negocio. Sin esto el contenedor corre en UTC y los
+      # filtros/agrupaciones por fecha se corren 4 horas: las ventas de
+      # despues de las 8:00 PM caian en el dia siguiente y filtrar "hasta
+      # hoy" escondia las ventas de hoy. Ver common/date-range.ts.
+      TZ: ${TZ:-America/Santo_Domingo}
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       BACKUP_INTERVAL_DAYS: ${BACKUP_INTERVAL_DAYS:-3}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}

@@ -1,14 +1,15 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Gem } from 'lucide-react';
 import { api } from '../../lib/api';
+import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { CostsReport } from '../../types';
 
 export default function Costs() {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // Igual que en Reportes: el periodo consultado se recuerda al navegar.
+  const [from, setFrom] = usePersistedState('costos:desde', '');
+  const [to, setTo] = usePersistedState('costos:hasta', '');
   const params = { from: from || undefined, to: to || undefined };
 
   const { data, isLoading } = useQuery<CostsReport>({

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
+import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
@@ -136,9 +137,14 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
   const { user } = useAuthStore();
   const esCredito = sale.metodoPago === 'CREDITO';
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (editing) {
     return <EditSaleModal sale={sale} onClose={() => setEditing(false)} onDone={onClose} />;
+  }
+
+  if (deleting) {
+    return <DeleteSaleModal sale={sale} onClose={() => setDeleting(false)} onDone={onClose} />;
   }
 
   return (
@@ -151,13 +157,22 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
           </div>
           <div className="flex items-center gap-1">
             {user?.role === 'ADMIN' && (
-              <button
-                onClick={() => setEditing(true)}
-                className="rounded-lg p-1.5 text-muted hover:bg-porcelain-200"
-                title="Corregir factura (requiere clave de administrador)"
-              >
-                <Pencil size={16} />
-              </button>
+              <>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg p-1.5 text-muted hover:bg-porcelain-200"
+                  title="Corregir factura (requiere clave de administrador)"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => setDeleting(true)}
+                  className="rounded-lg p-1.5 text-brick-500 hover:bg-brick-100"
+                  title="Eliminar factura (requiere clave de administrador)"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
             )}
             <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
               <X size={18} />
@@ -219,6 +234,96 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
   );
 }
 
+/**
+ * Eliminar una factura. Pide la clave del admin igual que corregirla, porque
+ * mueve inventario, reportes y posiblemente una deuda del cliente.
+ */
+function DeleteSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => void; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [adminPassword, setAdminPassword] = useState('');
+
+  const piezasDevueltas = sale.items.filter((i) => i.productId);
+
+  const deleteSale = useMutation({
+    mutationFn: async () =>
+      (await api.delete(`/sales/${sale.id}`, { data: { adminPassword }, skipErrorToast: true })).data,
+    onSuccess: () => {
+      toast.success('Factura eliminada. Las piezas volvieron al inventario.');
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      onDone();
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo eliminar la factura.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
+      <Card className="w-full max-w-sm p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display font-bold text-ink">Eliminar {sale.invoice?.numero ?? 'factura'}</h2>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mb-4 rounded-lg bg-brick-100 p-3 text-brick-700">
+          <p className="text-sm font-semibold">Esto no se puede deshacer.</p>
+          <p className="mt-1 text-xs">
+            Se borra la venta, su factura y los abonos registrados. Si era una venta a credito, tambien se
+            elimina la deuda del cliente.
+          </p>
+        </div>
+
+        {piezasDevueltas.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+              Vuelven al inventario
+            </p>
+            <ul className="space-y-0.5 text-sm text-ink">
+              {piezasDevueltas.map((item) => (
+                <li key={item.id}>
+                  + {item.cantidad} &times; {item.descripcion}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+          Clave de administrador
+        </label>
+        <input
+          type="password"
+          value={adminPassword}
+          onChange={(e) => setAdminPassword(e.target.value)}
+          placeholder="Confirma tu clave para eliminar"
+          className="mb-4 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            disabled={!adminPassword || deleteSale.isPending}
+            onClick={() => deleteSale.mutate()}
+          >
+            {deleteSale.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            {deleteSale.isPending ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 interface EditableLine {
   productId?: string;
   descripcion: string;
@@ -228,7 +333,10 @@ interface EditableLine {
 
 function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => void; onDone: () => void }) {
   const queryClient = useQueryClient();
-  const [lines, setLines] = useState<EditableLine[]>(
+  // La correccion a medias se guarda por factura (cada una lleva su propia
+  // clave), asi cerrar el modal sin querer no obliga a rehacer los ajustes.
+  const [lines, setLines] = usePersistedState<EditableLine[]>(
+    `factura:corregir:${sale.id}`,
     sale.items.map((i) => ({
       productId: i.productId ?? undefined,
       descripcion: i.descripcion,
@@ -239,6 +347,8 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
       precioUnitario: Number(i.precioUnitario),
     })),
   );
+  // La clave de administrador NUNCA se persiste: los borradores quedan en el
+  // disco de la PC en texto plano. Se vuelve a pedir siempre.
   const [adminPassword, setAdminPassword] = useState('');
 
   const subtotal = lines.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
@@ -254,20 +364,25 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
   const saveEdit = useMutation({
     mutationFn: async () => {
       if (lines.length === 0) throw new Error('La factura debe tener al menos un producto.');
-      const { data } = await api.put(`/sales/${sale.id}`, {
-        adminPassword,
-        items: lines.map((l) => ({
-          productId: l.productId,
-          descripcion: l.descripcion,
-          cantidad: l.cantidad,
-          precioUnitario: l.precioUnitario,
-        })),
-      });
+      const { data } = await api.put(
+        `/sales/${sale.id}`,
+        {
+          adminPassword,
+          items: lines.map((l) => ({
+            productId: l.productId,
+            descripcion: l.descripcion,
+            cantidad: l.cantidad,
+            precioUnitario: l.precioUnitario,
+          })),
+        },
+        { skipErrorToast: true },
+      );
       return data as Sale;
     },
     onSuccess: () => {
       toast.success('Factura corregida y regenerada.');
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      limpiarBorrador(`factura:corregir:${sale.id}`);
       onDone();
     },
     onError: (error: any) => {

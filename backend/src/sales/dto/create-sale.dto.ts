@@ -69,4 +69,17 @@ export class CreateSaleDto {
   @ApiProperty({ required: false, default: true, description: 'Genera automaticamente el PNG de la factura al crear la venta' })
   @IsOptional()
   generarFactura?: boolean;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Marca la venta como pedido por entregar (queda en el registro de Pedidos hasta que se entregue).',
+  })
+  @IsOptional()
+  esPedido?: boolean;
+
+  @ApiProperty({ required: false, description: 'Fecha prometida de entrega, si es un pedido.' })
+  @IsOptional()
+  @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
+  fechaEntrega?: string;
 }

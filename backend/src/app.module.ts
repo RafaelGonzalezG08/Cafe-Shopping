@@ -9,6 +9,7 @@ import { ClientsModule } from './clients/clients.module';
 import { ClientDebtsModule } from './client-debts/client-debts.module';
 import { ProductsModule } from './products/products.module';
 import { SalesModule } from './sales/sales.module';
+import { OrdersModule } from './orders/orders.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { ReportsModule } from './reports/reports.module';
@@ -28,6 +29,7 @@ import { HealthModule } from './health/health.module';
     ClientDebtsModule,
     ProductsModule,
     SalesModule,
+    OrdersModule,
     InvoicesModule,
     ExpensesModule,
     ReportsModule,

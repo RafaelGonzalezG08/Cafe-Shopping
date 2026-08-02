@@ -107,6 +107,39 @@ export interface ClientDebt {
   status: EstadoDeuda;
 }
 
+export type EstadoPedido = 'PENDIENTE' | 'EMPACADO' | 'ENTREGADO';
+
+/** Que tan urgente es la entrega. Lo calcula el backend con la fecha del negocio. */
+export type UrgenciaPedido = 'ATRASADO' | 'HOY' | 'PROXIMO' | 'SIN_FECHA';
+
+export interface Order {
+  id: string;
+  saleId: string;
+  estado: EstadoPedido;
+  fechaEntrega?: string | null;
+  notas?: string | null;
+  urgencia: UrgenciaPedido;
+  createdAt: string;
+  sale?: {
+    id: string;
+    fecha: string;
+    total: number;
+    metodoPago: MetodoPago;
+    client?: { id: string; nombre: string; telefono: string } | null;
+    items: { id: string; descripcion: string; cantidad: number }[];
+    invoice?: { numero: string; pngUrl?: string | null; estado: EstadoFactura } | null;
+  };
+}
+
+export interface OrdersSummary {
+  total: number;
+  pendientes: number;
+  empacados: number;
+  atrasados: number;
+  paraHoy: number;
+  proximos: Order[];
+}
+
 export interface Expense {
   id: string;
   fecha: string;

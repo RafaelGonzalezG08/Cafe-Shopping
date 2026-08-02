@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EstadoDeuda } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { localDateKey, parseFromDate, parseToDate } from '../common/date-range';
 
 export type GroupBy = 'day' | 'week' | 'month' | 'year';
 
@@ -17,9 +18,11 @@ export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private defaultRange(from?: string, to?: string, group: GroupBy = 'day') {
-    const toDate = to ? new Date(to) : new Date();
+    // parseToDate lleva "hasta" al final del dia (23:59:59.999 local), asi el
+    // rango incluye las ventas del propio dia elegido. Ver common/date-range.ts.
+    const toDate = to ? parseToDate(to) : new Date();
     if (from) {
-      return { fromDate: new Date(from), toDate };
+      return { fromDate: parseFromDate(from), toDate };
     }
     const spanMs: Record<GroupBy, number> = {
       day: 30 * 24 * 60 * 60 * 1000,
@@ -238,22 +241,25 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// Agrupa siempre en hora LOCAL del negocio, no en UTC: agrupando en UTC, una
+// venta hecha a las 9:00 PM en RD (UTC-4) caia en el dia siguiente y el
+// reporte diario no cuadraba con lo que el negocio vendio ese dia.
 function bucketKey(date: Date, group: GroupBy): string {
   const d = new Date(date);
   if (group === 'day') {
-    return d.toISOString().slice(0, 10);
+    return localDateKey(d);
   }
   if (group === 'year') {
-    return String(d.getUTCFullYear());
+    return String(d.getFullYear());
   }
   if (group === 'month') {
-    return d.toISOString().slice(0, 7);
+    return localDateKey(d).slice(0, 7);
   }
   // week: YYYY-Www (semana ISO)
-  const target = new Date(d.valueOf());
-  const dayNr = (d.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayNr = (target.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
   const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3) / 7);
-  return `${target.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+  return `${target.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }

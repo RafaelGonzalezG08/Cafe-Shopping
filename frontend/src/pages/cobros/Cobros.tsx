@@ -127,7 +127,8 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
   const queryClient = useQueryClient();
 
   const sendReminder = useMutation({
-    mutationFn: async () => (await api.post(`/client-debts/${debt.id}/remind`)).data,
+    mutationFn: async () =>
+      (await api.post(`/client-debts/${debt.id}/remind`, undefined, { skipErrorToast: true })).data,
     onSuccess: () => {
       toast.success('Recordatorio enviado por WhatsApp.');
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });

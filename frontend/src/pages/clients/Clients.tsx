@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, Search, Phone, Mail, X } from 'lucide-react';
 import { api } from '../../lib/api';
+import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { Client, MetodoPago } from '../../types';
@@ -29,6 +30,8 @@ export default function Clients() {
     onSuccess: () => {
       toast.success('Cliente creado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      // Ya se guardo de verdad: el borrador deja de tener sentido.
+      limpiarBorrador('clientes:nuevo');
       setShowForm(false);
     },
   });
@@ -210,7 +213,13 @@ function NewClientModal({
   onClose: () => void;
   onSubmit: (payload: Partial<Client>) => void;
 }) {
-  const [form, setForm] = useState({ nombre: '', telefono: '', email: '', direccion: '' });
+  // El cliente a medio escribir sobrevive si se cierra el modal sin querer.
+  const [form, setForm] = usePersistedState('clientes:nuevo', {
+    nombre: '',
+    telefono: '',
+    email: '',
+    direccion: '',
+  });
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

@@ -127,34 +127,85 @@ RunWithTimeout(cmdLine, timeoutMs, outFile := "") {
 }
 
 ; ============================================================
-; Busca el volumen de Docker del backend sin depender del nombre de la
-; carpeta del proyecto: Docker Compose nombra los volumenes como
-; "<carpeta>_<nombre-del-volumen>", asi que buscamos uno que TERMINE en
-; "_backend_uploads" en vez de asumir el prefijo. Devuelve "" si no
-; encuentra ninguno (por ejemplo si Docker Desktop todavia no arranco).
+; Busca el volumen de Docker donde el backend deja los pedidos de envio.
+;
+; IMPORTANTE: antes esto solo buscaba un volumen que TERMINARA en
+; "_backend_uploads". Eso fallaba silenciosamente cuando existia mas de uno
+; (por ejemplo, si el proyecto se corrio alguna vez desde una carpeta con
+; otro nombre, quedaba "<otra-carpeta>_backend_uploads" ademas del real).
+; El agente elegia el primero de la lista — que podia ser el viejo — y se
+; quedaba vigilando una cola vacia para siempre: el backend encolaba las
+; facturas en un volumen y el agente miraba otro. Desde afuera parecia que
+; "el agente dejo de llamarse", sin ningun error visible.
+;
+; Ahora se resuelve en 3 pasos, del mas confiable al mas general:
+;   1) Se le pregunta al contenedor del backend que esta CORRIENDO cual
+;      volumen tiene montado en /app/uploads. Es la fuente de la verdad:
+;      es literalmente donde el backend escribe.
+;   2) Si no se puede, se prefiere "cafe-shopping_backend_uploads" (el
+;      nombre que fuerza la app de escritorio con COMPOSE_PROJECT_NAME).
+;   3) Como ultimo recurso, el comportamiento viejo por sufijo.
 ; ============================================================
 DetectVolumeName() {
     global LOCAL_DIR, DOCKER_EXE, DOCKER_TIMEOUT_MS
+
+    ; --- 1) Preguntarle al contenedor del backend que esta corriendo ---
+    nameFile := LOCAL_DIR "\_backend_container.txt"
+    FileDelete, %nameFile%
+    psCmd := DOCKER_EXE " ps --filter ""label=com.docker.compose.service=backend"" --format ""{{.Names}}"""
+    run := RunWithTimeout(psCmd, DOCKER_TIMEOUT_MS, nameFile)
+    if (!run.timedOut && !run.launchFailed && FileExist(nameFile)) {
+        FileRead, psOut, %nameFile%
+        containerName := ""
+        Loop, Parse, psOut, `n, `r
+        {
+            candidate := RegExReplace(A_LoopField, "^\s+|\s+$", "")
+            if (candidate != "" && !InStr(candidate, " ")) {
+                containerName := candidate
+                break
+            }
+        }
+
+        if (containerName != "") {
+            mountsFile := LOCAL_DIR "\_backend_mounts.txt"
+            FileDelete, %mountsFile%
+            inspectCmd := DOCKER_EXE " inspect --format ""{{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}"" " containerName
+            run2 := RunWithTimeout(inspectCmd, DOCKER_TIMEOUT_MS, mountsFile)
+            if (!run2.timedOut && !run2.launchFailed && FileExist(mountsFile)) {
+                FileRead, mounts, %mountsFile%
+                ; Busca el volumen montado exactamente en /app/uploads
+                if (RegExMatch(mounts, "([^\s:]+):/app/uploads(\s|$)", m)) {
+                    if (m1 != "")
+                        return m1
+                }
+            }
+        }
+    }
+
+    ; --- 2 y 3) Listar volumenes: preferir el nombre esperado, si no por sufijo ---
     listFile := LOCAL_DIR "\_volume_list.txt"
     FileDelete, %listFile%
     cmd := DOCKER_EXE " volume ls --format ""{{.Name}}"""
 
-    run := RunWithTimeout(cmd, DOCKER_TIMEOUT_MS, listFile)
-    if (run.timedOut || run.launchFailed)
+    run3 := RunWithTimeout(cmd, DOCKER_TIMEOUT_MS, listFile)
+    if (run3.timedOut || run3.launchFailed)
         return ""
     if !FileExist(listFile)
         return ""
 
     FileRead, content, %listFile%
+    porSufijo := ""
     Loop, Parse, content, `n, `r
     {
         line := RegExReplace(A_LoopField, "^\s+|\s+$", "")
         if (line = "")
             continue
-        if RegExMatch(line, "i)_backend_uploads$")
+        if (line = "cafe-shopping_backend_uploads")
             return line
+        if (porSufijo = "" && RegExMatch(line, "i)_backend_uploads$"))
+            porSufijo := line
     }
-    return ""
+    return porSufijo
 }
 
 ; ============================================================

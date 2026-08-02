@@ -56,6 +56,14 @@ export class ClientDebtsService {
     const debt = await this.prisma.clientDebt.findUnique({ where: { id: debtId } });
     if (!debt) throw new NotFoundException('Deuda no encontrada.');
 
+    // Payment.saleId es obligatorio en la base: sin venta asociada, el insert
+    // fallaria con un error crudo de Postgres en vez de un mensaje util.
+    if (!debt.saleId) {
+      throw new BadRequestException(
+        'Esta deuda no tiene una venta/factura asociada, no se le pueden registrar abonos.',
+      );
+    }
+
     const saldoPendiente = Number(debt.amountTotal) - Number(debt.amountPaid);
     if (dto.amount > saldoPendiente + 0.01) {
       throw new BadRequestException(
@@ -64,9 +72,17 @@ export class ClientDebtsService {
     }
 
     const nuevoPagado = Number(debt.amountPaid) + dto.amount;
-    const nuevoEstado: EstadoDeuda =
-      nuevoPagado >= Number(debt.amountTotal) - 0.01
-        ? EstadoDeuda.PAGADA
+    const quedaSaldada = nuevoPagado >= Number(debt.amountTotal) - 0.01;
+    // Si la deuda ya estaba VENCIDA y sigue con saldo, se mantiene VENCIDA:
+    // marcarla como PARCIAL la "rejuvenecia" y desaparecia del filtro de
+    // vencidas hasta que el cron volviera a correr (1:00 AM del dia
+    // siguiente), aunque la fecha limite ya hubiera pasado.
+    const sigueVencida =
+      debt.status === EstadoDeuda.VENCIDA || (debt.dueDate ? debt.dueDate < new Date() : false);
+    const nuevoEstado: EstadoDeuda = quedaSaldada
+      ? EstadoDeuda.PAGADA
+      : sigueVencida
+        ? EstadoDeuda.VENCIDA
         : EstadoDeuda.PARCIAL;
 
     const [updated] = await this.prisma.$transaction([
@@ -76,7 +92,7 @@ export class ClientDebtsService {
       }),
       this.prisma.payment.create({
         data: {
-          saleId: debt.saleId as string,
+          saleId: debt.saleId,
           amount: dto.amount,
           metodo: dto.metodo,
         },

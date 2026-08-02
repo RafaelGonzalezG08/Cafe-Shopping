@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { StorageService } from '../invoices/storage.service';
+import { optimizeLogo } from '../common/image.util';
 import { UpdateBusinessProfileDto } from './dto/update-business-profile.dto';
 
 @Injectable()
@@ -33,9 +34,11 @@ export class SettingsService {
   /** Sube/reemplaza el icono/logo del negocio (se ve en el menu lateral y en las facturas). */
   async updateLogo(buffer: Buffer, mimetype: string, userId?: string) {
     const existing = await this.getProfile();
-    const ext = mimetype === 'image/png' ? 'png' : mimetype === 'image/webp' ? 'webp' : mimetype === 'image/svg+xml' ? 'svg' : 'jpg';
-    const key = `branding/logo-${Date.now()}.${ext}`;
-    const logoUrl = await this.storage.upload(buffer, key, mimetype);
+    // Se reduce y comprime igual que las fotos de producto, pero sin recortar
+    // a cuadrado y respetando los SVG. Ver image.util.ts.
+    const optimized = await optimizeLogo(buffer, mimetype);
+    const key = `branding/logo-${Date.now()}.${optimized.ext}`;
+    const logoUrl = await this.storage.upload(optimized.buffer, key, optimized.contentType);
     const updated = await this.prisma.businessProfile.update({
       where: { id: existing.id },
       data: { logoUrl },

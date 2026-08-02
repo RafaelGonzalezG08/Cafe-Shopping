@@ -8,6 +8,7 @@ import Products from './pages/products/Products';
 import Clients from './pages/clients/Clients';
 import Cobros from './pages/cobros/Cobros';
 import Sales from './pages/sales/Sales';
+import Orders from './pages/orders/Orders';
 import Expenses from './pages/expenses/Expenses';
 import Reports from './pages/reports/Reports';
 import Costs from './pages/costs/Costs';
@@ -53,6 +54,7 @@ export default function App() {
             }
           />
           <Route path="/ventas" element={<Sales />} />
+          <Route path="/pedidos" element={<Orders />} />
           <Route
             path="/gastos"
             element={

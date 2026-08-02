@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, ImagePlus, Gem, X, Pencil, Search } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
+import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { Button, Card, PageHeader, EmptyState, Badge } from '../../components/ui';
 import type { Product } from '../../types';
@@ -57,6 +58,7 @@ export default function Products() {
     onSuccess: () => {
       toast.success('Producto creado.');
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      limpiarBorrador('productos:nuevo');
       setShowForm(false);
     },
   });
@@ -68,9 +70,10 @@ export default function Products() {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
       ).data,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success('Producto actualizado.');
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      limpiarBorrador(`productos:editar:${variables.id}`);
       setEditing(null);
     },
   });
@@ -154,6 +157,7 @@ export default function Products() {
           title="Nuevo producto"
           submitLabel="Crear producto"
           isPending={createProduct.isPending}
+          persistKey="productos:nuevo"
           onClose={() => setShowForm(false)}
           onSubmit={(values) => createProduct.mutate(values)}
         />
@@ -172,6 +176,7 @@ export default function Products() {
             file: null,
           }}
           currentImage={imageSrc(editing)}
+          persistKey={`productos:editar:${editing.id}`}
           onClose={() => setEditing(null)}
           onSubmit={(values) => updateProduct.mutate({ id: editing.id, values })}
         />
@@ -186,6 +191,7 @@ function ProductModal({
   isPending,
   initial,
   currentImage,
+  persistKey,
   onClose,
   onSubmit,
 }: {
@@ -194,13 +200,30 @@ function ProductModal({
   isPending: boolean;
   initial?: ProductFormValues;
   currentImage?: string | null;
+  persistKey: string;
   onClose: () => void;
   onSubmit: (values: ProductFormValues) => void;
 }) {
-  const [form, setForm] = useState<ProductFormValues>(
-    initial ?? { nombre: '', precioUnitario: '', costoUnitario: '', stock: '', file: null },
-  );
+  // Solo los campos de texto se guardan como borrador: un File no se puede
+  // serializar, y aunque se pudiera, "recordar" un archivo que el usuario ya
+  // no ve seleccionado seria mas confuso que util. La foto se vuelve a elegir.
+  const { file: _initialFile, ...initialTexto } = initial ?? {
+    nombre: '',
+    precioUnitario: '',
+    costoUnitario: '',
+    stock: '',
+    file: null,
+  };
+  const [texto, setTexto] = usePersistedState(persistKey, initialTexto);
+  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+
+  const form: ProductFormValues = { ...texto, file };
+  const setForm = (updater: (f: ProductFormValues) => ProductFormValues) => {
+    const { file: nuevoFile, ...resto } = updater(form);
+    setTexto(resto);
+    if (nuevoFile !== file) setFile(nuevoFile);
+  };
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -211,9 +234,9 @@ function ProductModal({
     onSubmit(form);
   }
 
-  function handleFile(file: File | null) {
-    setForm((f) => ({ ...f, file }));
-    setPreview(file ? URL.createObjectURL(file) : null);
+  function handleFile(nuevo: File | null) {
+    setFile(nuevo);
+    setPreview(nuevo ? URL.createObjectURL(nuevo) : null);
   }
 
   const photoToShow = preview ?? currentImage ?? null;

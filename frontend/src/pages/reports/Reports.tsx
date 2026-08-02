@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Download } from 'lucide-react';
 import { api } from '../../lib/api';
+import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { ClientDebt } from '../../types';
@@ -27,9 +28,11 @@ interface Cashflow {
 }
 
 export default function Reports() {
-  const [group, setGroup] = useState<'day' | 'week' | 'month' | 'year'>('day');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // Los filtros se recuerdan: al volver de revisar otra pantalla, el reporte
+  // sigue en el mismo periodo en vez de resetearse a los ultimos 30 dias.
+  const [group, setGroup] = usePersistedState<'day' | 'week' | 'month' | 'year'>('reportes:agrupar', 'day');
+  const [from, setFrom] = usePersistedState('reportes:desde', '');
+  const [to, setTo] = usePersistedState('reportes:hasta', '');
 
   const params = { from: from || undefined, to: to || undefined };
 

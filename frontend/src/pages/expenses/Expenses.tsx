@@ -1,15 +1,17 @@
-import { useState, type FormEvent } from 'react';
+import { type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate } from '../../lib/format';
 import { Button, Card, PageHeader, EmptyState } from '../../components/ui';
 import type { Expense } from '../../types';
 
 export default function Expenses() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ categoria: '', descripcion: '', monto: '' });
+  // El gasto a medio escribir sobrevive si se sale de la pantalla sin querer.
+  const [form, setForm] = usePersistedState('gastos:nuevo', { categoria: '', descripcion: '', monto: '' });
 
   const { data: expenses = [], isLoading } = useQuery<Expense[]>({
     queryKey: ['expenses'],

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check } from 'lucide-react';
+import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check, Package } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
+import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card } from '../../components/ui';
 import type { Client, MetodoPago, Product, Sale } from '../../types';
@@ -20,15 +21,25 @@ const METODOS: MetodoPago[] = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'CREDITO'
 export default function POS() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [manualDesc, setManualDesc] = useState('');
-  const [manualPrice, setManualPrice] = useState('');
+  // La venta a medio armar se guarda sola: si el cajero sale de la pantalla
+  // por accidente (o se cierra la app), al volver el carrito sigue ahi.
+  // Ver lib/usePersistedState.ts.
+  const [cart, setCart] = usePersistedState<CartLine[]>('pos:carrito', []);
+  const [manualDesc, setManualDesc] = usePersistedState('pos:manual-desc', '');
+  const [manualPrice, setManualPrice] = usePersistedState('pos:manual-precio', '');
   const [clientSearch, setClientSearch] = useState('');
   const [clientModalOpen, setClientModalOpen] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | undefined>();
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
-  const [fechaVencimiento, setFechaVencimiento] = useState('');
+  const [selectedClientId, setSelectedClientId] = usePersistedState<string | undefined>('pos:cliente-id', undefined);
+  const [selectedClient, setSelectedClient] = usePersistedState<Client | null>('pos:cliente', null);
+  const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago>('pos:metodo-pago', 'EFECTIVO');
+  const [fechaVencimiento, setFechaVencimiento] = usePersistedState('pos:vencimiento', '');
+  // Pedido por entregar: la pieza no sale hoy con el cliente, queda en el
+  // registro de Pedidos hasta que se entregue.
+  const [esPedido, setEsPedido] = usePersistedState('pos:es-pedido', false);
+  const [fechaEntrega, setFechaEntrega] = usePersistedState('pos:fecha-entrega', '');
+  // completedSale NO se persiste: es el resultado de una venta ya cerrada, no
+  // trabajo a medias, y volver a la pantalla mostrando una factura vieja
+  // haria pensar que la venta se acaba de hacer otra vez.
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
   const { data: products = [] } = useQuery<Product[]>({
@@ -69,7 +80,19 @@ export default function POS() {
     setCart((prev) => {
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
+        // Avisa aqui en vez de dejar que la venta falle al cobrar: el backend
+        // rechaza la venta si no hay stock suficiente (ver descontarStock en
+        // sales.service.ts), y descubrirlo recien al cobrar, con el cliente
+        // enfrente, es la peor forma de enterarse.
+        if (existing.cantidad >= product.stock) {
+          toast.error(`Solo quedan ${product.stock} de "${product.nombre}".`);
+          return prev;
+        }
         return prev.map((l) => (l.productId === product.id ? { ...l, cantidad: l.cantidad + 1 } : l));
+      }
+      if (product.stock < 1) {
+        toast.error(`"${product.nombre}" no tiene stock disponible.`);
+        return prev;
       }
       return [
         ...prev,
@@ -99,11 +122,21 @@ export default function POS() {
   }
 
   function updateQty(key: string, delta: number) {
-    setCart((prev) =>
-      prev
+    setCart((prev) => {
+      const line = prev.find((l) => l.key === key);
+      // Mismo limite de stock que addProduct: el boton "+" del carrito es otra
+      // via para pasarse de las existencias reales.
+      if (line?.productId && delta > 0) {
+        const product = products.find((p) => p.id === line.productId);
+        if (product && line.cantidad + delta > product.stock) {
+          toast.error(`Solo quedan ${product.stock} de "${product.nombre}".`);
+          return prev;
+        }
+      }
+      return prev
         .map((l) => (l.key === key ? { ...l, cantidad: l.cantidad + delta } : l))
-        .filter((l) => l.cantidad > 0),
-    );
+        .filter((l) => l.cantidad > 0);
+    });
   }
 
   function removeLine(key: string) {
@@ -117,6 +150,8 @@ export default function POS() {
     setClientSearch('');
     setMetodoPago('EFECTIVO');
     setFechaVencimiento('');
+    setEsPedido(false);
+    setFechaEntrega('');
     setCompletedSale(null);
   }
 
@@ -126,6 +161,8 @@ export default function POS() {
         clientId: selectedClientId,
         metodoPago,
         fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
+        esPedido: esPedido || undefined,
+        fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
         items: cart.map((l) => ({
           productId: l.productId,
           descripcion: l.descripcion,
@@ -136,10 +173,11 @@ export default function POS() {
       return data as Sale;
     },
     onSuccess: (sale) => {
-      toast.success('Venta registrada.');
+      toast.success(esPedido ? 'Venta registrada y agregada a Pedidos.' : 'Venta registrada.');
       setCompletedSale(sale);
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 
@@ -163,12 +201,28 @@ export default function POS() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {filteredProducts.map((product) => (
+          {filteredProducts.map((product) => {
+            // Misma señal visual que el cliente seleccionado (verde + palomita):
+            // si el producto ya esta en la factura, se nota aunque el cajero
+            // llegue a el buscando otra cosa, en vez de agregarlo dos veces
+            // sin darse cuenta.
+            const enCarrito = cart.find((l) => l.productId === product.id);
+            return (
             <button
               key={product.id}
               onClick={() => addProduct(product)}
-              className="flex flex-col items-start overflow-hidden rounded-xl2 border border-porcelain-300 bg-white text-left transition-colors hover:border-copper-400 hover:bg-copper-50"
+              className={`relative flex flex-col items-start overflow-hidden rounded-xl2 border text-left transition-colors ${
+                enCarrito
+                  ? 'border-sage-500 bg-sage-100 hover:bg-sage-100'
+                  : 'border-porcelain-300 bg-white hover:border-copper-400 hover:bg-copper-50'
+              }`}
             >
+              {enCarrito && (
+                <span className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-sage-500 px-2 py-0.5 text-xs font-bold text-white shadow">
+                  <Check size={11} strokeWidth={3} />
+                  {enCarrito.cantidad}
+                </span>
+              )}
               <div className="flex h-24 w-full items-center justify-center bg-porcelain-200">
                 {product.imageUrl ? (
                   <img
@@ -189,7 +243,8 @@ export default function POS() {
                 <span className="mt-0.5 block text-xs text-muted">Stock: {product.stock}</span>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         <Card className="mt-4 p-4">
@@ -381,6 +436,38 @@ export default function POS() {
               className="mt-1.5 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
             />
           )}
+
+          {/* Pedido por entregar: la pieza no sale hoy con el cliente. */}
+          <div className={`mt-3 rounded-lg border p-3 ${esPedido ? 'border-copper-400 bg-copper-50' : 'border-porcelain-300'}`}>
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={esPedido}
+                onChange={(e) => setEsPedido(e.target.checked)}
+                className="h-4 w-4 accent-copper-500"
+              />
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                <Package size={15} className={esPedido ? 'text-copper-600' : 'text-muted'} />
+                Es un pedido por entregar
+              </span>
+            </label>
+            {esPedido && (
+              <div className="mt-2.5">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Fecha de entrega
+                </label>
+                <input
+                  type="date"
+                  value={fechaEntrega}
+                  onChange={(e) => setFechaEntrega(e.target.value)}
+                  className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+                />
+                <p className="mt-1.5 text-[11px] text-muted">
+                  Aparecera en Pedidos y en el Dashboard hasta que lo marques como entregado.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <Button
@@ -407,7 +494,8 @@ function InvoicePreview({
   const imageSrc = png?.startsWith('http') ? png : png ? apiUrl(png) : undefined;
 
   const sendWhatsapp = useMutation({
-    mutationFn: async () => (await api.post(`/sales/${sale.id}/send-invoice-whatsapp`)).data,
+    mutationFn: async () =>
+      (await api.post(`/sales/${sale.id}/send-invoice-whatsapp`, undefined, { skipErrorToast: true })).data,
     onSuccess: () => {
       toast.success('Factura enviada por WhatsApp.');
     },

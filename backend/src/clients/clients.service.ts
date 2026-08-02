@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -66,8 +66,30 @@ export class ClientsService {
     return client;
   }
 
+  /**
+   * Borra un cliente que todavia no tiene historial.
+   *
+   * Si ya tiene ventas o deudas NO se borra: la base tiene llaves foraneas
+   * desde `sales`/`client_debts` hacia `clients`, asi que el borrado fallaba
+   * con un error crudo de Postgres (500 sin explicacion). Y aunque no
+   * fallara, borrarlo destruiria el rastro de facturas ya emitidas a su
+   * nombre. Se avisa con un mensaje claro en su lugar.
+   */
   async remove(id: string, userId?: string) {
     await this.ensureExists(id);
+
+    const [ventas, deudas] = await Promise.all([
+      this.prisma.sale.count({ where: { clientId: id } }),
+      this.prisma.clientDebt.count({ where: { clientId: id } }),
+    ]);
+
+    if (ventas > 0 || deudas > 0) {
+      throw new BadRequestException(
+        `No se puede borrar este cliente porque ya tiene historial (${ventas} venta(s) y ${deudas} deuda(s)). ` +
+          `Borrarlo eliminaria el rastro de facturas ya emitidas a su nombre.`,
+      );
+    }
+
     await this.prisma.client.delete({ where: { id } });
     await this.audit.log('Client', id, 'DELETE', userId);
     return { id, deleted: true };

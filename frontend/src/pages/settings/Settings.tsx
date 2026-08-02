@@ -82,7 +82,7 @@ export default function Settings() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      return (await api.post('/settings/business-profile/logo', formData)).data;
+      return (await api.post('/settings/business-profile/logo', formData, { skipErrorToast: true })).data;
     },
     onSuccess: () => {
       toast.success('Icono del negocio actualizado.');
@@ -111,7 +111,8 @@ export default function Settings() {
 
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const restoreBackup = useMutation({
-    mutationFn: async (fileName: string) => (await api.post('/backups/restore', { fileName })).data,
+    mutationFn: async (fileName: string) =>
+      (await api.post('/backups/restore', { fileName }, { skipErrorToast: true })).data,
     onSuccess: (data) => {
       if (data.ok) {
         toast.success(

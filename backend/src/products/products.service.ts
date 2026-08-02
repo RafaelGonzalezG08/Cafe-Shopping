@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { StorageService } from '../invoices/storage.service';
+import { optimizeProductImage } from '../common/image.util';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -83,9 +84,11 @@ export class ProductsService {
 
   async updatePhoto(id: string, buffer: Buffer, mimetype: string, userId?: string) {
     await this.findOne(id);
-    const ext = mimetype === 'image/png' ? 'png' : mimetype === 'image/webp' ? 'webp' : 'jpg';
-    const key = `products/${id}-${Date.now()}.${ext}`;
-    const imageUrl = await this.storage.upload(buffer, key, mimetype);
+    // Se reduce a 800x800 y se comprime antes de guardar (ver image.util.ts):
+    // las fotos vienen del celular pesando megabytes y se muestran a 144px.
+    const optimized = await optimizeProductImage(buffer, mimetype);
+    const key = `products/${id}-${Date.now()}.${optimized.ext}`;
+    const imageUrl = await this.storage.upload(optimized.buffer, key, optimized.contentType);
     const product = await this.prisma.product.update({ where: { id }, data: { imageUrl } });
     await this.audit.log('Product', id, 'UPDATE', userId, { imageUrl });
     return product;

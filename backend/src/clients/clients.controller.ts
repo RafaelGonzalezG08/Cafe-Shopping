@@ -14,7 +14,10 @@ import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('clients')
 @ApiBearerAuth()
@@ -47,7 +50,12 @@ export class ClientsController {
     return this.clientsService.update(id, dto, user.userId);
   }
 
+  // Borrar un cliente es destructivo e irreversible: se restringe a ADMIN
+  // (antes cualquier CAJERO podia hacerlo). El servicio ademas se niega a
+  // borrar clientes que ya tienen ventas o deudas registradas.
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
   remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.clientsService.remove(id, user.userId);
   }

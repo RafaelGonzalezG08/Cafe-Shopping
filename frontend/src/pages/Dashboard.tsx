@@ -1,9 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { DollarSign, AlertCircle, Wallet, ShoppingBag } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  DollarSign,
+  AlertCircle,
+  Wallet,
+  ShoppingBag,
+  Package,
+  AlertTriangle,
+  CalendarClock,
+  ChevronRight,
+} from 'lucide-react';
 import { api } from '../lib/api';
-import { formatMoney, formatDate } from '../lib/format';
-import { Card, PageHeader } from '../components/ui';
-import type { DashboardSummary } from '../types';
+import { formatMoney, formatDate, ESTADO_PEDIDO_LABEL } from '../lib/format';
+import { Card, PageHeader, Badge } from '../components/ui';
+import type { DashboardSummary, OrdersSummary } from '../types';
 
 function KpiCard({
   label,
@@ -34,6 +44,91 @@ function KpiCard({
   );
 }
 
+/**
+ * Bloque de pedidos por entregar.
+ *
+ * Va ARRIBA de los KPIs y no abajo a proposito: son compromisos con clientes
+ * que esperan algo, y a diferencia de las cifras del dia, si se pasan por alto
+ * hay alguien esperando. Cuando hay atrasados el bloque se pinta en rojo para
+ * que salte a la vista sin tener que leerlo.
+ */
+function PedidosDestacados() {
+  const { data } = useQuery<OrdersSummary>({
+    queryKey: ['orders', 'summary'],
+    queryFn: async () => (await api.get('/orders/summary')).data,
+    refetchInterval: 60_000,
+  });
+
+  // Sin pedidos vivos no se muestra nada: un bloque vacio permanente solo
+  // gasta espacio y entrena al ojo a ignorar esa zona.
+  if (!data || data.total === 0) return null;
+
+  const hayAtrasados = data.atrasados > 0;
+
+  return (
+    <Card className={`mb-6 p-5 ${hayAtrasados ? 'border-brick-500 bg-brick-100/40' : ''}`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
+          {hayAtrasados ? (
+            <AlertTriangle size={16} className="text-brick-600" />
+          ) : (
+            <Package size={16} className="text-copper-600" />
+          )}
+          Pedidos por entregar
+        </h2>
+        <Link
+          to="/pedidos"
+          className="flex items-center gap-1 text-xs font-semibold text-copper-600 hover:text-copper-700"
+        >
+          Ver todos <ChevronRight size={14} />
+        </Link>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {data.atrasados > 0 && (
+          <Badge tone="brick">
+            <AlertTriangle size={11} className="mr-1" />
+            {data.atrasados} atrasado{data.atrasados === 1 ? '' : 's'}
+          </Badge>
+        )}
+        {data.paraHoy > 0 && (
+          <Badge tone="copper">
+            <CalendarClock size={11} className="mr-1" />
+            {data.paraHoy} para hoy
+          </Badge>
+        )}
+        <Badge tone="neutral">{data.pendientes} pendiente{data.pendientes === 1 ? '' : 's'}</Badge>
+        <Badge tone="sage">{data.empacados} empacado{data.empacados === 1 ? '' : 's'}</Badge>
+      </div>
+
+      <div className="divide-y divide-porcelain-200">
+        {data.proximos.map((order) => (
+          <div key={order.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+            <div className="min-w-0">
+              <p className="truncate font-medium text-ink">
+                {order.sale?.client?.nombre ?? 'Consumidor final'}
+              </p>
+              <p className="truncate text-xs text-muted">
+                {order.sale?.items.map((i) => `${i.cantidad} x ${i.descripcion}`).join(', ')}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <Badge
+                tone={
+                  order.urgencia === 'ATRASADO' ? 'brick' : order.urgencia === 'HOY' ? 'copper' : 'neutral'
+                }
+              >
+                {order.fechaEntrega ? formatDate(order.fechaEntrega) : 'Sin fecha'}
+              </Badge>
+              <p className="mt-0.5 text-[11px] text-muted">{ESTADO_PEDIDO_LABEL[order.estado]}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const { data, isLoading } = useQuery<DashboardSummary>({
     queryKey: ['dashboard'],
@@ -44,6 +139,8 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Resumen del negocio en tiempo real" />
+
+      <PedidosDestacados />
 
       {isLoading || !data ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

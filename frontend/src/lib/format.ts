@@ -20,6 +20,12 @@ export const ESTADO_DEUDA_LABEL: Record<string, string> = {
   VENCIDA: 'Vencida',
 };
 
+export const ESTADO_PEDIDO_LABEL: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  EMPACADO: 'Empacado',
+  ENTREGADO: 'Entregado',
+};
+
 export const METODO_PAGO_LABEL: Record<string, string> = {
   EFECTIVO: 'Efectivo',
   TARJETA: 'Tarjeta',
