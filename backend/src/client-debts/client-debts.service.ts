@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { EstadoDeuda } from '../common/enums';
+import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
@@ -31,7 +31,7 @@ export class ClientDebtsService {
 
   async findAll(status?: EstadoDeuda) {
     const debts = await this.prisma.clientDebt.findMany({
-      where: status ? { status } : { status: { not: EstadoDeuda.PAGADA } },
+      where: status ? { status } : { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
       include: {
         client: { select: { id: true, nombre: true, telefono: true, lastReminderSentAt: true } },
       },

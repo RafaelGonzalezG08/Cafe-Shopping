@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EstadoDeuda } from '../common/enums';
+import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { localDateKey, parseFromDate, parseToDate } from '../common/date-range';
 
@@ -138,7 +138,7 @@ export class ReportsService {
 
   async clientDebts() {
     const debts = await this.prisma.clientDebt.findMany({
-      where: { status: { not: EstadoDeuda.PAGADA } },
+      where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
       include: { client: { select: { id: true, nombre: true, telefono: true } } },
       orderBy: { dueDate: 'asc' },
     });
@@ -205,7 +205,7 @@ export class ReportsService {
     const [ventasHoy, deudas, gastosRecientes, gastosMes] = await Promise.all([
       this.prisma.sale.aggregate({ where: { fecha: { gte: startOfDay } }, _sum: { total: true }, _count: true }),
       this.prisma.clientDebt.aggregate({
-        where: { status: { not: EstadoDeuda.PAGADA } },
+        where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
         _sum: { amountTotal: true, amountPaid: true },
       }),
       this.prisma.expense.findMany({ orderBy: { fecha: 'desc' }, take: 5 }),

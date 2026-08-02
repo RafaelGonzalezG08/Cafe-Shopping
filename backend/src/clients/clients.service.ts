@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ESTADOS_DEUDA_CON_SALDO } from '../common/enums';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -28,7 +29,7 @@ export class ClientsService {
         : undefined,
       orderBy: { nombre: 'asc' },
       include: {
-        debts: { where: { status: { not: 'PAGADA' } } },
+        debts: { where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } } },
       },
     });
 

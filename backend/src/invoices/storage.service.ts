@@ -69,7 +69,18 @@ export class StorageService {
     this.logger.warn(
       `S3 no configurado: "${key}" se guardo localmente. El envio por WhatsApp requiere una URL publica.`,
     );
-    const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-    return `${backendUrl}/uploads/${key}`;
+    // Ruta RELATIVA, no una URL absoluta con host y puerto.
+    //
+    // Antes se guardaba "http://localhost:3000/uploads/...", con el puerto
+    // incrustado en la base de datos. Eso rompia las fotos en cuanto el
+    // backend cambiaba de puerto (justo lo que paso al pasar a la version
+    // nativa, que usa el 3010): las fichas quedaban sin imagen aunque el
+    // archivo siguiera ahi. La interfaz ya sabe anteponer la direccion del
+    // backend a las rutas relativas (ver apiUrl() en el frontend).
+    //
+    // Si hay una URL publica configurada (para links que se abran fuera de la
+    // PC) si se usa completa, porque ahi el host importa.
+    const backendUrl = process.env.BACKEND_PUBLIC_URL?.replace(/\/$/, '');
+    return backendUrl ? `${backendUrl}/uploads/${key}` : `/uploads/${key}`;
   }
 }

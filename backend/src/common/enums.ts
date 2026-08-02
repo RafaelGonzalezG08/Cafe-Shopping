@@ -56,6 +56,18 @@ export const EstadoPedido = {
 } as const;
 export type EstadoPedido = (typeof EstadoPedido)[keyof typeof EstadoPedido];
 
+/**
+ * Estados de deuda que todavia tienen saldo, como lista explicita.
+ *
+ * Se usa en vez de `{ status: { not: PAGADA } }` a proposito: SQLite limita
+ * cuantos parametros admite una consulta, y Prisma la parte en varias cuando
+ * hace falta — pero NO puede partirla si lleva un filtro de negacion. Con
+ * 2431 clientes eso reventaba el listado entero ("Query parameter limit
+ * exceeded"). Enumerar los estados evita la negacion y deja que Prisma parta
+ * la consulta con normalidad.
+ */
+export const ESTADOS_DEUDA_CON_SALDO = ['PENDIENTE', 'PARCIAL', 'VENCIDA'] as const;
+
 /** Listas para validadores (class-validator `IsIn`) y para recorrer valores. */
 export const ROLES = Object.values(Role);
 export const METODOS_PAGO = Object.values(MetodoPago);

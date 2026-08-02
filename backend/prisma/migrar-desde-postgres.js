@@ -22,6 +22,8 @@
  */
 
 const path = require('path');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
 // Dos clientes distintos a proposito: el normal ya quedo generado contra
 // SQLite y rechaza una URL de postgres. El de lectura se genera aparte desde
 // schema-origen-postgres.prisma (ver README de la rama).
@@ -56,10 +58,31 @@ const TABLAS = [
   'auditLog',
 ];
 
+/**
+ * Convierte las URLs absolutas de archivos en rutas relativas.
+ *
+ * La version con Docker guardaba "http://localhost:3000/uploads/...", con el
+ * puerto metido dentro del dato. La version nativa usa otro puerto, asi que
+ * esas fotos y facturas apuntarian a un servidor que ya no existe y las
+ * fichas se verian sin imagen. Guardar la ruta relativa las hace
+ * independientes del puerto.
+ */
+function aRutaRelativa(valor) {
+  if (typeof valor !== 'string') return valor;
+  const m = valor.match(/^https?:\/\/[^/]+(\/uploads\/.*)$/);
+  return m ? m[1] : valor;
+}
+
+const CAMPOS_DE_ARCHIVO = new Set(['imageUrl', 'logoUrl', 'pngUrl', 'pdfUrl']);
+
 /** Los Decimal de Prisma se pasan a string para no perder centavos por el camino. */
 function normalizar(fila) {
   const salida = {};
   for (const [clave, valor] of Object.entries(fila)) {
+    if (CAMPOS_DE_ARCHIVO.has(clave)) {
+      salida[clave] = aRutaRelativa(valor);
+      continue;
+    }
     if (valor === null || valor === undefined) {
       salida[clave] = valor;
     } else if (typeof valor === 'object' && typeof valor.toFixed === 'function' && !(valor instanceof Date)) {
@@ -72,6 +95,42 @@ function normalizar(fila) {
     }
   }
   return salida;
+}
+
+/**
+ * Copia las fotos de productos y los PNG de facturas desde el volumen de
+ * Docker a la carpeta de la version nativa.
+ *
+ * Migrar solo la base de datos no basta: los registros guardan la RUTA del
+ * archivo, no el archivo. Sin este paso el catalogo quedaria con todas las
+ * fichas sin foto y las facturas ya emitidas no se podrian reenviar por
+ * WhatsApp.
+ */
+function copiarArchivos(destinoUploads) {
+  const CONTENEDOR = process.env.CONTENEDOR_BACKEND || 'cafe-shopping-backend-1';
+  try {
+    execFileSync('docker', ['inspect', '--format', '{{.State.Running}}', CONTENEDOR], {
+      stdio: 'pipe',
+    });
+  } catch {
+    console.log('');
+    console.log(`No se encontro el contenedor ${CONTENEDOR} corriendo.`);
+    console.log('Enciende la version con Docker y vuelve a ejecutar, o copia a mano');
+    console.log(`las carpetas products/ e invoices/ a: ${destinoUploads}`);
+    return false;
+  }
+
+  fs.mkdirSync(destinoUploads, { recursive: true });
+  console.log('');
+  console.log('Copiando fotos y facturas desde el volumen de Docker...');
+  execFileSync('docker', ['cp', `${CONTENEDOR}:/app/uploads/.`, destinoUploads], { stdio: 'pipe' });
+
+  for (const carpeta of ['products', 'invoices']) {
+    const ruta = path.join(destinoUploads, carpeta);
+    const cuantos = fs.existsSync(ruta) ? fs.readdirSync(ruta).length : 0;
+    console.log(`  ${carpeta.padEnd(10)} ${cuantos} archivos`);
+  }
+  return true;
 }
 
 async function main() {
@@ -127,6 +186,10 @@ async function main() {
     console.log(`Total vendido en Postgres: ${a.toFixed(2)}`);
     console.log(`Total vendido en SQLite  : ${b.toFixed(2)}`);
     console.log(Math.abs(a - b) < 0.005 ? 'Los montos coinciden.' : 'LOS MONTOS NO COINCIDEN — revisar.');
+
+    // Los archivos van despues de los datos: si algo falla en la copia, al
+    // menos la base ya quedo migrada y se puede reintentar solo esta parte.
+    copiarArchivos(path.join(path.dirname(SQLITE_FILE), 'uploads'));
   } finally {
     await pg.$disconnect().catch(() => undefined);
     await sqlite.$disconnect().catch(() => undefined);
