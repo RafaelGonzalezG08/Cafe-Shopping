@@ -10,6 +10,7 @@
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const nativo = require('./nativo');
 const { spawn, execFile } = require('child_process');
 const net = require('net');
 const path = require('path');
@@ -219,7 +220,9 @@ function syncBackupsToOneDrive() {
     return { copiados: 0, destino: null };
   }
 
-  const origen = path.join(PROJECT_DIR, 'backups');
+  // Los respaldos los genera el backend dentro de los datos del usuario, no
+  // en la carpeta del programa (que el instalador reemplaza al actualizar).
+  const origen = path.join(nativo.dataDir(), 'backups');
   if (!fs.existsSync(origen)) return { copiados: 0, destino };
 
   let copiados = 0;
@@ -512,14 +515,23 @@ async function startup() {
   }
 
   try {
-    setSplashStatus('Verificando Docker Desktop...');
-    await ensureDockerRunning();
+    // Arranque nativo: sin Docker, sin contenedores, sin esperar a que una
+    // maquina virtual despierte. El backend es un proceso hijo y el frontend
+    // se sirve desde disco (ver nativo.js).
+    setSplashStatus('Iniciando el servicio...');
+    nativo.startBackend((linea) => console.log(`[backend] ${linea}`));
 
-    setSplashStatus('Iniciando los contenedores...');
-    await dockerComposeUp();
+    setSplashStatus('Preparando la base de datos...');
+    const backendListo = await nativo.waitForBackend(setSplashStatus);
+    if (!backendListo) {
+      throw new Error(
+        'El servicio interno no respondio a tiempo.\n\n' +
+          'Vuelve a abrir la aplicacion. Si sigue igual, avisa para revisar el registro de errores.',
+      );
+    }
 
-    setSplashStatus('Esperando a que la app este lista...');
-    await waitForFrontend();
+    setSplashStatus('Cargando la interfaz...');
+    await nativo.startFrontend();
 
     // Caso especial: si en la sesion anterior el usuario eligio "Instalar
     // despues", esa instalacion SI se hace antes de abrir la ventana. Ya la
@@ -580,11 +592,12 @@ async function startup() {
 app.whenReady().then(startup);
 
 app.on('window-all-closed', () => {
-  // A diferencia de los contenedores de Docker (esos SI se quedan corriendo
-  // a proposito, para que la proxima apertura sea instantanea), el agente
-  // de WhatsApp se cierra junto con la app: si no, se queda corriendo en
-  // segundo plano sin que el usuario lo sepa, y puede seguir "activo"
-  // aunque la persona crea que cerro todo.
+  // Todo se cierra junto con la app. En la version con Docker los
+  // contenedores se dejaban corriendo a proposito (para que la siguiente
+  // apertura fuera rapida), pero aqui no hace falta: el backend arranca en
+  // segundos. Dejarlo vivo solo consumiria memoria y mantendria la base de
+  // datos abierta, complicando los respaldos y las actualizaciones.
+  nativo.stopAll();
   killWhatsappAgent().finally(() => {
     if (process.platform !== 'darwin') app.quit();
   });

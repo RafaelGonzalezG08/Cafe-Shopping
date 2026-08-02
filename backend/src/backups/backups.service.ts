@@ -5,8 +5,9 @@ import { promisify } from 'util';
 import { promises as fs, createReadStream, createWriteStream } from 'fs';
 import { createGzip, createGunzip } from 'zlib';
 import { pipeline as pipelineCb } from 'stream';
-import { join, isAbsolute, resolve } from 'path';
+import { join, isAbsolute, resolve, dirname, basename } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { BACKUPS_DIR, UPLOADS_DIR } from '../common/paths';
 
 const execAsync = promisify(exec);
 const pipeline = promisify(pipelineCb);
@@ -26,8 +27,8 @@ function resolveSqliteFile(): string {
   return isAbsolute(ruta) ? ruta : resolve(process.cwd(), 'prisma', ruta);
 }
 
-const BACKUP_DIR = process.env.BACKUP_DIR || join(process.cwd(), 'backups');
-const UPLOADS_DIR = join(process.cwd(), 'uploads');
+const BACKUP_DIR = BACKUPS_DIR;
+
 const RETENTION_DAYS = Number(process.env.BACKUP_RETENTION_DAYS ?? 30);
 const INTERVAL_DAYS = Number(process.env.BACKUP_INTERVAL_DAYS ?? 3);
 const MARKER_FILE = join(BACKUP_DIR, '.last-backup.json');
@@ -141,7 +142,10 @@ export class BackupsService {
           .catch(() => false);
         if (hasUploads) {
           uploadsFile = join(BACKUP_DIR, `uploads-${timestamp}.tar.gz`);
-          await execAsync(`tar -czf "${uploadsFile}" -C "${process.cwd()}" uploads`);
+          // -C a la carpeta PADRE de uploads (no a process.cwd()): en la
+          // version nativa uploads vive en los datos del usuario, fuera de la
+          // carpeta del programa.
+          await execAsync(`tar -czf "${uploadsFile}" -C "${dirname(UPLOADS_DIR)}" "${basename(UPLOADS_DIR)}"`);
         }
       } catch (error) {
         this.logger.warn(`No se pudo respaldar la carpeta de uploads: ${error}`);
@@ -237,7 +241,7 @@ export class BackupsService {
         // fs.rm en vez de "rm -rf": ese comando no existe en Windows nativo.
         await fs.rm(UPLOADS_DIR, { recursive: true, force: true });
         await fs.mkdir(UPLOADS_DIR, { recursive: true });
-        await execAsync(`tar -xzf "${uploadsFile}" -C "${process.cwd()}"`);
+        await execAsync(`tar -xzf "${uploadsFile}" -C "${dirname(UPLOADS_DIR)}"`);
         restoredUploads = true;
       }
 

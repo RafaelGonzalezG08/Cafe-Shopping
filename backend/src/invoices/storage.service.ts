@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { UPLOADS_DIR } from '../common/paths';
 
 /**
  * Sube archivos a S3 (o cualquier proveedor S3-compatible, ej. DigitalOcean Spaces
@@ -20,7 +21,7 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly s3Client: S3Client | null;
   private readonly bucket = process.env.S3_BUCKET;
-  private readonly localDir = join(process.cwd(), 'uploads');
+  private readonly localDir = UPLOADS_DIR;
 
   constructor() {
     this.s3Client = this.bucket

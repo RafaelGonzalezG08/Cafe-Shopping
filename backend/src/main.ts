@@ -6,11 +6,22 @@ import * as express from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { MigrationsService } from './prisma/migrations.service';
+import { UPLOADS_DIR } from './common/paths';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+
+  // Aplica las migraciones pendientes antes de atender peticiones. En la
+  // version con Docker de esto se encargaba `prisma migrate deploy` en el
+  // arranque del contenedor; aqui se hace en proceso para no tener que
+  // empaquetar el CLI de Prisma en la app de escritorio (ver
+  // MigrationsService). PRISMA_MIGRATIONS_DIR lo define Electron, que sabe
+  // donde quedaron los archivos dentro de la instalacion.
+  const migrationsDir = process.env.PRISMA_MIGRATIONS_DIR || join(process.cwd(), 'prisma', 'migrations');
+  await app.get(MigrationsService).applyPending(migrationsDir);
 
   const configuredOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -30,7 +41,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Sirve los archivos generados localmente (fallback cuando no hay S3 configurado)
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  app.use('/uploads', express.static(UPLOADS_DIR));
 
   app.setGlobalPrefix('api');
 
