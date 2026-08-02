@@ -26,7 +26,6 @@
     ],
     "extraResources": [
       {
-        "//": "Backend compilado. Incluye node_modules porque ahora el backend corre como proceso normal (antes vivia dentro del contenedor con sus dependencias adentro). Se excluye lo que solo sirve para desarrollo.",
         "from": "../backend",
         "to": "app-project/backend",
         "filter": [
@@ -53,12 +52,10 @@
         ]
       },
       {
-        "//": "Solo el build del frontend: lo sirve nativo.js, ya no hay nginx.",
         "from": "../frontend/dist",
         "to": "app-project/frontend/dist"
       },
       {
-        "//": "Agente de WhatsApp (lee la cola directo del disco, sin Docker).",
         "from": "..",
         "to": "app-project",
         "filter": [

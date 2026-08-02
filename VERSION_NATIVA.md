@@ -91,8 +91,13 @@ node prisma/migrar-desde-postgres.js
 ```
 
 Copia clientes, productos, ventas, facturas, deudas y auditoria conservando
-los ids, y al terminar compara el total vendido de ambas bases. Solo lee de
-Postgres, y se puede repetir sin duplicar nada.
+los ids, y al terminar compara el total vendido de ambas bases. Tambien trae
+las fotos de productos y los PNG de facturas desde el volumen de Docker (los
+registros guardan la ruta, no el archivo) y convierte las URLs absolutas
+`http://localhost:3000/uploads/...` en rutas relativas, para que no dependan
+del puerto.
+
+Solo lee de Postgres, y se puede repetir sin duplicar nada.
 
 ---
 
