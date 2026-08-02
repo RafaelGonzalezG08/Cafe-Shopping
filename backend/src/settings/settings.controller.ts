@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Post, Put, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../common/enums';
 import { SettingsService } from './settings.service';
 import { UpdateBusinessProfileDto } from './dto/update-business-profile.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNumber, IsPositive } from 'class-validator';
-import { MetodoPago } from '@prisma/client';
+import { MetodoPago } from '../../common/enums';
 
 export class RegisterPaymentDto {
   @ApiProperty({ example: 500 })

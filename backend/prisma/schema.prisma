@@ -3,52 +3,22 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 // ---------- Enums ----------
 
-enum Role {
-  ADMIN
-  CAJERO
-  CONTABILIDAD
-}
 
-enum MetodoPago {
-  EFECTIVO
-  TARJETA
-  TRANSFERENCIA
-  CREDITO
-  OTRO
-}
 
-enum EstadoFactura {
-  PENDIENTE
-  GENERADA
-  ENVIADA
-  ERROR
-}
 
-enum EstadoDeuda {
-  PENDIENTE
-  PARCIAL
-  PAGADA
-  VENCIDA
-}
 
 // Estados por los que pasa un pedido antes de llegar al cliente.
 // ENTREGADO no llega a guardarse: al marcarlo, el pedido se borra y la
 // factura queda como el registro de la venta (ver orders.service.ts).
-enum EstadoPedido {
-  PENDIENTE
-  EMPACADO
-  ENTREGADO
-}
 
 // ---------- Modelos ----------
 
@@ -57,7 +27,7 @@ model User {
   nombre       String
   email        String   @unique
   passwordHash String   @map("password_hash")
-  role         Role     @default(CAJERO)
+  role         String     @default("CAJERO")
   activo       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -90,10 +60,10 @@ model Product {
   id             String   @id @default(cuid())
   sku            String   @unique
   nombre         String
-  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(10, 2)
+  precioUnitario Decimal  @map("precio_unitario")
   // Costo de adquisicion de la pieza. Solo visible/editable por ADMIN (ver
   // ProductsController) - se usa para calcular margen en el apartado de Costos.
-  costoUnitario  Decimal  @default(0) @map("costo_unitario") @db.Decimal(10, 2)
+  costoUnitario  Decimal  @default(0) @map("costo_unitario")
   stock          Int      @default(0)
   imageUrl       String?  @map("image_url")
   activo         Boolean  @default(true)
@@ -108,10 +78,10 @@ model Product {
 model Sale {
   id         String     @id @default(cuid())
   fecha      DateTime   @default(now())
-  subtotal   Decimal    @db.Decimal(10, 2)
-  impuestos  Decimal    @default(0) @db.Decimal(10, 2)
-  total      Decimal    @db.Decimal(10, 2)
-  metodoPago MetodoPago @map("metodo_pago")
+  subtotal   Decimal
+  impuestos  Decimal    @default(0)
+  total      Decimal
+  metodoPago String @map("metodo_pago")
   userId     String     @map("user_id")
   clientId   String?    @map("client_id")
   createdAt  DateTime   @default(now()) @map("created_at")
@@ -134,12 +104,12 @@ model SaleItem {
   productId      String? @map("product_id")
   descripcion    String
   cantidad       Int
-  precioUnitario Decimal @map("precio_unitario") @db.Decimal(10, 2)
+  precioUnitario Decimal @map("precio_unitario")
   // Copia del costo del producto al momento de la venta (igual que
   // precioUnitario), para que el margen historico no cambie si luego se
   // edita el costo del producto en el catalogo.
-  costoUnitario  Decimal @default(0) @map("costo_unitario") @db.Decimal(10, 2)
-  total          Decimal @db.Decimal(10, 2)
+  costoUnitario  Decimal @default(0) @map("costo_unitario")
+  total          Decimal
 
   sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -151,7 +121,7 @@ model Invoice {
   id             String        @id @default(cuid())
   saleId         String        @unique @map("sale_id")
   numero         String        @unique
-  estado         EstadoFactura @default(PENDIENTE)
+  estado         String @default("PENDIENTE")
   pdfUrl         String?       @map("pdf_url")
   pngUrl         String?       @map("png_url")
   sentWhatsappAt DateTime?     @map("sent_whatsapp_at")
@@ -167,9 +137,9 @@ model Invoice {
 model Payment {
   id        String     @id @default(cuid())
   saleId    String     @map("sale_id")
-  amount    Decimal    @db.Decimal(10, 2)
+  amount    Decimal
   fecha     DateTime   @default(now())
-  metodo    MetodoPago
+  metodo    String
   createdAt DateTime   @default(now()) @map("created_at")
 
   sale Sale @relation(fields: [saleId], references: [id])
@@ -181,10 +151,10 @@ model ClientDebt {
   id          String      @id @default(cuid())
   clientId    String      @map("client_id")
   saleId      String?     @map("sale_id")
-  amountTotal Decimal     @map("amount_total") @db.Decimal(10, 2)
-  amountPaid  Decimal     @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  amountTotal Decimal     @map("amount_total")
+  amountPaid  Decimal     @default(0) @map("amount_paid")
   dueDate     DateTime?   @map("due_date")
-  status      EstadoDeuda @default(PENDIENTE)
+  status      String @default("PENDIENTE")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
@@ -200,7 +170,7 @@ model Expense {
   fecha       DateTime @default(now())
   categoria   String
   descripcion String
-  monto       Decimal  @db.Decimal(10, 2)
+  monto       Decimal
   userId      String   @map("user_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -219,7 +189,7 @@ model Expense {
 model Order {
   id           String       @id @default(cuid())
   saleId       String       @unique @map("sale_id")
-  estado       EstadoPedido @default(PENDIENTE)
+  estado       String @default("PENDIENTE")
   // Fecha en la que se le prometio la entrega al cliente. Es lo que ordena
   // el listado y lo que el Dashboard usa para marcar atrasos.
   fechaEntrega DateTime?    @map("fecha_entrega")
@@ -240,7 +210,9 @@ model AuditLog {
   entityId  String   @map("entity_id")
   action    String
   userId    String?  @map("user_id")
-  changes   Json?
+  // SQLite no tiene tipo Json: se guarda el JSON serializado como texto.
+  // AuditService se encarga de convertirlo en ambos sentidos.
+  changes   String?
   timestamp DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
@@ -256,7 +228,7 @@ model BusinessProfile {
   logoUrl      String?  @map("logo_url")
   direccion    String?
   identifFiscal String? @map("identif_fiscal")
-  tasaImpuesto Decimal  @default(0.18) @map("tasa_impuesto") @db.Decimal(5, 4)
+  tasaImpuesto Decimal  @default(0.18) @map("tasa_impuesto")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("business_profile")

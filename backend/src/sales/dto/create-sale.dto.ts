@@ -13,7 +13,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MetodoPago } from '@prisma/client';
+import { MetodoPago } from '../../common/enums';
 
 export class SaleItemDto {
   @ApiProperty({ required: false, description: 'ID del producto si viene del catalogo' })

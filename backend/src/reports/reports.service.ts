@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EstadoDeuda } from '@prisma/client';
+import { EstadoDeuda } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { localDateKey, parseFromDate, parseToDate } from '../common/date-range';
 

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { EstadoDeuda, Role } from '@prisma/client';
+import { EstadoDeuda, Role } from '../common/enums';
 import { ClientDebtsService } from './client-debts.service';
 import { RegisterPaymentDto } from './dto/register-payment.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';

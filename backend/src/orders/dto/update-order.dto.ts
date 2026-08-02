@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsISO8601, IsOptional, IsString } from 'class-validator';
-import { EstadoPedido } from '@prisma/client';
+import { EstadoPedido } from '../../common/enums';
 
 export class UpdateOrderDto {
   @ApiPropertyOptional({

@@ -22,3 +22,7 @@ build/
 # Archivos de registros y temporales
 *.log
 desktop/dist/
+# Base de datos local de la version nativa (SQLite) y su copia de restauracion
+backend/prisma/*.db
+backend/prisma/*.db-journal
+backend/prisma/*.db.anterior

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EstadoPedido, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { EstadoPedido } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { parseFromDate } from '../common/date-range';
@@ -109,7 +110,7 @@ export class OrdersService {
       include: { sale: SALE_PREVIEW },
     });
 
-    await this.audit.log('Order', id, 'UPDATE', userId, data as Prisma.InputJsonValue);
+    await this.audit.log('Order', id, 'UPDATE', userId, data as Record<string, unknown>);
     return this.conUrgencia(updated);
   }
 

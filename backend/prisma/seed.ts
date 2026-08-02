@@ -1,5 +1,11 @@
-import { PrismaClient, Role, MetodoPago, EstadoFactura } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
+// Los enums viven en src/common/enums.ts, pero el tsconfig del seed tiene su
+// rootDir en prisma/ y no puede importar desde src. Como en SQLite estos
+// campos son texto, basta con repetir aqui los valores que usa el seed.
+const Role = { ADMIN: 'ADMIN', CAJERO: 'CAJERO', CONTABILIDAD: 'CONTABILIDAD' } as const;
+const MetodoPago = { EFECTIVO: 'EFECTIVO', TARJETA: 'TARJETA', TRANSFERENCIA: 'TRANSFERENCIA', CREDITO: 'CREDITO', OTRO: 'OTRO' } as const;
+const EstadoFactura = { PENDIENTE: 'PENDIENTE', GENERADA: 'GENERADA', ENVIADA: 'ENVIADA', ERROR: 'ERROR' } as const;
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 

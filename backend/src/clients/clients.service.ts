@@ -13,12 +13,16 @@ export class ClientsService {
 
   async findAll(search?: string) {
     const clients = await this.prisma.client.findMany({
+      // Sin `mode: 'insensitive'`: SQLite no lo soporta en Prisma, pero su
+      // LIKE ya ignora mayusculas/minusculas para texto ASCII, que es como se
+      // escriben los nombres y correos aqui. La unica diferencia frente a
+      // Postgres es que las letras acentuadas si distinguen mayusculas.
       where: search
         ? {
             OR: [
-              { nombre: { contains: search, mode: 'insensitive' } },
+              { nombre: { contains: search } },
               { telefono: { contains: search } },
-              { email: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search } },
             ],
           }
         : undefined,

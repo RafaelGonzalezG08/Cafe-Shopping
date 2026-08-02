@@ -2,10 +2,29 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { promises as fs, createReadStream, createWriteStream } from 'fs';
+import { createGzip, createGunzip } from 'zlib';
+import { pipeline as pipelineCb } from 'stream';
+import { join, isAbsolute, resolve } from 'path';
+import { PrismaService } from '../prisma/prisma.service';
 
 const execAsync = promisify(exec);
+const pipeline = promisify(pipelineCb);
+
+/**
+ * Ruta real del archivo .db a partir de DATABASE_URL ("file:./cafe.db").
+ * Se necesita para restaurar, porque restaurar en SQLite es literalmente
+ * reemplazar ese archivo.
+ */
+function resolveSqliteFile(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url?.startsWith('file:')) {
+    throw new Error('DATABASE_URL debe apuntar a un archivo SQLite (file:...).');
+  }
+  const ruta = url.slice('file:'.length);
+  // Prisma resuelve las rutas relativas respecto a la carpeta del schema.
+  return isAbsolute(ruta) ? ruta : resolve(process.cwd(), 'prisma', ruta);
+}
 
 const BACKUP_DIR = process.env.BACKUP_DIR || join(process.cwd(), 'backups');
 const UPLOADS_DIR = join(process.cwd(), 'uploads');
@@ -36,6 +55,10 @@ const MARKER_FILE = join(BACKUP_DIR, '.last-backup.json');
 export class BackupsService {
   private readonly logger = new Logger(BackupsService.name);
   private running = false;
+
+  // Se usa para el snapshot con VACUUM INTO y para soltar/retomar la conexion
+  // al restaurar (Windows no permite sobrescribir un archivo abierto).
+  constructor(private readonly prisma: PrismaService) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async checkAndRun() {
@@ -85,40 +108,30 @@ export class BackupsService {
     try {
       await fs.mkdir(BACKUP_DIR, { recursive: true });
 
-      const dbUrl = process.env.DATABASE_URL;
-      if (!dbUrl) throw new Error('DATABASE_URL no esta configurada.');
-      const dbFile = join(BACKUP_DIR, `db-${timestamp}.sql.gz`);
-      const rawSqlFile = join(BACKUP_DIR, `db-${timestamp}.sql`);
-      // Se referencia $DATABASE_URL (heredada del entorno del proceso) en vez
-      // de interpolar el valor directo en el comando, para no exponer la
-      // contraseña en logs ni arriesgar problemas si tuviera caracteres
-      // especiales para el shell.
-      // --clean --if-exists: hace que el dump incluya sentencias DROP antes
-      // de cada CREATE, para que se pueda restaurar sobre una base de datos
-      // que ya tiene tablas (botón "Restaurar" abajo) sin que truene por
-      // "relation already exists".
-      //
-      // IMPORTANTE: se dumpea a un archivo plano con -f en vez de
-      // "pg_dump | gzip > archivo". Con una tuberia, el codigo de salida que
-      // ve Node es el de gzip (el ULTIMO comando), no el de pg_dump — si
-      // pg_dump fallaba (credenciales, version, lo que sea), gzip igual
-      // comprimia "nada" y quedaba un .gz valido pero vacio de ~20 bytes,
-      // reportando el respaldo como exitoso sin serlo. Con -f, un fallo de
-      // pg_dump se ve como un fallo real de este comando.
-      const dump = await execAsync(`pg_dump --clean --if-exists "$DATABASE_URL" -f "${rawSqlFile}"`);
-      if (dump.stderr?.trim()) {
-        this.logger.warn(`pg_dump stderr (respaldo igual continua si el exit code fue 0): ${dump.stderr.trim()}`);
-      }
+      const dbFile = join(BACKUP_DIR, `db-${timestamp}.sqlite.gz`);
+      const snapshotFile = join(BACKUP_DIR, `.snapshot-${timestamp}.sqlite`);
 
-      const rawStat = await fs.stat(rawSqlFile);
+      // "VACUUM INTO" es la forma correcta de respaldar SQLite mientras la
+      // app esta en uso: pide a SQLite que escriba una copia consistente y ya
+      // compactada. Copiar el archivo con fs.copyFile seria mas simple pero
+      // peligroso — si alguien esta cobrando una venta en ese instante, la
+      // copia puede quedar a medio escribir y el respaldo naceria corrupto,
+      // justo el dia que haga falta.
+      await this.prisma.$executeRawUnsafe(`VACUUM INTO '${snapshotFile.replace(/'/g, "''")}'`);
+
+      const rawStat = await fs.stat(snapshotFile);
       if (rawStat.size < 200) {
+        await fs.unlink(snapshotFile).catch(() => undefined);
         throw new Error(
-          `El dump de la base de datos salio sospechosamente pequeño (${rawStat.size} bytes). ` +
-            `Revisa la conexion/version de pg_dump en el contenedor del backend.`,
+          `La copia de la base de datos salio sospechosamente pequeña (${rawStat.size} bytes).`,
         );
       }
 
-      await execAsync(`gzip -f "${rawSqlFile}"`);
+      // Se comprime con zlib (incluido en Node) en vez de invocar "gzip":
+      // corriendo nativo en Windows ese comando no existe, y el respaldo
+      // fallaria en la PC del cliente aunque aqui funcione por tener Git.
+      await pipeline(createReadStream(snapshotFile), createGzip(), createWriteStream(dbFile));
+      await fs.unlink(snapshotFile).catch(() => undefined);
 
       let uploadsFile: string | null = null;
       try {
@@ -159,14 +172,11 @@ export class BackupsService {
    */
   async restore(dbFileName: string): Promise<{ ok: boolean; error?: string; restoredUploads?: boolean }> {
     if (this.running) return { ok: false, error: 'Hay un respaldo/restauracion en curso, intenta en un momento.' };
-    if (!/^db-[\w.-]+\.sql\.gz$/.test(dbFileName)) {
+    if (!/^db-[\w.-]+\.sqlite\.gz$/.test(dbFileName)) {
       return { ok: false, error: 'Nombre de archivo de respaldo invalido.' };
     }
     this.running = true;
     try {
-      const dbUrl = process.env.DATABASE_URL;
-      if (!dbUrl) throw new Error('DATABASE_URL no esta configurada.');
-
       const dbFile = join(BACKUP_DIR, dbFileName);
       const exists = await fs
         .access(dbFile)
@@ -174,29 +184,43 @@ export class BackupsService {
         .catch(() => false);
       if (!exists) throw new Error(`No se encontro el respaldo ${dbFileName}.`);
 
-      // Igual que en run(): se evita "gunzip -c archivo | psql", porque el
-      // codigo de salida que ve Node ahi es el de psql (el ultimo comando de
-      // la tuberia). Si el .gz estuviera corrupto o vacio, gunzip fallaria
-      // pero psql (sin nada que ejecutar) igual saldria con exito, y la
-      // restauracion se reportaria como completada sin restaurar nada. Por
-      // eso primero se descomprime a un archivo plano y se revisa su tamaño.
-      const restoreSqlFile = join(BACKUP_DIR, `.restore-${Date.now()}.sql`);
-      await execAsync(`gunzip -c "${dbFile}" > "${restoreSqlFile}"`);
-      const restoreStat = await fs.stat(restoreSqlFile);
+      // Se descomprime a un archivo aparte y se valida ANTES de tocar la base
+      // en uso: si el .gz estuviera corrupto, descubrirlo despues de haber
+      // borrado la base actual dejaria al negocio sin datos y sin respaldo.
+      const restoredFile = join(BACKUP_DIR, `.restore-${Date.now()}.sqlite`);
+      await pipeline(createReadStream(dbFile), createGunzip(), createWriteStream(restoredFile));
+
+      const restoreStat = await fs.stat(restoredFile);
       if (restoreStat.size < 200) {
-        await fs.unlink(restoreSqlFile).catch(() => undefined);
+        await fs.unlink(restoredFile).catch(() => undefined);
         throw new Error(
           `El respaldo ${dbFileName} esta vacio o corrupto (${restoreStat.size} bytes) — no se puede restaurar. ` +
             `Prueba con otro punto de la lista.`,
         );
       }
+      // Comprobacion extra: que sea de verdad una base SQLite (los primeros
+      // 16 bytes de todo archivo SQLite son "SQLite format 3\0").
+      const cabecera = await fs.readFile(restoredFile, { encoding: 'latin1', flag: 'r' }).then((c) => c.slice(0, 15));
+      if (cabecera !== 'SQLite format 3') {
+        await fs.unlink(restoredFile).catch(() => undefined);
+        throw new Error(`El respaldo ${dbFileName} no parece una base de datos valida.`);
+      }
 
       this.logger.warn(`Restaurando base de datos desde ${dbFileName} ...`);
-      const psqlResult = await execAsync(`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "${restoreSqlFile}"`);
-      if (psqlResult.stderr?.trim()) {
-        this.logger.warn(`psql stderr durante la restauracion: ${psqlResult.stderr.trim()}`);
+
+      // Con SQLite "restaurar" es reemplazar el archivo. Hay que soltar la
+      // conexion primero (Windows no deja sobrescribir un archivo abierto) y
+      // volver a conectar despues. Se guarda la base actual como .anterior
+      // por si la restauracion resulta ser la decision equivocada.
+      const rutaActual = resolveSqliteFile();
+      await this.prisma.$disconnect();
+      try {
+        await fs.rename(rutaActual, `${rutaActual}.anterior`).catch(() => undefined);
+        await fs.copyFile(restoredFile, rutaActual);
+      } finally {
+        await this.prisma.$connect();
       }
-      await fs.unlink(restoreSqlFile).catch(() => undefined);
+      await fs.unlink(restoredFile).catch(() => undefined);
 
       // El archivo de uploads comparte el mismo sufijo de timestamp que el
       // de la base de datos (ej. db-2026-...gz / uploads-2026-...tar.gz).
@@ -210,8 +234,9 @@ export class BackupsService {
       let restoredUploads = false;
       if (hasUploadsBackup) {
         this.logger.warn(`Restaurando carpeta de uploads desde uploads-${timestamp}.tar.gz ...`);
+        // fs.rm en vez de "rm -rf": ese comando no existe en Windows nativo.
+        await fs.rm(UPLOADS_DIR, { recursive: true, force: true });
         await fs.mkdir(UPLOADS_DIR, { recursive: true });
-        await execAsync(`rm -rf "${UPLOADS_DIR}"/*`);
         await execAsync(`tar -xzf "${uploadsFile}" -C "${process.cwd()}"`);
         restoredUploads = true;
       }

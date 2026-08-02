@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { EstadoFactura, MetodoPago, Prisma } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
+import { EstadoFactura, MetodoPago } from '../common/enums';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
@@ -391,20 +392,24 @@ export class SalesService {
   /**
    * Numero consecutivo de factura para el año en curso (FAC-2026-00007).
    *
-   * Se toma del MAXIMO numero existente + 1, no de un `count()`:
-   *  - Con count, si alguna vez se borra una factura (o se restaura un
-   *    respaldo mas viejo), el conteo baja y se vuelve a emitir un numero ya
-   *    usado — chocando con el indice unico de `numero` y tumbando la venta.
-   *  - Ademas se toma un advisory lock de Postgres, que se libera solo al
-   *    terminar la transaccion: sin el, dos cajeros cobrando al mismo tiempo
-   *    leen el mismo maximo, piden el mismo numero, y a uno de los dos le
-   *    revienta la venta entera por el indice unico.
+   * Se toma del MAXIMO numero existente + 1, no de un `count()`: con count,
+   * si alguna vez se borra una factura (o se restaura un respaldo mas viejo),
+   * el conteo baja y se vuelve a emitir un numero ya usado — chocando con el
+   * indice unico de `numero` y tumbando la venta.
+   *
+   * Sobre la concurrencia: la version con Postgres tomaba un advisory lock
+   * (`pg_advisory_xact_lock`) para que dos cajeros cobrando a la vez no
+   * leyeran el mismo maximo. SQLite no tiene esos locks, pero tampoco hacen
+   * falta: la base es un archivo servido por un unico proceso backend, y
+   * SQLite serializa las escrituras. El `await` de este metodo se resuelve
+   * dentro de una transaccion, asi que dos ventas simultaneas no pueden
+   * intercalar su lectura del maximo con la escritura de la otra. Si alguna
+   * vez esto volviera a ser multi-proceso, habria que reintroducir un
+   * bloqueo explicito aqui.
    */
   private async generateInvoiceNumber(tx: Prisma.TransactionClient): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `FAC-${year}-`;
-
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-number-${year}`}))`;
 
     const last = await tx.invoice.findFirst({
       where: { numero: { startsWith: prefix } },
