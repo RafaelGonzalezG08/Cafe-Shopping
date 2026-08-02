@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { UPLOADS_DIR } from '../common/paths';
 
 export interface WhatsappSendResult {
   ok: boolean;
@@ -29,7 +30,7 @@ export interface WhatsappSendResult {
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  private readonly uploadsDir = join(process.cwd(), 'uploads');
+  private readonly uploadsDir = UPLOADS_DIR;
   private readonly queueDir = join(this.uploadsDir, 'whatsapp-queue');
   private readonly resultsDir = join(this.uploadsDir, 'whatsapp-results');
 

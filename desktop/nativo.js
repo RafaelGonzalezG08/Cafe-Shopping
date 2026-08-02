@@ -109,12 +109,83 @@ function startBackend(onLog) {
   backendProcess.stdout?.on('data', (d) => onLog?.(String(d).trimEnd()));
   backendProcess.stderr?.on('data', (d) => onLog?.(String(d).trimEnd()));
 
+  // El backend pide por aqui que se rendericen las facturas (ver
+  // RenderService). Se responde con el PNG/PDF ya generado.
+  backendProcess.on('message', (mensaje) => {
+    if (mensaje?.tipo === 'render') renderizarParaBackend(mensaje, onLog);
+  });
+
   backendProcess.on('exit', (code) => {
     onLog?.(`El backend termino con codigo ${code}`);
     backendProcess = null;
   });
 
   return backendProcess;
+}
+
+/**
+ * Genera el PNG o PDF de una factura usando el Chromium de Electron.
+ *
+ * Esto sustituye a Puppeteer: la app YA es Chromium, asi que abrir un segundo
+ * navegador solo para capturar una imagen sobraba. Ademas Puppeteer descarga
+ * su propio Chromium al instalar dependencias — algo que en la PC de un
+ * cliente no ocurre nunca, y la factura no se habria podido generar.
+ *
+ * La ventana va oculta (show: false) y se destruye siempre, incluso si el
+ * render falla: si quedara viva, cada factura dejaria una ventana invisible
+ * consumiendo memoria.
+ */
+async function renderizarParaBackend(mensaje, onLog) {
+  const { BrowserWindow } = require('electron');
+  const { id, formato, html, width, scale } = mensaje;
+  let ventana = null;
+
+  try {
+    ventana = new BrowserWindow({
+      show: false,
+      width: Math.round(width || 420),
+      height: 900,
+      // JavaScript habilitado porque se necesita para medir el alto real del
+      // ticket antes de capturar. El HTML lo genera el propio backend a partir
+      // de su plantilla, con los valores escapados (ver invoice.template.ts),
+      // asi que no se esta ejecutando codigo de terceros.
+      webPreferences: { contextIsolation: true, nodeIntegration: false },
+    });
+
+    await ventana.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    // Da un instante a que apliquen fuentes y estilos antes de capturar.
+    await new Promise((r) => setTimeout(r, 300));
+
+    let datos;
+    if (formato === 'pdf') {
+      datos = await ventana.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+    } else {
+      // Se mide el alto real del ticket para recortar exactamente, en vez de
+      // capturar una ventana fija con espacio sobrante debajo.
+      const alto = await ventana.webContents.executeJavaScript(
+        `Math.ceil((document.querySelector('.ticket') || document.body).getBoundingClientRect().height)`,
+      );
+      ventana.setContentSize(Math.round(width || 420), Math.max(1, Math.round(alto)));
+      await new Promise((r) => setTimeout(r, 120));
+
+      const imagen = await ventana.webContents.capturePage();
+      // El factor de escala replica el deviceScaleFactor de Puppeteer: la
+      // factura se ve nitida aunque el cliente le haga zoom en WhatsApp.
+      const factor = Math.max(1, scale || 1);
+      const ampliada = imagen.resize({
+        width: Math.round(imagen.getSize().width * factor),
+        quality: 'best',
+      });
+      datos = ampliada.toPNG();
+    }
+
+    backendProcess?.send({ tipo: 'render-resultado', id, datosBase64: datos.toString('base64') });
+  } catch (error) {
+    onLog?.(`Fallo el render de la factura: ${error}`);
+    backendProcess?.send({ tipo: 'render-resultado', id, error: String(error?.message || error) });
+  } finally {
+    if (ventana && !ventana.isDestroyed()) ventana.destroy();
+  }
 }
 
 /**
