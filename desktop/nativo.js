@@ -39,7 +39,29 @@ let frontendServer = null;
 function dataDir() {
   const dir = path.join(app.getPath('userData'), 'datos');
   fs.mkdirSync(dir, { recursive: true });
+  publicarRutaParaElAgente(dir);
   return dir;
+}
+
+/**
+ * Deja escrita la ruta de datos donde el agente de WhatsApp pueda leerla.
+ *
+ * Hace falta porque el nombre de la carpeta cambia segun como corra la app:
+ * en desarrollo es "cafe-shopping-desktop" (el `name` del package.json) y ya
+ * instalada es "Cafe Shopping" (el `productName`). El agente es un script
+ * aparte que no puede preguntarle nada a Electron, y con la ruta escrita a
+ * mano habria buscado las facturas en una carpeta inexistente en la PC del
+ * cliente — sin enviar nada y sin un error claro.
+ */
+function publicarRutaParaElAgente(dir) {
+  try {
+    const carpetaAgente = 'C:\\temp\\whatsapp_send';
+    fs.mkdirSync(carpetaAgente, { recursive: true });
+    fs.writeFileSync(path.join(carpetaAgente, 'ruta-datos.txt'), dir, 'utf8');
+  } catch {
+    // Si no se puede escribir, el agente cae a buscar por los nombres
+    // conocidos (ver send_whatsapp_agent.ahk).
+  }
 }
 
 /** Raiz del proyecto empaquetado (backend/, frontend/dist, prisma/...). */

@@ -5,7 +5,7 @@
 ; Desktop) y hace lo siguiente en bucle:
 ;
 ;   1) Revisa la carpeta whatsapp-queue dentro de los datos de la app
-;      (AppData\cafe-shopping-desktop\datos\uploads). El backend deja
+;      (se resuelve sola al arrancar, ver DATA_DIR). El backend deja
 ;      ahi un archivo "<id>.job" cada vez que alguien pide enviar una factura.
 ;   2) Por cada job encontrado: toma el PNG de la factura del disco, lo pega en el
 ;      chat de WhatsApp Desktop del telefono del cliente junto con el texto
@@ -42,11 +42,36 @@ POLL_INTERVAL_MS  := 3000   ; cada cuanto revisa la cola
 CMD_TIMEOUT_MS    := 15000  ; maximo que se espera un comando de Windows (PowerShell)
 LOG_FILE          := LOCAL_DIR "\agent.log"
 
-; La app guarda sus datos en AppData\Roaming\cafe-shopping-desktop\datos
+; La app guarda sus datos en AppData\Roaming\<nombre de la app>\datos
 ; (ver dataDir() en desktop/nativo.js). Ya no hay volumenes de Docker: la
 ; cola, las facturas y los resultados son carpetas normales de Windows.
+; La carpeta de datos cambia de nombre segun como corra la app: instalada es
+; "Cafe Shopping" (productName) y en desarrollo "cafe-shopping-desktop"
+; (name del package.json). Por eso NO se escribe a mano: la app deja la ruta
+; real en ruta-datos.txt al arrancar (ver publicarRutaParaElAgente en
+; desktop/nativo.js). Si ese archivo no existe todavia -por ejemplo si el
+; agente arranco antes que la app- se prueban los nombres conocidos.
 EnvGet, appData, APPDATA
-DATA_DIR    := appData "\cafe-shopping-desktop\datos"
+DATA_DIR := ""
+rutaPublicada := "C:\temp\whatsapp_send\ruta-datos.txt"
+if FileExist(rutaPublicada) {
+    FileRead, rutaLeida, %rutaPublicada%
+    rutaLeida := RegExReplace(rutaLeida, "^\s+|\s+$", "")
+    if (rutaLeida != "" && FileExist(rutaLeida))
+        DATA_DIR := rutaLeida
+}
+if (DATA_DIR = "") {
+    for i, candidato in ["Cafe Shopping", "cafe-shopping-desktop"] {
+        prueba := appData "\" candidato "\datos"
+        if FileExist(prueba) {
+            DATA_DIR := prueba
+            break
+        }
+    }
+}
+if (DATA_DIR = "")
+    DATA_DIR := appData "\Cafe Shopping\datos"
+
 UPLOADS_DIR := DATA_DIR "\uploads"
 QUEUE_DIR   := UPLOADS_DIR "\whatsapp-queue"
 RESULTS_DIR := UPLOADS_DIR "\whatsapp-results"
