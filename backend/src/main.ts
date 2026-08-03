@@ -7,6 +7,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { MigrationsService } from './prisma/migrations.service';
+import { BootstrapService } from './prisma/bootstrap.service';
 import { UPLOADS_DIR } from './common/paths';
 
 async function bootstrap() {
@@ -22,6 +23,10 @@ async function bootstrap() {
   // donde quedaron los archivos dentro de la instalacion.
   const migrationsDir = process.env.PRISMA_MIGRATIONS_DIR || join(process.cwd(), 'prisma', 'migrations');
   await app.get(MigrationsService).applyPending(migrationsDir);
+
+  // Instalacion nueva: crea el primer administrador y el perfil del negocio.
+  // Sin esto la base quedaba vacia y nadie podia iniciar sesion.
+  await app.get(BootstrapService).ensureInitialData();
 
   const configuredOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 

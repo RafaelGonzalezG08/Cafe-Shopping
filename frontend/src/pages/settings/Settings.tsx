@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
@@ -320,6 +320,8 @@ export default function Settings() {
             </div>
             <NewUserForm onSubmit={(payload) => createUser.mutate(payload)} />
           </Card>
+
+          <CambiarClave />
         </div>
       </div>
     </div>
@@ -365,6 +367,100 @@ function IntegrationRow({ label, ok }: { label: string; ok: boolean }) {
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Cambio de la propia clave.
+ *
+ * Cualquier rol puede usarlo (cada quien la suya). Es lo primero que deberia
+ * hacer el dueño en una instalacion nueva: la aplicacion arranca con una
+ * clave inicial conocida y publicada en la guia.
+ */
+function CambiarClave() {
+  const [actual, setActual] = useState('');
+  const [nueva, setNueva] = useState('');
+  const [repetir, setRepetir] = useState('');
+
+  const cambiar = useMutation({
+    mutationFn: async () =>
+      (
+        await api.patch(
+          '/users/me/password',
+          { passwordActual: actual, passwordNueva: nueva },
+          { skipErrorToast: true },
+        )
+      ).data,
+    onSuccess: () => {
+      toast.success('Clave actualizada.');
+      setActual('');
+      setNueva('');
+      setRepetir('');
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo cambiar la clave.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
+
+  function enviar(e: FormEvent) {
+    e.preventDefault();
+    if (nueva.length < 6) {
+      toast.error('La clave nueva debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (nueva !== repetir) {
+      toast.error('La clave nueva y su repeticion no coinciden.');
+      return;
+    }
+    cambiar.mutate();
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
+        Cambiar mi clave
+      </h2>
+      <form onSubmit={enviar} className="space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            Clave actual
+          </label>
+          <input
+            type="password"
+            value={actual}
+            onChange={(e) => setActual(e.target.value)}
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            Clave nueva
+          </label>
+          <input
+            type="password"
+            value={nueva}
+            onChange={(e) => setNueva(e.target.value)}
+            placeholder="Minimo 6 caracteres"
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            Repetir la clave nueva
+          </label>
+          <input
+            type="password"
+            value={repetir}
+            onChange={(e) => setRepetir(e.target.value)}
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={!actual || !nueva || cambiar.isPending}>
+          {cambiar.isPending ? 'Guardando...' : 'Cambiar clave'}
+        </Button>
+      </form>
+    </Card>
   );
 }
 
