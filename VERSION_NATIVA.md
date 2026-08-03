@@ -82,13 +82,16 @@ los respaldos a `OneDrive\CafeShopping\Respaldos`.
 
 ## Traer los datos de la version con Docker
 
-Con los contenedores de la version vieja encendidos:
+Con los contenedores de la version vieja encendidos. **Ojo con la carpeta**:
+los comandos van desde `backend/`, no desde `desktop/`.
 
 ```bash
-cd backend
+cd C:\Users\ykaru\Downloads\cafe-shopping\backend
 npx prisma generate --schema prisma/schema-origen-postgres.prisma
 node prisma/migrar-desde-postgres.js
 ```
+
+(El primer comando solo hace falta la primera vez.)
 
 Copia clientes, productos, ventas, facturas, deudas y auditoria conservando
 los ids, y al terminar compara el total vendido de ambas bases. Tambien trae
