@@ -1,12 +1,15 @@
 // main.js — proceso principal de Electron.
 //
-// Hace lo mismo que hacia iniciar_cafe_shopping.ahk, pero como parte de una
-// app de escritorio real:
-//   1) Verifica/arranca Docker Desktop.
-//   2) Corre "docker compose up -d" sobre el proyecto empaquetado.
-//   3) Espera a que el frontend responda.
+// Arranque de la aplicacion, sin Docker:
+//   1) Levanta el backend como proceso hijo (ver nativo.js).
+//   2) Espera a que la base de datos este lista.
+//   3) Sirve la interfaz compilada desde disco.
 //   4) Lanza el agente de WhatsApp (send_whatsapp_agent.exe o .ahk).
 //   5) Muestra la app en una ventana nativa.
+//
+// Quedan mas abajo algunas funciones de la epoca de Docker (ensureDockerRunning,
+// dockerComposeUp...) que ya nadie llama; se conservan solo como referencia
+// mientras se termina de validar la version nativa.
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
@@ -16,8 +19,6 @@ const net = require('net');
 const path = require('path');
 const fs = require('fs');
 
-const FRONTEND_URL = 'http://localhost:5173';
-const FRONTEND_PORT = 5173;
 // 3 minutos y no 90s: en un arranque en frio (Docker Desktop apagado, WSL2
 // levantando la maquina virtual) se han medido esperas de mas de 90s en esta
 // misma PC. Con el limite anterior la app se rendia con un error justo
@@ -275,25 +276,6 @@ function dockerComposeUp() {
   });
 }
 
-async function waitForFrontend() {
-  let elapsed = 0;
-  while (elapsed < MAX_WAIT_FRONTEND_MS) {
-    try {
-      // El puerto 5173 (frontend) responde rapido, pero la API (3000) tarda
-      // mas porque hace migraciones de BD. Esperar al health-check es lo que
-      // de verdad indica que todo esta listo.
-      const resp = await fetch('http://localhost:3000/api/health', { timeout: 2000 });
-      if (resp.ok) return;
-    } catch {
-      // Todavia no esta listo, seguir esperando
-    }
-    await sleep(POLL_MS);
-    elapsed += POLL_MS;
-  }
-  // No cortamos el arranque por esto: puede que solo este tardando un poco
-  // mas (primera vez, migraciones, etc.). Abrimos la ventana igual.
-}
-
 function launchWhatsappAgent() {
   const exePath = path.join(PROJECT_DIR, 'send_whatsapp_agent.exe');
   const ahkPath = path.join(PROJECT_DIR, 'send_whatsapp_agent.ahk');
@@ -312,7 +294,14 @@ function launchWhatsappAgent() {
   }
 }
 
-async function createMainWindow() {
+/**
+ * @param {string} url Direccion que sirve la interfaz. La devuelve
+ *   nativo.startFrontend(), que es quien sabe en que puerto quedo
+ *   escuchando (puede no ser el preferido si estaba ocupado). NO se usa una
+ *   constante: apuntaba al 5173 de la version con Docker y, al instalar sin
+ *   Docker, ese puerto no existe y la ventana se abria en blanco.
+ */
+async function createMainWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -328,12 +317,10 @@ async function createMainWindow() {
     mainWindow.show();
   });
 
-  // index.html (a diferencia de los archivos hasheados en /assets/) no
-  // manda Cache-Control, asi que Chromium puede quedarse con una copia
-  // vieja en su cache HTTP persistente entre una version de la app y la
-  // siguiente. Se limpia SIEMPRE antes de cargar para garantizar que se
-  // vea el build que Docker acaba de servir, no uno cacheado de una
-  // instalacion anterior.
+  // index.html (a diferencia de los archivos hasheados en /assets/) puede
+  // quedarse cacheado en Chromium entre una version de la app y la
+  // siguiente, mostrando la interfaz anterior tras actualizar. Se limpia
+  // siempre antes de cargar.
   try {
     await mainWindow.webContents.session.clearCache();
   } catch {
@@ -341,7 +328,19 @@ async function createMainWindow() {
     // anterior (cache posiblemente vieja), no bloqueamos el arranque por esto.
   }
 
-  mainWindow.loadURL(FRONTEND_URL);
+  // Si la interfaz no carga, la ventana se queda en blanco sin decir por que
+  // (fue justo lo que paso al apuntar al puerto equivocado). Con esto al
+  // menos se ve el motivo en vez de una pantalla vacia.
+  mainWindow.webContents.on('did-fail-load', (_e, code, descripcion, urlFallida) => {
+    console.error(`No se pudo cargar la interfaz (${code} ${descripcion}): ${urlFallida}`);
+    dialog.showErrorBox(
+      'Cafe Shopping',
+      `No se pudo cargar la interfaz desde:\n${urlFallida}\n\n${descripcion}\n\n` +
+        'Cierra la aplicacion y vuelve a abrirla. Si sigue igual, avisa para revisarlo.',
+    );
+  });
+
+  await mainWindow.loadURL(url);
 }
 
 function setupAutoUpdater() {
@@ -531,7 +530,7 @@ async function startup() {
     }
 
     setSplashStatus('Cargando la interfaz...');
-    await nativo.startFrontend();
+    const urlInterfaz = await nativo.startFrontend();
 
     // Caso especial: si en la sesion anterior el usuario eligio "Instalar
     // despues", esa instalacion SI se hace antes de abrir la ventana. Ya la
@@ -546,7 +545,7 @@ async function startup() {
     launchWhatsappAgent();
 
     setSplashStatus('Abriendo Cafe Shopping...');
-    await createMainWindow();
+    await createMainWindow(urlInterfaz);
 
     // Copia de seguridad fuera de la PC. Va despues de abrir la ventana y sin
     // await: copiar archivos grandes no debe retrasar el momento en que se
