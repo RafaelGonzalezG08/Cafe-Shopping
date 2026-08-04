@@ -27,4 +27,19 @@ export class UpdateBusinessProfileDto {
   @Min(0)
   @Max(1)
   tasaImpuesto: number;
+
+  @ApiProperty({ required: false, description: 'Numero al que llegan los pedidos del catalogo web.' })
+  @IsOptional()
+  @IsString()
+  telefonoWhatsapp?: string;
+
+  @ApiProperty({ required: false, description: 'Frase corta bajo el nombre en el catalogo.' })
+  @IsOptional()
+  @IsString()
+  descripcionWeb?: string;
+
+  @ApiProperty({ required: false, description: 'Como pagar por transferencia (banco, cuenta, titular).' })
+  @IsOptional()
+  @IsString()
+  datosPago?: string;
 }

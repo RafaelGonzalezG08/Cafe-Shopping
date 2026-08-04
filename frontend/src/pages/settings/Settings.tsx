@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { Button, Card, PageHeader } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
@@ -67,7 +67,15 @@ export default function Settings() {
     queryFn: async () => (await api.get('/users')).data,
   });
 
-  const [form, setForm] = useState({ nombre: '', direccion: '', identifFiscal: '', tasaImpuesto: '0.18' });
+  const [form, setForm] = useState({
+    nombre: '',
+    direccion: '',
+    identifFiscal: '',
+    tasaImpuesto: '0.18',
+    telefonoWhatsapp: '',
+    descripcionWeb: '',
+    datosPago: '',
+  });
 
   useEffect(() => {
     if (profile) {
@@ -76,6 +84,9 @@ export default function Settings() {
         direccion: profile.direccion ?? '',
         identifFiscal: profile.identifFiscal ?? '',
         tasaImpuesto: String(profile.tasaImpuesto),
+        telefonoWhatsapp: profile.telefonoWhatsapp ?? '',
+        descripcionWeb: profile.descripcionWeb ?? '',
+        datosPago: profile.datosPago ?? '',
       });
     }
   }, [profile]);
@@ -371,6 +382,15 @@ export default function Settings() {
             <NewUserForm onSubmit={(payload) => createUser.mutate(payload)} />
           </Card>
 
+          <CatalogoWeb
+            telefonoWhatsapp={form.telefonoWhatsapp}
+            descripcionWeb={form.descripcionWeb}
+            datosPago={form.datosPago}
+            onChange={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
+            onGuardar={() => updateProfile.mutate()}
+            guardando={updateProfile.isPending}
+          />
+
           <CambiarClave />
         </div>
       </div>
@@ -417,6 +437,142 @@ function IntegrationRow({ label, ok }: { label: string; ok: boolean }) {
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Catalogo web: datos que solo usa el sitio publico y el boton que lo genera.
+ *
+ * El sitio se entrega como una carpeta lista para subir en vez de publicarse
+ * solo: publicar exige una cuenta de hosting y sus credenciales, y no tiene
+ * sentido pedirle eso al programa cuando arrastrar una carpeta al navegador
+ * toma diez segundos y no compromete ninguna contraseña.
+ */
+function CatalogoWeb({
+  telefonoWhatsapp,
+  descripcionWeb,
+  datosPago,
+  onChange,
+  onGuardar,
+  guardando,
+}: {
+  telefonoWhatsapp: string;
+  descripcionWeb: string;
+  datosPago: string;
+  onChange: (campo: 'telefonoWhatsapp' | 'descripcionWeb' | 'datosPago', valor: string) => void;
+  onGuardar: () => void;
+  guardando: boolean;
+}) {
+  const [resultado, setResultado] = useState<{
+    carpeta: string;
+    productos: number;
+    excluidasSinFoto: number;
+    excluidasSinPrecio: number;
+  } | null>(null);
+
+  const generar = useMutation({
+    mutationFn: async () => (await api.post('/catalogo/generar', undefined, { skipErrorToast: true })).data,
+    onSuccess: (data) => {
+      if (data.ok) {
+        setResultado({
+          carpeta: data.carpeta,
+          productos: data.productos,
+          excluidasSinFoto: data.excluidasSinFoto ?? 0,
+          excluidasSinPrecio: data.excluidasSinPrecio ?? 0,
+        });
+        toast.success(`Catalogo generado con ${data.productos} piezas.`);
+      } else {
+        toast.error(data.error || 'No se pudo generar el catalogo.');
+      }
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo generar el catalogo.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
+        <Globe size={15} /> Catalogo web
+      </h2>
+      <p className="mb-3 text-xs text-muted">
+        Genera una pagina publica con tus piezas. Los clientes arman su pedido y te llega por WhatsApp;
+        el cobro lo coordinas tu por transferencia.
+      </p>
+
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            WhatsApp para pedidos *
+          </label>
+          <input
+            value={telefonoWhatsapp}
+            onChange={(e) => onChange('telefonoWhatsapp', e.target.value)}
+            placeholder="+1 809 555 1234"
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            Frase del negocio
+          </label>
+          <input
+            value={descripcionWeb}
+            onChange={(e) => onChange('descripcionWeb', e.target.value)}
+            placeholder="Joyeria fina · Envios a todo el pais"
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            Formas de pago (se muestran al pie del catalogo)
+          </label>
+          <textarea
+            value={datosPago}
+            onChange={(e) => onChange('datosPago', e.target.value)}
+            rows={3}
+            placeholder={'Transferencia Banco Popular\nCuenta de ahorros 123-456789-0\nA nombre de: ...'}
+            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onGuardar} disabled={guardando}>
+            <Save size={15} /> Guardar datos
+          </Button>
+          <Button onClick={() => generar.mutate()} disabled={generar.isPending || !telefonoWhatsapp.trim()}>
+            <Globe size={15} /> {generar.isPending ? 'Generando...' : 'Generar catalogo'}
+          </Button>
+        </div>
+
+        {resultado && (
+          <div className="rounded-lg bg-sage-100 p-3 text-xs text-sage-700">
+            <p className="font-semibold">Catalogo listo con {resultado.productos} piezas.</p>
+            <p className="mt-1 break-all">
+              Carpeta: <code>{resultado.carpeta}</code>
+            </p>
+            <p className="mt-2">
+              Para ponerlo en linea gratis: entra a <strong>app.netlify.com/drop</strong> y arrastra esa
+              carpeta completa a la pagina. Te dara una direccion al instante.
+            </p>
+            {(resultado.excluidasSinFoto > 0 || resultado.excluidasSinPrecio > 0) && (
+              <p className="mt-2 border-t border-sage-600/20 pt-2 text-brick-600">
+                Quedaron fuera{' '}
+                {resultado.excluidasSinFoto > 0 && (
+                  <strong>{resultado.excluidasSinFoto} piezas sin foto</strong>
+                )}
+                {resultado.excluidasSinFoto > 0 && resultado.excluidasSinPrecio > 0 && ' y '}
+                {resultado.excluidasSinPrecio > 0 && (
+                  <strong>{resultado.excluidasSinPrecio} sin precio</strong>
+                )}
+                . Completalas en Productos y vuelve a generar para incluirlas.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 

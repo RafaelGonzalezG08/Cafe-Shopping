@@ -229,6 +229,17 @@ model BusinessProfile {
   direccion    String?
   identifFiscal String? @map("identif_fiscal")
   tasaImpuesto Decimal  @default(0.18) @map("tasa_impuesto")
+
+  // ----- Datos que solo usa el catalogo web -----
+  // Numero al que llegan los pedidos del catalogo. Es distinto del telefono
+  // de contacto: aqui va el que tiene WhatsApp abierto en el negocio.
+  telefonoWhatsapp String? @map("telefono_whatsapp")
+  // Frase corta bajo el nombre en el catalogo (ej. "Joyeria fina en Santiago").
+  descripcionWeb   String? @map("descripcion_web")
+  // Como pagar por transferencia: banco, tipo de cuenta, numero y a nombre de
+  // quien. Es texto libre porque cada negocio lo escribe a su manera.
+  datosPago        String? @map("datos_pago")
+
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("business_profile")

@@ -163,4 +163,7 @@ export interface BusinessProfile {
   direccion?: string | null;
   identifFiscal?: string | null;
   tasaImpuesto: number;
+  telefonoWhatsapp?: string | null;
+  descripcionWeb?: string | null;
+  datosPago?: string | null;
 }
