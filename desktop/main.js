@@ -228,7 +228,14 @@ function syncBackupsToOneDrive() {
 
   let copiados = 0;
   for (const nombre of fs.readdirSync(origen)) {
-    if (!/\.(sql|tar)\.gz$/i.test(nombre)) continue; // solo los archivos de respaldo
+    // Archivos de respaldo: la base (.sqlite.gz, o .sql.gz de la epoca de
+    // PostgreSQL), las fotos (.tar.gz) y la ficha con el contenido (.info.json).
+    //
+    // OJO con este filtro: cuando la base paso a SQLite los respaldos pasaron
+    // a llamarse ".sqlite.gz" y el patron anterior solo aceptaba ".sql.gz", asi
+    // que las fotos si llegaban a OneDrive pero LA BASE DE DATOS NO. El fallo
+    // era invisible: la carpeta se veia con respaldos dentro.
+    if (!/\.(sqlite|sql|tar)\.gz$|\.info\.json$/i.test(nombre)) continue;
 
     const src = path.join(origen, nombre);
     const dst = path.join(destino, nombre);

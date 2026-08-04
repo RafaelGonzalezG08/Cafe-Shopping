@@ -7,7 +7,28 @@ import { createGzip, createGunzip } from 'zlib';
 import { pipeline as pipelineCb } from 'stream';
 import { join, isAbsolute, resolve, dirname, basename } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
-import { BACKUPS_DIR, UPLOADS_DIR } from '../common/paths';
+import { BACKUPS_DIR, BACKUPS_MIRROR_DIR, UPLOADS_DIR } from '../common/paths';
+
+/** Cuantos registros guarda un respaldo (se calcula al generarlo). */
+export interface BackupContenido {
+  productos: number;
+  clientes: number;
+  ventas: number;
+  facturas: number;
+  deudas: number;
+  gastos: number;
+  pedidos: number;
+  usuarios: number;
+}
+
+export interface BackupFileInfo {
+  name: string;
+  sizeBytes: number;
+  createdAt: Date;
+  /** Donde se encontro: en el disco o en la copia de OneDrive. */
+  origen: 'local' | 'nube';
+  contenido: BackupContenido | null;
+}
 
 const execAsync = promisify(exec);
 const pipeline = promisify(pipelineCb);
@@ -80,24 +101,108 @@ export class BackupsService {
   }
 
   /** Info para mostrar en Configuracion: ultimo respaldo y archivos guardados. */
+  /**
+   * Lista los respaldos de la carpeta local Y de la copia en OneDrive.
+   *
+   * Mirar las dos es el punto: si el disco falla o alguien borra la carpeta
+   * de datos, los respaldos de la nube tienen que seguir apareciendo aqui
+   * para poder restaurar. Antes solo se leia la local, asi que en ese
+   * escenario —el unico para el que existe la copia en la nube— la pantalla
+   * salia vacia y parecia que no habia nada que recuperar.
+   *
+   * Si un respaldo esta en ambos lados aparece una sola vez, marcado como
+   * local (restaurar desde el disco es mas rapido y no depende de que
+   * OneDrive lo haya descargado).
+   */
   async list() {
     await fs.mkdir(BACKUP_DIR, { recursive: true });
-    const files = await fs.readdir(BACKUP_DIR);
-    const items = await Promise.all(
-      files
-        .filter((f) => !f.startsWith('.'))
-        .map(async (f) => {
-          const stat = await fs.stat(join(BACKUP_DIR, f));
-          return { name: f, sizeBytes: stat.size, createdAt: stat.mtime };
-        }),
-    );
-    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const items = new Map<string, BackupFileInfo>();
+    for (const [carpeta, origen] of [
+      [BACKUP_DIR, 'local'],
+      [BACKUPS_MIRROR_DIR, 'nube'],
+    ] as const) {
+      if (!carpeta) continue;
+      const nombres = await fs.readdir(carpeta).catch(() => [] as string[]);
+      for (const nombre of nombres) {
+        if (nombre.startsWith('.') || nombre.endsWith('.info.json')) continue;
+        if (items.has(nombre)) continue; // ya estaba en la carpeta local
+        const stat = await fs.stat(join(carpeta, nombre)).catch(() => null);
+        if (!stat) continue;
+        items.set(nombre, {
+          name: nombre,
+          sizeBytes: stat.size,
+          createdAt: stat.mtime,
+          origen,
+          contenido: await this.leerFicha(carpeta, nombre),
+        });
+      }
+    }
+
+    const files = [...items.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return {
       lastRun: await this.getLastRun(),
       intervalDays: INTERVAL_DAYS,
       retentionDays: RETENTION_DAYS,
-      files: items,
+      copiaEnNube: Boolean(BACKUPS_MIRROR_DIR),
+      files,
     };
+  }
+
+  /** Ruta completa de un respaldo, buscandolo en el disco y luego en OneDrive. */
+  private async buscarRespaldo(nombre: string): Promise<string | null> {
+    for (const carpeta of [BACKUP_DIR, BACKUPS_MIRROR_DIR]) {
+      if (!carpeta) continue;
+      const ruta = join(carpeta, nombre);
+      const existe = await fs
+        .access(ruta)
+        .then(() => true)
+        .catch(() => false);
+      if (existe) return ruta;
+    }
+    return null;
+  }
+
+  /** Conteos guardados junto al respaldo, si los tiene (los viejos no). */
+  private async leerFicha(carpeta: string, nombre: string): Promise<BackupContenido | null> {
+    if (!nombre.endsWith('.sqlite.gz')) return null;
+    try {
+      const raw = await fs.readFile(join(carpeta, `${nombre}.info.json`), 'utf8');
+      return JSON.parse(raw) as BackupContenido;
+    } catch {
+      // Respaldo anterior a esta funcion, o ficha perdida: no es un error.
+      return null;
+    }
+  }
+
+  /**
+   * Cuenta que hay dentro de la base al respaldar y lo guarda en una ficha
+   * junto al archivo.
+   *
+   * Se calcula AQUI y no al listar porque para saberlo habria que
+   * descomprimir y abrir cada respaldo: con varios acumulados, la pantalla
+   * de Configuracion tardaria segundos en cargar.
+   */
+  private async escribirFicha(rutaRespaldo: string): Promise<void> {
+    try {
+      const [productos, clientes, ventas, facturas, deudas, gastos, pedidos, usuarios] = await Promise.all([
+        this.prisma.product.count(),
+        this.prisma.client.count(),
+        this.prisma.sale.count(),
+        this.prisma.invoice.count(),
+        this.prisma.clientDebt.count(),
+        this.prisma.expense.count(),
+        this.prisma.order.count(),
+        this.prisma.user.count(),
+      ]);
+      await fs.writeFile(
+        `${rutaRespaldo}.info.json`,
+        JSON.stringify({ productos, clientes, ventas, facturas, deudas, gastos, pedidos, usuarios }),
+      );
+    } catch (error) {
+      // La ficha es informativa: si falla, el respaldo sigue siendo valido.
+      this.logger.warn(`No se pudo escribir la ficha del respaldo: ${error}`);
+    }
   }
 
   /** Ejecuta el respaldo ahora mismo (usado por el cron y por el boton manual). */
@@ -133,6 +238,7 @@ export class BackupsService {
       // fallaria en la PC del cliente aunque aqui funcione por tener Git.
       await pipeline(createReadStream(snapshotFile), createGzip(), createWriteStream(dbFile));
       await fs.unlink(snapshotFile).catch(() => undefined);
+      await this.escribirFicha(dbFile);
 
       let uploadsFile: string | null = null;
       try {
@@ -181,12 +287,11 @@ export class BackupsService {
     }
     this.running = true;
     try {
-      const dbFile = join(BACKUP_DIR, dbFileName);
-      const exists = await fs
-        .access(dbFile)
-        .then(() => true)
-        .catch(() => false);
-      if (!exists) throw new Error(`No se encontro el respaldo ${dbFileName}.`);
+      // Se busca primero en el disco y luego en OneDrive: asi se puede
+      // restaurar aunque la carpeta local ya no exista (disco perdido,
+      // borrado accidental), que es para lo que sirve la copia en la nube.
+      const dbFile = await this.buscarRespaldo(dbFileName);
+      if (!dbFile) throw new Error(`No se encontro el respaldo ${dbFileName}.`);
 
       // Se descomprime a un archivo aparte y se valida ANTES de tocar la base
       // en uso: si el .gz estuviera corrupto, descubrirlo despues de haber
@@ -228,15 +333,15 @@ export class BackupsService {
 
       // El archivo de uploads comparte el mismo sufijo de timestamp que el
       // de la base de datos (ej. db-2026-...gz / uploads-2026-...tar.gz).
-      const timestamp = dbFileName.slice('db-'.length, -'.sql.gz'.length);
-      const uploadsFile = join(BACKUP_DIR, `uploads-${timestamp}.tar.gz`);
-      const hasUploadsBackup = await fs
-        .access(uploadsFile)
-        .then(() => true)
-        .catch(() => false);
+      // La extension correcta es ".sqlite.gz" (10 caracteres). Al pasar de
+      // PostgreSQL a SQLite esto seguia recortando 7 (".sql.gz"), asi que el
+      // nombre calculado terminaba en "...108Z.sq" y NUNCA encontraba el
+      // archivo de fotos: la base se restauraba y las imagenes no.
+      const timestamp = dbFileName.slice('db-'.length, -'.sqlite.gz'.length);
+      const uploadsFile = await this.buscarRespaldo(`uploads-${timestamp}.tar.gz`);
 
       let restoredUploads = false;
-      if (hasUploadsBackup) {
+      if (uploadsFile) {
         this.logger.warn(`Restaurando carpeta de uploads desde uploads-${timestamp}.tar.gz ...`);
         // fs.rm en vez de "rm -rf": ese comando no existe en Windows nativo.
         await fs.rm(UPLOADS_DIR, { recursive: true, force: true });

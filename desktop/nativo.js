@@ -64,6 +64,40 @@ function publicarRutaParaElAgente(dir) {
   }
 }
 
+/**
+ * Carpeta de respaldos dentro del OneDrive del usuario que tiene la sesion
+ * abierta en Windows, o null si no usa OneDrive.
+ *
+ * Se resuelve con las variables que define el propio Windows, nunca con una
+ * ruta escrita a mano: el programa lo usan clientes distintos, cada uno con
+ * su nombre de usuario.
+ */
+function resolveOneDriveBackupDirNativo() {
+  const candidatos = [
+    process.env.OneDrive,
+    process.env.OneDriveCommercial,
+    process.env.OneDriveConsumer,
+    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'OneDrive') : null,
+  ].filter(Boolean);
+
+  const raiz = candidatos.find((dir) => {
+    try {
+      return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+  if (!raiz) return null;
+
+  const destino = path.join(raiz, 'CafeShopping', 'Respaldos');
+  try {
+    fs.mkdirSync(destino, { recursive: true });
+    return destino;
+  } catch {
+    return null;
+  }
+}
+
 /** Raiz del proyecto empaquetado (backend/, frontend/dist, prisma/...). */
 function projectDir() {
   return app.isPackaged ? path.join(process.resourcesPath, 'app-project') : path.join(__dirname, '..');
@@ -128,6 +162,16 @@ async function startBackend(onLog) {
     DATABASE_URL: `file:${path.join(datos, 'cafe-shopping.db').replace(/\\/g, '/')}`,
     UPLOADS_DIR: uploads,
     BACKUP_DIR: path.join(datos, 'backups'),
+    // Segunda carpeta de respaldos: la copia en OneDrive. El backend la lee
+    // ademas de la local, para que si el disco se pierde (o alguien borra la
+    // carpeta de datos) los respaldos de la nube SIGAN APARECIENDO en la
+    // pantalla de Configuracion y se puedan restaurar. Sin esto, la copia en
+    // la nube existia pero la aplicacion no sabia verla.
+    //
+    // La ruta se resuelve por usuario (variables OneDrive/OneDriveCommercial
+    // que define Windows), nunca escrita a mano: cada cliente tiene su propio
+    // nombre de usuario.
+    BACKUP_MIRROR_DIR: resolveOneDriveBackupDirNativo() || '',
     PRISMA_MIGRATIONS_DIR: path.join(proyecto, 'backend', 'prisma', 'migrations'),
     FRONTEND_URL: `http://localhost:${FRONTEND_PORT}`,
     JWT_SECRET: obtenerJwtSecret(datos),

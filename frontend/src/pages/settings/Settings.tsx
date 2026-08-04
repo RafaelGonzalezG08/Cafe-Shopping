@@ -7,16 +7,32 @@ import { Button, Card, PageHeader } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 import type { BusinessProfile, Role } from '../../types';
 
+/** Cuantos registros trae un respaldo (lo calcula el backend al generarlo). */
+interface BackupContenido {
+  productos: number;
+  clientes: number;
+  ventas: number;
+  facturas: number;
+  deudas: number;
+  gastos: number;
+  pedidos: number;
+  usuarios: number;
+}
+
 interface BackupFile {
   name: string;
   sizeBytes: number;
   createdAt: string;
+  /** Si se encontro en esta computadora o en la copia de OneDrive. */
+  origen: 'local' | 'nube';
+  contenido: BackupContenido | null;
 }
 
 interface BackupsStatus {
   lastRun: string | null;
   intervalDays: number;
   retentionDays: number;
+  copiaEnNube: boolean;
   files: BackupFile[];
 }
 
@@ -241,26 +257,60 @@ export default function Settings() {
               <ShieldCheck size={13} /> Se guarda solo en disco local — nunca en el bucket S3/R2 (ese es público).
             </p>
             <p className="mt-1 mb-3 text-xs text-muted">
-              El respaldo se guarda en la carpeta configurada como <code>BACKUP_HOST_DIR</code> del servidor.
-              Si quieres una copia fuera de tu PC, apunta esa carpeta a un lugar dentro de tu OneDrive/Google
-              Drive <strong>privado</strong> — se sincronizará solo, sin tocar el bucket público de facturas.
+              {backups?.copiaEnNube
+                ? 'Cada respaldo se copia tambien a tu OneDrive, para que sobreviva si esta computadora falla. Abajo se listan los de ambos lugares.'
+                : 'Los respaldos se guardan solo en esta computadora: no se detecto OneDrive para hacer una copia fuera de ella.'}
             </p>
             {backups?.files && backups.files.length > 0 ? (
-              <div className="max-h-40 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
-                {backups.files.slice(0, 8).map((f) => (
-                  <div key={f.name} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                    <span className="truncate text-ink">{f.name}</span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
-                      {f.name.startsWith('db-') && (
-                        <button
-                          onClick={() => setRestoreTarget(f.name)}
-                          className="flex items-center gap-1 rounded-md border border-porcelain-300 px-1.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-brick-400 hover:text-brick-600"
+              <div className="max-h-64 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
+                {backups.files.slice(0, 10).map((f) => (
+                  <div key={f.name} className="px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-ink">
+                        {f.name.startsWith('db-') ? 'Base de datos' : 'Fotos y facturas'}
+                        {' · '}
+                        {formatDateTime(f.createdAt)}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {/* De donde salio: importa para saber si se puede
+                            restaurar aunque el disco se haya perdido. */}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            f.origen === 'nube' ? 'bg-sage-100 text-sage-700' : 'bg-porcelain-200 text-muted'
+                          }`}
                         >
-                          <RotateCcw size={11} /> Restaurar
-                        </button>
-                      )}
+                          {f.origen === 'nube' ? 'OneDrive' : 'Esta PC'}
+                        </span>
+                        <span className="text-muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+                        {/* Solo se ofrece restaurar lo que esta version sabe
+                            leer. Los ".sql.gz" son de cuando la base era
+                            PostgreSQL: ofrecer el boton y que fallara al
+                            pulsarlo, justo en una emergencia, seria peor que
+                            no ofrecerlo. */}
+                        {f.name.endsWith('.sqlite.gz') && (
+                          <button
+                            onClick={() => setRestoreTarget(f.name)}
+                            className="flex items-center gap-1 rounded-md border border-porcelain-300 px-1.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-brick-400 hover:text-brick-600"
+                          >
+                            <RotateCcw size={11} /> Restaurar
+                          </button>
+                        )}
+                        {f.name.startsWith('db-') && !f.name.endsWith('.sqlite.gz') && (
+                          <span className="text-[10px] italic text-muted">formato anterior</span>
+                        )}
+                      </div>
                     </div>
+                    {/* Que hay dentro, para no tener que adivinar por el nombre
+                        del archivo si el respaldo trae el inventario y los
+                        clientes. */}
+                    {f.contenido && (
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {f.contenido.productos.toLocaleString('es-DO')} productos ·{' '}
+                        {f.contenido.clientes.toLocaleString('es-DO')} clientes ·{' '}
+                        {f.contenido.ventas.toLocaleString('es-DO')} ventas ·{' '}
+                        {f.contenido.facturas.toLocaleString('es-DO')} facturas
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

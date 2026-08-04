@@ -17,3 +17,14 @@ import { join } from 'path';
 
 export const UPLOADS_DIR = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
 export const BACKUPS_DIR = process.env.BACKUP_DIR || join(process.cwd(), 'backups');
+
+/**
+ * Segunda carpeta de respaldos: la copia que vive en OneDrive.
+ *
+ * Se lee ademas de la local para que los respaldos de la nube sigan
+ * disponibles aunque la carpeta de datos del disco desaparezca — que es
+ * justo el escenario para el que existe esa copia. La ruta la calcula la app
+ * de escritorio segun el usuario de Windows (ver nativo.js); aqui solo se
+ * recibe ya resuelta.
+ */
+export const BACKUPS_MIRROR_DIR = process.env.BACKUP_MIRROR_DIR || '';
