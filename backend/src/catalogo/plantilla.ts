@@ -23,7 +23,6 @@ export interface DatosCatalogo {
   descripcion: string;
   direccion: string;
   telefonoWhatsapp: string;
-  datosPago: string;
   logo: string | null;
   productos: ProductoCatalogo[];
   generado: string;
@@ -55,17 +54,24 @@ export function generarHtml(datos: DatosCatalogo): string {
   :root{
     --tinta:#241019; --suave:#93767C; --linea:#E6C7C9;
     --fondo:#FBF2F1; --papel:#FFFFFF; --acento:#B75D66; --acento-osc:#96434C;
-    --oscuro:#22101A;
+    /* Rosa pastel del encabezado y el pie. Es mas claro que el fondo de la
+       pagina para que las dos franjas se distingan sin usar bordes. */
+    --pastel:#F7DEE1;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--fondo);color:var(--tinta);
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.5}
   img{max-width:100%;display:block}
 
-  header{background:var(--oscuro);color:#FBF2F1;padding:2.5rem 1.25rem;text-align:center}
+  header{background:var(--pastel);color:var(--tinta);padding:2.5rem 1.25rem;text-align:center}
   header img{width:72px;height:72px;border-radius:16px;object-fit:cover;margin:0 auto 1rem}
   header h1{font-size:1.9rem;letter-spacing:-.02em}
-  header p{color:#E6C7C9;margin-top:.4rem;font-size:.95rem}
+  /* La frase del negocio va en cursiva, con una pila de tipografias que
+     existen en Windows, Mac y Android; si ninguna esta, "cursive" deja al
+     sistema elegir la suya en vez de caer en una fuente recta. */
+  header .frase{font-family:'Brush Script MT','Segoe Script','Snell Roundhand',cursive;
+    font-style:italic;font-size:1.5rem;color:var(--acento-osc);margin-top:.5rem;line-height:1.2}
+  header p{color:var(--suave);margin-top:.4rem;font-size:.95rem}
 
   .barra{position:sticky;top:0;z-index:20;background:var(--papel);
     border-bottom:1px solid var(--linea);padding:.75rem 1.25rem;
@@ -108,11 +114,8 @@ export function generarHtml(datos: DatosCatalogo): string {
   .pedido .enviar{background:#0E8A5F;color:#fff}
   .pedido .vaciar{background:transparent;color:var(--suave);border:1px solid var(--linea)}
 
-  footer{background:var(--oscuro);color:#E6C7C9;padding:2rem 1.25rem;text-align:center;
+  footer{background:var(--pastel);color:var(--tinta);padding:2rem 1.25rem;text-align:center;
     font-size:.85rem}
-  footer .pago{max-width:520px;margin:1rem auto 0;background:rgba(255,255,255,.07);
-    border-radius:12px;padding:1rem;text-align:left;white-space:pre-line;font-size:.82rem}
-  footer .pago b{display:block;margin-bottom:.35rem;color:#FBF2F1}
 
   @media(max-width:420px){
     .rejilla{grid-template-columns:repeat(2,1fr);gap:.7rem}
@@ -126,7 +129,7 @@ export function generarHtml(datos: DatosCatalogo): string {
 <header>
   ${datos.logo ? `<img src="${esc(datos.logo)}" alt="">` : ''}
   <h1>${esc(datos.negocio)}</h1>
-  ${datos.descripcion ? `<p>${esc(datos.descripcion)}</p>` : ''}
+  ${datos.descripcion ? `<p class="frase">${esc(datos.descripcion)}</p>` : ''}
   ${datos.direccion ? `<p>${esc(datos.direccion)}</p>` : ''}
 </header>
 
@@ -154,12 +157,7 @@ export function generarHtml(datos: DatosCatalogo): string {
 
 <footer>
   <p>${esc(datos.negocio)}${datos.direccion ? ' &middot; ' + esc(datos.direccion) : ''}</p>
-  ${
-    datos.datosPago
-      ? `<div class="pago"><b>Formas de pago</b>${esc(datos.datosPago)}</div>`
-      : ''
-  }
-  <p style="margin-top:1rem;opacity:.6;font-size:.75rem">Precios en pesos dominicanos. Actualizado el ${esc(datos.generado)}.</p>
+  <p style="margin-top:.75rem;color:var(--suave);font-size:.75rem">Precios en pesos dominicanos. Actualizado el ${esc(datos.generado)}.</p>
 </footer>
 
 <script>

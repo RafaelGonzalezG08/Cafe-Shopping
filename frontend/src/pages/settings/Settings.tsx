@@ -74,7 +74,6 @@ export default function Settings() {
     tasaImpuesto: '0.18',
     telefonoWhatsapp: '',
     descripcionWeb: '',
-    datosPago: '',
   });
 
   useEffect(() => {
@@ -86,7 +85,6 @@ export default function Settings() {
         tasaImpuesto: String(profile.tasaImpuesto),
         telefonoWhatsapp: profile.telefonoWhatsapp ?? '',
         descripcionWeb: profile.descripcionWeb ?? '',
-        datosPago: profile.datosPago ?? '',
       });
     }
   }, [profile]);
@@ -385,7 +383,6 @@ export default function Settings() {
           <CatalogoWeb
             telefonoWhatsapp={form.telefonoWhatsapp}
             descripcionWeb={form.descripcionWeb}
-            datosPago={form.datosPago}
             onChange={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
             onGuardar={() => updateProfile.mutate()}
             guardando={updateProfile.isPending}
@@ -451,15 +448,13 @@ function IntegrationRow({ label, ok }: { label: string; ok: boolean }) {
 function CatalogoWeb({
   telefonoWhatsapp,
   descripcionWeb,
-  datosPago,
   onChange,
   onGuardar,
   guardando,
 }: {
   telefonoWhatsapp: string;
   descripcionWeb: string;
-  datosPago: string;
-  onChange: (campo: 'telefonoWhatsapp' | 'descripcionWeb' | 'datosPago', valor: string) => void;
+  onChange: (campo: 'telefonoWhatsapp' | 'descripcionWeb', valor: string) => void;
   onGuardar: () => void;
   guardando: boolean;
 }) {
@@ -524,19 +519,6 @@ function CatalogoWeb({
             className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Formas de pago (se muestran al pie del catalogo)
-          </label>
-          <textarea
-            value={datosPago}
-            onChange={(e) => onChange('datosPago', e.target.value)}
-            rows={3}
-            placeholder={'Transferencia Banco Popular\nCuenta de ahorros 123-456789-0\nA nombre de: ...'}
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onGuardar} disabled={guardando}>
             <Save size={15} /> Guardar datos

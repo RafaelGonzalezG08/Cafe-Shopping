@@ -103,7 +103,6 @@ export class CatalogoService {
       descripcion: perfil.descripcionWeb ?? '',
       direccion: perfil.direccion ?? '',
       telefonoWhatsapp: perfil.telefonoWhatsapp,
-      datosPago: perfil.datosPago ?? '',
       logo,
       productos: items,
       generado: new Date().toLocaleDateString('es-DO', {
