@@ -1,6 +1,6 @@
 {
   "name": "cafe-shopping-desktop",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Cafe Shopping - punto de venta de escritorio (sin Docker: base local y agente de WhatsApp integrados)",
   "main": "main.js",
   "private": true,
