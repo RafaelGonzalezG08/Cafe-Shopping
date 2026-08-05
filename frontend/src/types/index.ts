@@ -142,6 +142,28 @@ export interface Order {
   };
 }
 
+export type EstadoPedidoWeb = 'PENDIENTE' | 'ATENDIDO' | 'CANCELADO';
+
+export interface WebOrderItem {
+  cantidad: number;
+  nombre: string;
+  sku: string | null;
+  /** Precio de la linea completa (cantidad x unitario). */
+  total: number;
+}
+
+/** Pedido llegado por el catalogo web, pegando el mensaje de WhatsApp del cliente. */
+export interface WebOrder {
+  id: string;
+  codigo: string;
+  items: WebOrderItem[];
+  total: number;
+  estado: EstadoPedidoWeb;
+  textoOriginal: string;
+  notas?: string | null;
+  createdAt: string;
+}
+
 export interface OrdersSummary {
   total: number;
   pendientes: number;

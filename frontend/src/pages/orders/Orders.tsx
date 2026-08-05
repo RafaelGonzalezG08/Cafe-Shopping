@@ -1,13 +1,26 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { PackageCheck, Package, Truck, CalendarClock, AlertTriangle, X, Phone } from 'lucide-react';
+import {
+  PackageCheck,
+  Package,
+  Truck,
+  CalendarClock,
+  AlertTriangle,
+  X,
+  Phone,
+  Globe,
+  ClipboardPaste,
+  Check,
+  Ban,
+  Trash2,
+} from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
-import { formatMoney, formatDate, ESTADO_PEDIDO_LABEL } from '../../lib/format';
+import { formatMoney, formatDateTime, ESTADO_PEDIDO_LABEL, ESTADO_PEDIDO_WEB_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
-import type { EstadoPedido, Order, UrgenciaPedido } from '../../types';
+import type { EstadoPedido, EstadoPedidoWeb, Order, UrgenciaPedido, WebOrder } from '../../types';
 
 /** Color e etiqueta de cada nivel de urgencia (lo calcula el backend). */
 const URGENCIA: Record<UrgenciaPedido, { tone: 'brick' | 'copper' | 'sage' | 'neutral'; texto: string }> = {
@@ -23,7 +36,41 @@ const FILTROS: { valor: EstadoPedido | 'TODOS'; texto: string }[] = [
   { valor: 'EMPACADO', texto: 'Empacados' },
 ];
 
+const PESTANAS: { valor: 'TIENDA' | 'WEB'; texto: string }[] = [
+  { valor: 'TIENDA', texto: 'Pedidos' },
+  { valor: 'WEB', texto: 'Pedidos web' },
+];
+
 export default function Orders() {
+  const [pestana, setPestana] = usePersistedState<'TIENDA' | 'WEB'>('pedidos:pestana', 'TIENDA');
+
+  return (
+    <div>
+      <PageHeader
+        title="Pedidos"
+        subtitle="Piezas comprometidas que todavia no estan en manos del cliente"
+      />
+
+      <div className="mb-5 flex flex-wrap gap-1.5">
+        {PESTANAS.map((p) => (
+          <button
+            key={p.valor}
+            onClick={() => setPestana(p.valor)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              pestana === p.valor ? 'bg-espresso-700 text-white' : 'bg-porcelain-200 text-muted hover:bg-porcelain-300'
+            }`}
+          >
+            {p.texto}
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'TIENDA' ? <PedidosTienda /> : <PedidosWeb />}
+    </div>
+  );
+}
+
+function PedidosTienda() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [filtro, setFiltro] = usePersistedState<EstadoPedido | 'TODOS'>('pedidos:filtro', 'TODOS');
@@ -64,11 +111,6 @@ export default function Orders() {
 
   return (
     <div>
-      <PageHeader
-        title="Pedidos"
-        subtitle="Piezas comprometidas que todavia no estan en manos del cliente"
-      />
-
       <div className="mb-5 flex flex-wrap gap-1.5">
         {FILTROS.map((f) => (
           <button
@@ -251,6 +293,189 @@ function ConfirmarEntrega({
           </Button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+const FILTROS_WEB: { valor: EstadoPedidoWeb | 'TODOS'; texto: string }[] = [
+  { valor: 'PENDIENTE', texto: 'Por atender' },
+  { valor: 'ATENDIDO', texto: 'Atendidos' },
+  { valor: 'CANCELADO', texto: 'Cancelados' },
+  { valor: 'TODOS', texto: 'Todos' },
+];
+
+/**
+ * Pedidos que llegan del catalogo web. La pagina no pide datos del cliente a
+ * proposito, asi que no hay forma de que caigan solos: el cliente manda el
+ * pedido por WhatsApp con su codigo (ej. PED-K3F7Q2) y ese mismo mensaje se
+ * pega aqui para crearlo, sin volver a escribir nada a mano.
+ */
+function PedidosWeb() {
+  const queryClient = useQueryClient();
+  const [filtro, setFiltro] = usePersistedState<EstadoPedidoWeb | 'TODOS'>('pedidos-web:filtro', 'PENDIENTE');
+  const [texto, setTexto] = useState('');
+
+  const { data: pedidos = [], isLoading } = useQuery<WebOrder[]>({
+    queryKey: ['web-orders', filtro],
+    queryFn: async () =>
+      (await api.get('/web-orders', { params: { estado: filtro === 'TODOS' ? undefined : filtro } })).data,
+  });
+
+  function refrescar() {
+    queryClient.invalidateQueries({ queryKey: ['web-orders'] });
+  }
+
+  const crear = useMutation({
+    mutationFn: async (mensaje: string) => (await api.post('/web-orders', { texto: mensaje })).data as WebOrder,
+    onSuccess: (pedido) => {
+      toast.success(`Pedido ${pedido.codigo} creado.`);
+      setTexto('');
+      refrescar();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || 'No se pudo crear el pedido.');
+    },
+  });
+
+  const actualizar = useMutation({
+    mutationFn: async ({ id, estado }: { id: string; estado: EstadoPedidoWeb }) =>
+      (await api.patch(`/web-orders/${id}`, { estado })).data,
+    onSuccess: () => {
+      toast.success('Pedido actualizado.');
+      refrescar();
+    },
+  });
+
+  const eliminar = useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/web-orders/${id}`)).data,
+    onSuccess: () => {
+      toast.success('Pedido eliminado.');
+      refrescar();
+    },
+  });
+
+  return (
+    <div>
+      <Card className="mb-5 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ClipboardPaste size={16} className="text-espresso-700" />
+          <p className="font-display font-bold text-ink">Pegar pedido de WhatsApp</p>
+        </div>
+        <p className="mb-3 text-xs text-muted">
+          Copia el mensaje que el cliente mando desde el catalogo web (trae su numero de pedido) y pegalo aqui para
+          crearlo.
+        </p>
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder={'Hola! Quiero hacer este pedido #PED-XXXXX:\n\n1 x Anillo oro (AN-0001) - RD$ 3,000.00\n\nTotal: RD$ 3,000.00'}
+          rows={4}
+          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+        <div className="mt-2 flex justify-end">
+          <Button
+            size="sm"
+            onClick={() => texto.trim() && crear.mutate(texto)}
+            disabled={crear.isPending || !texto.trim()}
+          >
+            <ClipboardPaste size={15} /> {crear.isPending ? 'Creando...' : 'Crear pedido'}
+          </Button>
+        </div>
+      </Card>
+
+      <div className="mb-5 flex flex-wrap gap-1.5">
+        {FILTROS_WEB.map((f) => (
+          <button
+            key={f.valor}
+            onClick={() => setFiltro(f.valor)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              filtro === f.valor ? 'bg-copper-500 text-white' : 'bg-porcelain-200 text-muted hover:bg-porcelain-300'
+            }`}
+          >
+            {f.texto}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <Card className="h-40 animate-pulse" />
+      ) : pedidos.length === 0 ? (
+        <EmptyState
+          title="Sin pedidos web"
+          description="La pagina no pide datos del cliente: cuando te escriban por WhatsApp con su numero de pedido, pega el mensaje arriba."
+        />
+      ) : (
+        <div className="space-y-3">
+          {pedidos.map((pedido) => (
+            <Card key={pedido.id} className="p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                    <Badge
+                      tone={pedido.estado === 'ATENDIDO' ? 'sage' : pedido.estado === 'CANCELADO' ? 'brick' : 'copper'}
+                    >
+                      {ESTADO_PEDIDO_WEB_LABEL[pedido.estado]}
+                    </Badge>
+                    <span className="flex items-center gap-1 font-mono text-xs text-muted">
+                      <Globe size={11} /> {pedido.codigo}
+                    </span>
+                  </div>
+
+                  <ul className="mt-1 space-y-0.5 text-sm text-ink">
+                    {pedido.items.map((item, i) => (
+                      <li key={i}>
+                        {item.cantidad} x {item.nombre}
+                        {item.sku && <span className="text-muted"> ({item.sku})</span>} - RD$ {formatMoney(item.total)}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p className="mt-2 text-[11px] text-muted">{formatDateTime(pedido.createdAt)}</p>
+                </div>
+
+                <p className="font-display text-lg font-bold tabular-nums text-copper-600">
+                  RD$ {formatMoney(pedido.total)}
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-porcelain-200 pt-3">
+                {pedido.estado === 'PENDIENTE' ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => actualizar.mutate({ id: pedido.id, estado: 'ATENDIDO' })}
+                      disabled={actualizar.isPending}
+                    >
+                      <Check size={15} /> Marcar atendido
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => actualizar.mutate({ id: pedido.id, estado: 'CANCELADO' })}
+                      disabled={actualizar.isPending}
+                    >
+                      <Ban size={15} /> Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => actualizar.mutate({ id: pedido.id, estado: 'PENDIENTE' })}
+                    disabled={actualizar.isPending}
+                  >
+                    Volver a pendiente
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => eliminar.mutate(pedido.id)} disabled={eliminar.isPending}>
+                  <Trash2 size={15} /> Eliminar
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

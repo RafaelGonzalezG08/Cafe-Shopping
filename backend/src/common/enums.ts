@@ -92,8 +92,21 @@ export const MATERIAL_LABEL: Record<Material, string> = {
   OTRO: 'Otro',
 };
 
+/**
+ * Estado de un pedido llegado por el catalogo web. Distinto de EstadoPedido
+ * (que es de una venta ya cobrada en el POS): un pedido web todavia no es
+ * una venta, solo una intencion de compra que hay que atender.
+ */
+export const EstadoPedidoWeb = {
+  PENDIENTE: 'PENDIENTE',
+  ATENDIDO: 'ATENDIDO',
+  CANCELADO: 'CANCELADO',
+} as const;
+export type EstadoPedidoWeb = (typeof EstadoPedidoWeb)[keyof typeof EstadoPedidoWeb];
+
 export const ROLES = Object.values(Role);
 export const MATERIALES = Object.values(Material);
+export const ESTADOS_PEDIDO_WEB = Object.values(EstadoPedidoWeb);
 export const METODOS_PAGO = Object.values(MetodoPago);
 export const ESTADOS_FACTURA = Object.values(EstadoFactura);
 export const ESTADOS_DEUDA = Object.values(EstadoDeuda);

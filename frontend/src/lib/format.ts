@@ -26,6 +26,12 @@ export const ESTADO_PEDIDO_LABEL: Record<string, string> = {
   ENTREGADO: 'Entregado',
 };
 
+export const ESTADO_PEDIDO_WEB_LABEL: Record<string, string> = {
+  PENDIENTE: 'Por atender',
+  ATENDIDO: 'Atendido',
+  CANCELADO: 'Cancelado',
+};
+
 export const METODO_PAGO_LABEL: Record<string, string> = {
   EFECTIVO: 'Efectivo',
   TARJETA: 'Tarjeta',

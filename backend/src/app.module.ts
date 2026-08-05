@@ -10,6 +10,7 @@ import { ClientDebtsModule } from './client-debts/client-debts.module';
 import { ProductsModule } from './products/products.module';
 import { SalesModule } from './sales/sales.module';
 import { OrdersModule } from './orders/orders.module';
+import { WebOrdersModule } from './web-orders/web-orders.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -31,6 +32,7 @@ import { HealthModule } from './health/health.module';
     ProductsModule,
     SalesModule,
     OrdersModule,
+    WebOrdersModule,
     CatalogoModule,
     InvoicesModule,
     ExpensesModule,

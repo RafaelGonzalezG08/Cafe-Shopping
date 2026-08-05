@@ -207,6 +207,33 @@ model Order {
   @@index([fechaEntrega])
 }
 
+// Pedido que llego por el catalogo web, pegando el mensaje de WhatsApp del
+// cliente (ver modulo web-orders).
+//
+// No es un Order comun a proposito: un Order envuelve una Sale ya cobrada en
+// el POS, y un pedido web todavia no es una venta — es una intencion de
+// compra sin cliente identificado (la pagina no pide datos a proposito). El
+// codigo (ej. "PED-K3F7Q2") es el unico hilo entre lo que el cliente escribio
+// por WhatsApp y esta fila.
+model WebOrder {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  // Piezas del pedido, serializadas: [{sku,nombre,cantidad,precioUnitario,total}].
+  // SQLite no tiene tipo Json (ver AuditLog.changes para el mismo patron).
+  items     String
+  total     Decimal
+  estado    String   @default("PENDIENTE")
+  // Texto completo tal como se pego, por si el resumen no alcanza (ej. el
+  // cliente agrego una nota debajo del pedido).
+  textoOriginal String @map("texto_original")
+  notas     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("web_orders")
+  @@index([estado])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   entity    String
