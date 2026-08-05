@@ -4,6 +4,17 @@ import { join, extname, basename } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { UPLOADS_DIR } from '../common/paths';
 import { generarHtml, DatosCatalogo, ProductoCatalogo } from './plantilla';
+import { MATERIAL_LABEL, Material } from '../common/enums';
+
+export interface ResultadoGenerar {
+  ok: boolean;
+  carpeta?: string;
+  productos?: number;
+  /** Piezas que quedaron fuera y por que, para que el negocio pueda completarlas. */
+  excluidasSinFoto?: number;
+  excluidasSinPrecio?: number;
+  error?: string;
+}
 
 /**
  * Genera el catalogo publico como un sitio estatico listo para subir.
@@ -34,15 +45,46 @@ export class CatalogoService {
     return documentos;
   }
 
-  async generar(): Promise<{
-    ok: boolean;
-    carpeta?: string;
-    productos?: number;
-    /** Piezas que quedaron fuera y por que, para que el negocio pueda completarlas. */
-    excluidasSinFoto?: number;
-    excluidasSinPrecio?: number;
-    error?: string;
-  }> {
+  private ejecucionActual: Promise<ResultadoGenerar> | null = null;
+  private hayPendiente = false;
+
+  /**
+   * Punto de entrada publico: serializa las generaciones para que nunca
+   * corran dos a la vez.
+   *
+   * Hace falta porque `generar()` borra la carpeta de salida y la vuelve a
+   * escribir completa. Como ahora se dispara solo despues de cada cambio en
+   * un producto (ver ProductsService), editar varias piezas seguidas lanzaba
+   * varias generaciones en paralelo que se pisaban entre si — una borraba lo
+   * que la otra estaba escribiendo a medio camino. Se detecto probando esto
+   * mismo: 11 ediciones seguidas dejaron el sitio con 10 piezas y una con el
+   * material de la corrida anterior.
+   *
+   * Si llega una peticion mientras otra esta corriendo, no se lanza una
+   * segunda: se marca "pendiente" y, al terminar la actual, se corre UNA vez
+   * mas (no una por cada peticion que llego en el medio) para que los
+   * cambios que se cruzaron con la corrida en curso queden reflejados
+   * igual, sin acumular trabajo de mas.
+   */
+  async generar(): Promise<ResultadoGenerar> {
+    if (this.ejecucionActual) {
+      this.hayPendiente = true;
+      return this.ejecucionActual;
+    }
+
+    this.ejecucionActual = this.generarInterno();
+    try {
+      return await this.ejecucionActual;
+    } finally {
+      this.ejecucionActual = null;
+      if (this.hayPendiente) {
+        this.hayPendiente = false;
+        void this.generar();
+      }
+    }
+  }
+
+  private async generarInterno(): Promise<ResultadoGenerar> {
     const perfil = await this.prisma.businessProfile.findFirst();
 
     if (!perfil?.telefonoWhatsapp?.trim()) {
@@ -59,7 +101,7 @@ export class CatalogoService {
       orderBy: { nombre: 'asc' },
       // Se eligen los campos uno a uno para que el costo NUNCA pueda salir
       // publicado por descuido al agregar columnas nuevas al producto.
-      select: { sku: true, nombre: true, precioUnitario: true, imageUrl: true },
+      select: { sku: true, nombre: true, precioUnitario: true, imageUrl: true, material: true },
     });
 
     // Una pieza sin precio saldria como "RD$ 0.00", que parece un error del
@@ -93,6 +135,9 @@ export class CatalogoService {
         nombre: p.nombre,
         precio: Number(p.precioUnitario),
         imagen: await this.copiarFoto(p.imageUrl, carpetaFotos),
+        // Se manda ya traducido ("Plata" en vez de "PLATA"): la pagina no
+        // conoce las constantes del backend, solo lo que va a mostrar.
+        material: MATERIAL_LABEL[(p.material as Material) ?? 'OTRO'] ?? MATERIAL_LABEL.OTRO,
       });
     }
 

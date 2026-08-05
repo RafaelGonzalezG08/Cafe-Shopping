@@ -6,6 +6,16 @@ export type EstadoFactura = 'PENDIENTE' | 'GENERADA' | 'ENVIADA' | 'ERROR';
 
 export type EstadoDeuda = 'PENDIENTE' | 'PARCIAL' | 'PAGADA' | 'VENCIDA';
 
+export type Material = 'PLATA' | 'ORO' | 'GOLDFILLED' | 'ACERO' | 'OTRO';
+
+export const MATERIAL_LABEL: Record<Material, string> = {
+  PLATA: 'Plata',
+  ORO: 'Oro',
+  GOLDFILLED: 'Gold filled',
+  ACERO: 'Acero',
+  OTRO: 'Otro',
+};
+
 export interface AuthUser {
   id: string;
   nombre: string;
@@ -33,6 +43,7 @@ export interface Product {
   precioUnitario: number;
   // Solo presente cuando el backend responde a un usuario ADMIN.
   costoUnitario?: number;
+  material: Material;
   stock: number;
   imageUrl?: string | null;
   activo: boolean;

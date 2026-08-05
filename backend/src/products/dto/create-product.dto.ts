@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from 'class-validator';
+import { Material, MATERIALES } from '../../common/enums';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
@@ -38,4 +39,9 @@ export class CreateProductDto {
   @IsInt()
   @Min(0)
   stock: number;
+
+  @ApiPropertyOptional({ enum: MATERIALES, example: Material.PLATA })
+  @IsOptional()
+  @IsIn(MATERIALES, { message: 'Material invalido.' })
+  material?: Material;
 }

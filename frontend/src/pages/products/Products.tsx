@@ -6,14 +6,25 @@ import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { Button, Card, PageHeader, EmptyState, Badge } from '../../components/ui';
-import type { Product } from '../../types';
+import type { Material, Product } from '../../types';
+import { MATERIAL_LABEL } from '../../types';
 
 type ProductFormValues = {
   nombre: string;
   precioUnitario: string;
   costoUnitario: string;
+  material: Material;
   stock: string;
   file: File | null;
+};
+
+/** Color de la insignia por material: el mismo lenguaje visual en toda la app y en el catalogo. */
+const MATERIAL_COLOR: Record<Material, string> = {
+  PLATA: 'bg-slate-500',
+  ORO: 'bg-copper-500',
+  GOLDFILLED: 'bg-copper-400',
+  ACERO: 'bg-slate-400',
+  OTRO: 'bg-espresso-700',
 };
 
 function buildFormData(values: ProductFormValues) {
@@ -21,6 +32,7 @@ function buildFormData(values: ProductFormValues) {
   formData.append('nombre', values.nombre.trim());
   formData.append('precioUnitario', values.precioUnitario);
   formData.append('costoUnitario', String(Number(values.costoUnitario) || 0));
+  formData.append('material', values.material);
   formData.append('stock', String(Number(values.stock) || 0));
   if (values.file) formData.append('file', values.file);
   return formData;
@@ -126,6 +138,14 @@ export default function Products() {
                 ) : (
                   <Gem size={28} className="text-muted" />
                 )}
+                {/* Insignia de material en la esquina: para confirmar de un
+                    vistazo que la pieza quedo con el material correcto,
+                    sin tener que abrirla a revisar. */}
+                <span
+                  className={`absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${MATERIAL_COLOR[product.material]}`}
+                >
+                  {MATERIAL_LABEL[product.material]}
+                </span>
                 <span className="absolute inset-0 flex items-center justify-center bg-espresso-950/0 opacity-0 transition-opacity group-hover:bg-espresso-950/40 group-hover:opacity-100">
                   <Pencil size={20} className="text-white" />
                 </span>
@@ -172,6 +192,7 @@ export default function Products() {
             nombre: editing.nombre,
             precioUnitario: String(editing.precioUnitario),
             costoUnitario: String(editing.costoUnitario ?? ''),
+            material: editing.material ?? 'OTRO',
             stock: String(editing.stock),
             file: null,
           }}
@@ -211,6 +232,7 @@ function ProductModal({
     nombre: '',
     precioUnitario: '',
     costoUnitario: '',
+    material: 'OTRO' as Material,
     stock: '',
     file: null,
   };
@@ -323,6 +345,28 @@ function ProductModal({
             />
             <p className="mt-1 text-[11px] text-muted">
               Solo lo ves tu (ADMIN). Se usa para calcular el margen en el apartado de Costos.
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Material</label>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(MATERIAL_LABEL) as Material[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, material: m }))}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    form.material === m
+                      ? `text-white ${MATERIAL_COLOR[m]}`
+                      : 'bg-porcelain-200 text-muted hover:bg-porcelain-300'
+                  }`}
+                >
+                  {MATERIAL_LABEL[m]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              Se usa para el filtro del catalogo web y la insignia sobre la foto.
             </p>
           </div>
           <Button type="submit" className="w-full" disabled={isPending}>

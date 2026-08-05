@@ -64,6 +64,9 @@ model Product {
   // Costo de adquisicion de la pieza. Solo visible/editable por ADMIN (ver
   // ProductsController) - se usa para calcular margen en el apartado de Costos.
   costoUnitario  Decimal  @default(0) @map("costo_unitario")
+  // Material de la pieza (PLATA, ORO, GOLDFILLED, ACERO, OTRO). Alimenta el
+  // filtro del catalogo web y la insignia en la esquina de la foto.
+  material       String   @default("OTRO")
   stock          Int      @default(0)
   imageUrl       String?  @map("image_url")
   activo         Boolean  @default(true)

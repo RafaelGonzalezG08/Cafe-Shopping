@@ -1,18 +1,44 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { StorageService } from '../invoices/storage.service';
 import { optimizeProductImage } from '../common/image.util';
+import { CatalogoService } from '../catalogo/catalogo.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly catalogo: CatalogoService,
   ) {}
+
+  /**
+   * Vuelve a generar el sitio del catalogo despues de un cambio en el
+   * inventario (precio, foto, stock, alta o baja), para que quien lo suba a
+   * Netlify siempre tenga la version mas reciente sin tener que acordarse de
+   * pulsar "Publicar catalogo" cada vez.
+   *
+   * Sin `await` en quien la llama: regenerar no debe demorar la respuesta al
+   * cajero que esta guardando una pieza, y el propio metodo atrapa cualquier
+   * error para que un fallo aqui (por ejemplo, si aun no se configuro el
+   * telefono de WhatsApp del catalogo) nunca tumbe el guardado del producto.
+   */
+  private async regenerarCatalogo(): Promise<void> {
+    try {
+      const resultado = await this.catalogo.generar();
+      if (!resultado.ok) {
+        this.logger.warn(`No se pudo actualizar el catalogo web: ${resultado.error}`);
+      }
+    } catch (error) {
+      this.logger.warn(`No se pudo actualizar el catalogo web: ${error}`);
+    }
+  }
 
   findAll(onlyActive = true) {
     return this.prisma.product.findMany({
@@ -35,6 +61,7 @@ export class ProductsService {
 
     const product = await this.prisma.product.create({ data: { ...dto, sku } });
     await this.audit.log('Product', product.id, 'CREATE', userId, { ...dto, sku } as any);
+    void this.regenerarCatalogo();
     return product;
   }
 
@@ -68,6 +95,7 @@ export class ProductsService {
     await this.findOne(id);
     const product = await this.prisma.product.update({ where: { id }, data: dto });
     await this.audit.log('Product', id, 'UPDATE', userId, dto as any);
+    void this.regenerarCatalogo();
     return product;
   }
 
@@ -79,6 +107,8 @@ export class ProductsService {
       data: { activo: false },
     });
     await this.audit.log('Product', id, 'DELETE', userId);
+    // La pieza dada de baja tiene que desaparecer del sitio publico tambien.
+    void this.regenerarCatalogo();
     return product;
   }
 
@@ -91,6 +121,7 @@ export class ProductsService {
     const imageUrl = await this.storage.upload(optimized.buffer, key, optimized.contentType);
     const product = await this.prisma.product.update({ where: { id }, data: { imageUrl } });
     await this.audit.log('Product', id, 'UPDATE', userId, { imageUrl });
+    void this.regenerarCatalogo();
     return product;
   }
 }

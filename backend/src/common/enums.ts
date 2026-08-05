@@ -69,7 +69,31 @@ export type EstadoPedido = (typeof EstadoPedido)[keyof typeof EstadoPedido];
 export const ESTADOS_DEUDA_CON_SALDO = ['PENDIENTE', 'PARCIAL', 'VENCIDA'] as const;
 
 /** Listas para validadores (class-validator `IsIn`) y para recorrer valores. */
+/**
+ * Material de una pieza de joyeria. Se usa para el filtro del catalogo web
+ * (el dato que mas preguntan los clientes ademas del precio) y para la
+ * insignia en la esquina de la foto en Productos, asi se confirma de un
+ * vistazo al cargar la pieza en vez de tener que abrirla para revisarlo.
+ */
+export const Material = {
+  PLATA: 'PLATA',
+  ORO: 'ORO',
+  GOLDFILLED: 'GOLDFILLED',
+  ACERO: 'ACERO',
+  OTRO: 'OTRO',
+} as const;
+export type Material = (typeof Material)[keyof typeof Material];
+
+export const MATERIAL_LABEL: Record<Material, string> = {
+  PLATA: 'Plata',
+  ORO: 'Oro',
+  GOLDFILLED: 'Gold filled',
+  ACERO: 'Acero',
+  OTRO: 'Otro',
+};
+
 export const ROLES = Object.values(Role);
+export const MATERIALES = Object.values(Material);
 export const METODOS_PAGO = Object.values(MetodoPago);
 export const ESTADOS_FACTURA = Object.values(EstadoFactura);
 export const ESTADOS_DEUDA = Object.values(EstadoDeuda);
