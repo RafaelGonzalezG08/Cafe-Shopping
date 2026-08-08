@@ -70,12 +70,29 @@ model Product {
   stock          Int      @default(0)
   imageUrl       String?  @map("image_url")
   activo         Boolean  @default(true)
+  // Categoria de joya (Anillo, Collar, etc.), asignada SOLA cuando la primera
+  // palabra del nombre coincide exactamente con una categoria existente (ver
+  // ProductsService.clasificarCategoria()). Como client_debts.sale_id, es una
+  // columna suelta y no una relacion real de Prisma: al borrar una categoria
+  // no hay que rehacer la tabla completa (SQLite no deja agregar una llave
+  // foranea con ALTER TABLE), solo se pone en null a mano.
+  categoriaId    String?  @map("categoria_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   saleItems SaleItem[]
 
   @@map("products")
+}
+
+// Categoria de joya (Anillo, Collar, Aretes, Pulsera, Reloj, ...), que el
+// negocio define a su gusto. Sirve para clasificar y filtrar el inventario.
+model Category {
+  id        String   @id @default(cuid())
+  nombre    String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("categories")
 }
 
 model Sale {

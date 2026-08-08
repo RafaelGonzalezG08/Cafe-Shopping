@@ -47,6 +47,12 @@ export interface Product {
   stock: number;
   imageUrl?: string | null;
   activo: boolean;
+  categoriaId?: string | null;
+}
+
+export interface Category {
+  id: string;
+  nombre: string;
 }
 
 export interface ProductMargin {

@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { ClientsModule } from './clients/clients.module';
 import { ClientDebtsModule } from './client-debts/client-debts.module';
 import { ProductsModule } from './products/products.module';
+import { CategoriesModule } from './categories/categories.module';
 import { SalesModule } from './sales/sales.module';
 import { OrdersModule } from './orders/orders.module';
 import { WebOrdersModule } from './web-orders/web-orders.module';
@@ -31,6 +32,7 @@ import { HealthModule } from './health/health.module';
     ClientsModule,
     ClientDebtsModule,
     ProductsModule,
+    CategoriesModule,
     SalesModule,
     OrdersModule,
     WebOrdersModule,

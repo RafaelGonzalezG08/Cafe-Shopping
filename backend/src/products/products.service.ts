@@ -1,11 +1,34 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { StorageService } from '../invoices/storage.service';
 import { optimizeProductImage } from '../common/image.util';
 import { CatalogoService } from '../catalogo/catalogo.service';
+import { UPLOADS_DIR } from '../common/paths';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+
+export interface GrupoDuplicado {
+  nombre: string;
+  precioUnitario: number;
+  tamanoFotoBytes: number;
+  mantiene: { id: string; sku: string };
+  elimina: { id: string; sku: string }[];
+}
+
+export interface VistaPreviaLimpieza {
+  grupos: GrupoDuplicado[];
+  sinFoto: { id: string; sku: string; nombre: string }[];
+  totalABaja: number;
+}
+
+export interface VistaPreviaEliminarDuplicados {
+  grupos: GrupoDuplicado[];
+  totalEliminables: number;
+  omitidosPorVentas: { id: string; sku: string; nombre: string }[];
+}
 
 @Injectable()
 export class ProductsService {
@@ -59,10 +82,32 @@ export class ProductsService {
     const existing = await this.prisma.product.findUnique({ where: { sku } });
     if (existing) throw new ConflictException('Ya existe un producto con ese SKU.');
 
-    const product = await this.prisma.product.create({ data: { ...dto, sku } });
+    const categoriaId = await this.clasificarCategoria(dto.nombre);
+    const product = await this.prisma.product.create({ data: { ...dto, sku, categoriaId } });
     await this.audit.log('Product', product.id, 'CREATE', userId, { ...dto, sku } as any);
     void this.regenerarCatalogo();
     return product;
+  }
+
+  /**
+   * Clasifica automaticamente una pieza segun la primera palabra de su
+   * nombre: si coincide EXACTO (sin importar mayusculas ni acentos) con
+   * alguna categoria ya creada, esa es su categoria. Si no coincide con
+   * ninguna, queda sin categoria — nunca se inventa una nueva sola.
+   */
+  private async clasificarCategoria(nombre: string): Promise<string | null> {
+    const primeraPalabra = nombre.trim().split(/\s+/)[0];
+    if (!primeraPalabra) return null;
+
+    const normalizar = (texto: string) =>
+      texto
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '') // quita acentos (á -> a)
+        .toLowerCase();
+
+    const categorias = await this.prisma.category.findMany({ select: { id: true, nombre: true } });
+    const encontrada = categorias.find((c) => normalizar(c.nombre) === normalizar(primeraPalabra));
+    return encontrada?.id ?? null;
   }
 
   /**
@@ -100,7 +145,15 @@ export class ProductsService {
 
   async update(id: string, dto: UpdateProductDto, userId?: string) {
     await this.findOne(id);
-    const product = await this.prisma.product.update({ where: { id }, data: dto });
+    // Solo se recalcula la categoria si el nombre cambia: recalcularla en
+    // cualquier edicion (ej. solo tocar el stock) podria reclasificar la
+    // pieza sola por casualidad (si alguien creo una categoria nueva
+    // despues), sin que quien edito el stock lo haya pedido ni lo espere.
+    const categoriaId = dto.nombre ? await this.clasificarCategoria(dto.nombre) : undefined;
+    const product = await this.prisma.product.update({
+      where: { id },
+      data: categoriaId !== undefined ? { ...dto, categoriaId } : dto,
+    });
     await this.audit.log('Product', id, 'UPDATE', userId, dto as any);
     void this.regenerarCatalogo();
     return product;
@@ -119,6 +172,59 @@ export class ProductsService {
     return product;
   }
 
+  /** Dar de baja varias piezas de una vez (seleccion multiple en Productos). */
+  async bulkDarDeBaja(ids: string[], userId?: string): Promise<{ actualizados: number }> {
+    const { count } = await this.prisma.product.updateMany({
+      where: { id: { in: ids }, activo: true },
+      data: { activo: false },
+    });
+    if (count > 0) {
+      await this.audit.log('Product', 'baja-lote', 'DELETE', userId, { cantidad: count });
+      void this.regenerarCatalogo();
+    }
+    return { actualizados: count };
+  }
+
+  /** Reactivar varias piezas de una vez. */
+  async bulkReactivar(ids: string[], userId?: string): Promise<{ actualizados: number }> {
+    const { count } = await this.prisma.product.updateMany({
+      where: { id: { in: ids }, activo: false },
+      data: { activo: true },
+    });
+    if (count > 0) {
+      await this.audit.log('Product', 'reactivar-lote', 'UPDATE', userId, { cantidad: count });
+      void this.regenerarCatalogo();
+    }
+    return { actualizados: count };
+  }
+
+  /**
+   * Eliminar de verdad varias piezas ya dadas de baja (seleccion multiple).
+   * Misma regla que eliminarDuplicados(): nunca borra una que tenga una
+   * venta encima, y libera su foto del disco si tenia.
+   */
+  async bulkEliminar(ids: string[], userId?: string): Promise<{ eliminados: number; omitidosPorVentas: number }> {
+    const productos = await this.prisma.product.findMany({
+      where: { id: { in: ids }, activo: false },
+      select: { id: true, imageUrl: true },
+    });
+    const conVentas = await this.idsConVentas(productos.map((p) => p.id));
+    const aEliminar = productos.filter((p) => !conVentas.has(p.id));
+
+    if (aEliminar.length > 0) {
+      await this.prisma.product.deleteMany({ where: { id: { in: aEliminar.map((p) => p.id) } } });
+      await this.audit.log('Product', 'eliminar-lote', 'DELETE', userId, {
+        eliminados: aEliminar.length,
+        omitidosPorVentas: conVentas.size,
+      });
+      for (const p of aEliminar) {
+        if (p.imageUrl) await fs.unlink(this.rutaFoto(p.imageUrl)).catch(() => undefined);
+      }
+    }
+
+    return { eliminados: aEliminar.length, omitidosPorVentas: conVentas.size };
+  }
+
   async updatePhoto(id: string, buffer: Buffer, mimetype: string, userId?: string) {
     await this.findOne(id);
     // Se reduce a 800x800 y se comprime antes de guardar (ver image.util.ts):
@@ -130,5 +236,171 @@ export class ProductsService {
     await this.audit.log('Product', id, 'UPDATE', userId, { imageUrl });
     void this.regenerarCatalogo();
     return product;
+  }
+
+  /** Ruta en disco de la foto de un producto, a partir de su imageUrl (relativo o con host). */
+  private rutaFoto(imageUrl: string): string {
+    const marca = '/uploads/';
+    const idx = imageUrl.indexOf(marca);
+    const key = idx === -1 ? imageUrl : imageUrl.slice(idx + marca.length);
+    return join(UPLOADS_DIR, key);
+  }
+
+  /**
+   * Calcula que piezas se darian de baja al "limpiar duplicados": las que no
+   * tienen foto, y las que SI tienen foto pero son practicamente la misma
+   * pieza repetida (mismo nombre, mismo precio y el archivo de foto pesa
+   * exactamente lo mismo en bytes). De cada grupo de repetidas se conserva
+   * la mas antigua y se marcan las demas.
+   *
+   * Se aisla en un metodo aparte para que la vista previa y la limpieza real
+   * calculen EXACTAMENTE lo mismo — si calcularan cada una por su lado
+   * podrian desincronizarse y la vista previa mentiria sobre lo que en
+   * realidad se va a borrar.
+   */
+  private async calcularLimpieza(activo: boolean): Promise<{
+    grupos: GrupoDuplicado[];
+    sinFoto: { id: string; sku: string; nombre: string }[];
+    idsDuplicados: string[];
+    idsSinFoto: string[];
+  }> {
+    const productos = await this.prisma.product.findMany({
+      where: { activo },
+      select: { id: true, sku: true, nombre: true, precioUnitario: true, imageUrl: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const sinFoto = productos.filter((p) => !p.imageUrl);
+    const conFoto = productos.filter((p) => p.imageUrl);
+
+    const tamanos = new Map<string, number>();
+    await Promise.all(
+      conFoto.map(async (p) => {
+        const size = await fs
+          .stat(this.rutaFoto(p.imageUrl as string))
+          .then((s) => s.size)
+          .catch(() => null);
+        if (size != null) tamanos.set(p.id, size);
+      }),
+    );
+
+    // Agrupa por nombre + precio + tamaño de foto en bytes. El orden dentro
+    // de cada grupo ya viene de mas viejo a mas nuevo (orderBy arriba).
+    const grupos = new Map<string, typeof conFoto>();
+    for (const p of conFoto) {
+      const tamano = tamanos.get(p.id);
+      if (tamano == null) continue; // no se pudo leer el archivo: no se compara
+      const clave = `${p.nombre.trim().toLowerCase()}|${Number(p.precioUnitario)}|${tamano}`;
+      const lista = grupos.get(clave);
+      if (lista) lista.push(p);
+      else grupos.set(clave, [p]);
+    }
+
+    const gruposDuplicados: GrupoDuplicado[] = [];
+    const idsDuplicados: string[] = [];
+    for (const lista of grupos.values()) {
+      if (lista.length < 2) continue;
+      const [mantiene, ...resto] = lista;
+      gruposDuplicados.push({
+        nombre: mantiene.nombre,
+        precioUnitario: Number(mantiene.precioUnitario),
+        tamanoFotoBytes: tamanos.get(mantiene.id) as number,
+        mantiene: { id: mantiene.id, sku: mantiene.sku },
+        elimina: resto.map((p) => ({ id: p.id, sku: p.sku })),
+      });
+      idsDuplicados.push(...resto.map((p) => p.id));
+    }
+
+    return {
+      grupos: gruposDuplicados,
+      sinFoto: sinFoto.map((p) => ({ id: p.id, sku: p.sku, nombre: p.nombre })),
+      idsDuplicados,
+      idsSinFoto: sinFoto.map((p) => p.id),
+    };
+  }
+
+  async vistaPreviaLimpieza(): Promise<VistaPreviaLimpieza> {
+    const { grupos, sinFoto, idsDuplicados, idsSinFoto } = await this.calcularLimpieza(true);
+    return { grupos, sinFoto, totalABaja: idsDuplicados.length + idsSinFoto.length };
+  }
+
+  /**
+   * Da de baja (no borra) las piezas duplicadas y las que no tienen foto.
+   * Baja logica, igual que remove(): las facturas viejas que ya las mencionan
+   * no se ven afectadas, y cualquiera se puede reactivar despues a mano.
+   */
+  async limpiarDuplicados(userId?: string): Promise<{ bajaDuplicados: number; bajaSinFoto: number }> {
+    const { idsDuplicados, idsSinFoto } = await this.calcularLimpieza(true);
+    const idsTotal = [...idsDuplicados, ...idsSinFoto];
+
+    if (idsTotal.length > 0) {
+      await this.prisma.product.updateMany({ where: { id: { in: idsTotal } }, data: { activo: false } });
+      await this.audit.log('Product', 'limpieza-duplicados', 'DELETE', userId, {
+        bajaDuplicados: idsDuplicados.length,
+        bajaSinFoto: idsSinFoto.length,
+      });
+      void this.regenerarCatalogo();
+    }
+
+    return { bajaDuplicados: idsDuplicados.length, bajaSinFoto: idsSinFoto.length };
+  }
+
+  /** IDs de esta lista que aparecen en alguna venta (nunca se pueden borrar de verdad). */
+  private async idsConVentas(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const items = await this.prisma.saleItem.findMany({
+      where: { productId: { in: ids } },
+      select: { productId: true },
+      distinct: ['productId'],
+    });
+    return new Set(items.map((i) => i.productId as string));
+  }
+
+  /**
+   * Vista previa de "Eliminar duplicados" en la pestaña de dados de baja:
+   * a diferencia de limpiarDuplicados() (que solo los marca inactivos), esto
+   * los borra de verdad para recuperar espacio — pero solo los duplicados
+   * que NUNCA se vendieron. Los que si tienen una venta encima se dejan tal
+   * cual (borrarlos rompería el historial de esa factura) y se listan aparte
+   * para que quede claro por que no desaparecieron.
+   */
+  async vistaPreviaEliminarDuplicados(): Promise<VistaPreviaEliminarDuplicados> {
+    const { grupos, idsDuplicados } = await this.calcularLimpieza(false);
+    const conVentas = await this.idsConVentas(idsDuplicados);
+
+    const omitidosPorVentas: { id: string; sku: string; nombre: string }[] = [];
+    let totalEliminables = 0;
+    for (const grupo of grupos) {
+      for (const p of grupo.elimina) {
+        if (conVentas.has(p.id)) omitidosPorVentas.push({ id: p.id, sku: p.sku, nombre: grupo.nombre });
+        else totalEliminables++;
+      }
+    }
+
+    return { grupos, totalEliminables, omitidosPorVentas };
+  }
+
+  /** Ejecuta lo que vistaPreviaEliminarDuplicados() calculo: borra de verdad y libera las fotos del disco. */
+  async eliminarDuplicados(userId?: string): Promise<{ eliminados: number; omitidosPorVentas: number }> {
+    const { idsDuplicados } = await this.calcularLimpieza(false);
+    const conVentas = await this.idsConVentas(idsDuplicados);
+    const aEliminar = idsDuplicados.filter((id) => !conVentas.has(id));
+
+    if (aEliminar.length > 0) {
+      const productos = await this.prisma.product.findMany({
+        where: { id: { in: aEliminar } },
+        select: { id: true, imageUrl: true },
+      });
+      await this.prisma.product.deleteMany({ where: { id: { in: aEliminar } } });
+      await this.audit.log('Product', 'eliminar-duplicados', 'DELETE', userId, {
+        eliminados: aEliminar.length,
+        omitidosPorVentas: conVentas.size,
+      });
+      for (const p of productos) {
+        if (p.imageUrl) await fs.unlink(this.rutaFoto(p.imageUrl)).catch(() => undefined);
+      }
+    }
+
+    return { eliminados: aEliminar.length, omitidosPorVentas: conVentas.size };
   }
 }
