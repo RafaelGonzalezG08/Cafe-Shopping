@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe, UploadCloud, ArrowRight } from 'lucide-react';
+import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe, UploadCloud, ArrowRight, Loader2 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { Button, Card, PageHeader } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
@@ -354,6 +354,23 @@ export default function Settings() {
                     {restoreBackup.isPending ? 'Restaurando...' : 'Si, restaurar'}
                   </Button>
                 </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Overlay bloqueante mientras restaura: cambiar el archivo de la
+              base de datos en pleno uso es delicado, asi que mientras dura
+              nadie puede hacer clic en nada mas de la app (ver
+              backups.service.ts -> restore(), que ademas desconecta y
+              reconecta Prisma durante el proceso). */}
+          {restoreBackup.isPending && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4">
+              <Card className="w-full max-w-sm p-6 text-center">
+                <Loader2 size={32} className="mx-auto mb-3 animate-spin text-copper-600" />
+                <h3 className="mb-1 font-display text-sm font-bold text-ink">Restaurando respaldo...</h3>
+                <p className="text-xs text-muted">
+                  No cierres el programa ni hagas nada mas mientras termina. Esto toma unos segundos.
+                </p>
               </Card>
             </div>
           )}
