@@ -4,6 +4,7 @@ import { EstadoPedidoWeb } from '../common/enums';
 import { WebOrdersService } from './web-orders.service';
 import { CreateWebOrderDto } from './dto/create-web-order.dto';
 import { UpdateWebOrderDto } from './dto/update-web-order.dto';
+import { AtenderWebOrderDto } from './dto/atender-web-order.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
@@ -28,6 +29,12 @@ export class WebOrdersController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateWebOrderDto, @CurrentUser() user: AuthenticatedUser) {
     return this.webOrdersService.update(id, dto, user.userId);
+  }
+
+  /** Convierte el pedido en una venta real (cliente, metodo de pago, etc.) y lo marca ATENDIDO. */
+  @Post(':id/atender')
+  atender(@Param('id') id: string, @Body() dto: AtenderWebOrderDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.webOrdersService.atender(id, dto, user.userId);
   }
 
   @Delete(':id')

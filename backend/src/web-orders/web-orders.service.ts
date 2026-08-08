@@ -1,10 +1,13 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { SalesService } from '../sales/sales.service';
+import { SaleItemDto } from '../sales/dto/create-sale.dto';
 import { EstadoPedidoWeb } from '../common/enums';
 import { parsearPedidoWeb, ItemPedidoWeb } from './parser';
 import { CreateWebOrderDto } from './dto/create-web-order.dto';
 import { UpdateWebOrderDto } from './dto/update-web-order.dto';
+import { AtenderWebOrderDto } from './dto/atender-web-order.dto';
 
 /** Fila de web_orders con `items` ya vuelto a ser un arreglo, listo para la interfaz. */
 function conItems<T extends { items: string }>(pedido: T) {
@@ -16,6 +19,7 @@ export class WebOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly sales: SalesService,
   ) {}
 
   /**
@@ -76,6 +80,62 @@ export class WebOrdersService {
 
     await this.audit.log('WebOrder', id, 'UPDATE', userId, { estado: dto.estado });
     return conItems(actualizado);
+  }
+
+  /**
+   * Convierte el pedido web en una venta real (misma factura que sale del
+   * punto de venta), y de paso marca el pedido como ATENDIDO enlazado a esa
+   * venta. Es lo que "atender" un pedido web significa de verdad: alguien
+   * decidio el cliente y el metodo de pago, y ahora hay una factura.
+   *
+   * Los items se toman TAL COMO el cliente los pidio (mismo precio que vio
+   * en la web, no el precio de catalogo de hoy - pudo cambiar desde
+   * entonces). Si el SKU todavia existe como producto, la venta queda
+   * enlazada a el (descuenta stock, etc); si no (se borro o cambio de SKU),
+   * se vende como item suelto con el mismo nombre y precio, sin tocar stock.
+   */
+  async atender(id: string, dto: AtenderWebOrderDto, userId: string) {
+    const pedido = await this.prisma.webOrder.findUnique({ where: { id } });
+    if (!pedido) throw new NotFoundException('Pedido web no encontrado.');
+    if (pedido.estado !== EstadoPedidoWeb.PENDIENTE) {
+      throw new ConflictException('Este pedido ya fue atendido o cancelado.');
+    }
+
+    const items = JSON.parse(pedido.items) as ItemPedidoWeb[];
+    const skus = [...new Set(items.map((i) => i.sku).filter((s): s is string => Boolean(s)))];
+    const productos = skus.length ? await this.prisma.product.findMany({ where: { sku: { in: skus } } }) : [];
+    const porSku = new Map(productos.map((p) => [p.sku.toUpperCase(), p]));
+
+    const saleItems: SaleItemDto[] = items.map((item) => {
+      const producto = item.sku ? porSku.get(item.sku.toUpperCase()) : undefined;
+      return {
+        productId: producto?.id,
+        descripcion: producto?.nombre ?? item.nombre,
+        cantidad: item.cantidad,
+        precioUnitario: Math.round((item.total / item.cantidad) * 100) / 100,
+      };
+    });
+
+    const sale = await this.sales.create(
+      {
+        clientId: dto.clientId,
+        metodoPago: dto.metodoPago,
+        fechaVencimiento: dto.fechaVencimiento,
+        esPedido: dto.esPedido,
+        fechaEntrega: dto.fechaEntrega,
+        descuentoPct: dto.descuentoPct,
+        items: saleItems,
+      },
+      userId,
+    );
+
+    await this.prisma.webOrder.update({
+      where: { id },
+      data: { estado: EstadoPedidoWeb.ATENDIDO, saleId: sale.id },
+    });
+
+    await this.audit.log('WebOrder', id, 'UPDATE', userId, { accion: 'atendido', saleId: sale.id });
+    return sale;
   }
 
   async remove(id: string, userId?: string) {

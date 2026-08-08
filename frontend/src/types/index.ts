@@ -167,6 +167,7 @@ export interface WebOrder {
   estado: EstadoPedidoWeb;
   textoOriginal: string;
   notas?: string | null;
+  saleId?: string | null;
   createdAt: string;
 }
 

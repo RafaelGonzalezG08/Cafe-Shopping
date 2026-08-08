@@ -244,6 +244,11 @@ model WebOrder {
   // cliente agrego una nota debajo del pedido).
   textoOriginal String @map("texto_original")
   notas     String?
+  // Venta que se genero al "atender" este pedido (ver web-orders.service.ts
+  // -> atender()). Como client_debts.sale_id, es una columna suelta, no una
+  // relacion real: si esa venta se llegara a borrar, el pedido web no debe
+  // desaparecer con ella, solo queda un vinculo roto (caso raro).
+  saleId    String?  @map("sale_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
