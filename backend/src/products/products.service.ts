@@ -68,24 +68,31 @@ export class ProductsService {
   /**
    * Genera un SKU tipo "AN-0001": las 2 primeras letras del nombre (sin
    * acentos, en mayusculas) mas un consecutivo de 4 digitos, calculado a
-   * partir del ultimo SKU existente con ese mismo prefijo.
+   * partir del mayor numero entre los SKU existentes con ese mismo prefijo.
+   *
+   * Se calcula en codigo sobre TODOS los del prefijo, no con
+   * `orderBy: sku desc` + tomar el primero: eso compara como texto, y un SKU
+   * de 3 digitos (ej. "AN-002", de datos viejos o importados de otra
+   * computadora) ordena DESPUES que uno de 4 (ej. "AN-0003") porque '2' > '0'
+   * como caracter. El siguiente consecutivo salia repetido y la creacion
+   * fallaba por SKU duplicado.
    */
-  private async generateSku(nombre: string): Promise<string> {
+  async generateSku(nombre: string): Promise<string> {
     const soloLetras = nombre
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // quita acentos (á -> a)
       .replace(/[^a-zA-Z]/g, '');
     const prefix = (soloLetras.slice(0, 2) || 'PR').toUpperCase();
 
-    const last = await this.prisma.product.findFirst({
+    const candidatos = await this.prisma.product.findMany({
       where: { sku: { startsWith: `${prefix}-` } },
-      orderBy: { sku: 'desc' },
+      select: { sku: true },
     });
 
     let nextNumber = 1;
-    if (last) {
-      const match = last.sku.match(/-(\d+)$/);
-      if (match) nextNumber = parseInt(match[1], 10) + 1;
+    for (const c of candidatos) {
+      const match = c.sku.match(/-(\d+)$/);
+      if (match) nextNumber = Math.max(nextNumber, parseInt(match[1], 10) + 1);
     }
 
     return `${prefix}-${String(nextNumber).padStart(4, '0')}`;
@@ -118,7 +125,7 @@ export class ProductsService {
     // las fotos vienen del celular pesando megabytes y se muestran a 144px.
     const optimized = await optimizeProductImage(buffer, mimetype);
     const key = `products/${id}-${Date.now()}.${optimized.ext}`;
-    const imageUrl = await this.storage.upload(optimized.buffer, key, optimized.contentType);
+    const imageUrl = await this.storage.upload(optimized.buffer, key);
     const product = await this.prisma.product.update({ where: { id }, data: { imageUrl } });
     await this.audit.log('Product', id, 'UPDATE', userId, { imageUrl });
     void this.regenerarCatalogo();

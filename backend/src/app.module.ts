@@ -17,6 +17,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { BackupsModule } from './backups/backups.module';
+import { DataImportModule } from './data-import/data-import.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -39,6 +40,7 @@ import { HealthModule } from './health/health.module';
     ReportsModule,
     SettingsModule,
     BackupsModule,
+    DataImportModule,
     HealthModule,
   ],
 })

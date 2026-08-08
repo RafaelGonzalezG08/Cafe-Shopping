@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe } from 'lucide-react';
+import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe, UploadCloud, ArrowRight } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { Button, Card, PageHeader } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
@@ -38,7 +38,6 @@ interface BackupsStatus {
 
 interface IntegrationsStatus {
   whatsapp: boolean;
-  s3: boolean;
 }
 
 interface AppUser {
@@ -74,6 +73,8 @@ export default function Settings() {
     tasaImpuesto: '0.18',
     telefonoWhatsapp: '',
     descripcionWeb: '',
+    relevoPedidosUrl: '',
+    relevoPedidosClave: '',
   });
 
   useEffect(() => {
@@ -85,6 +86,8 @@ export default function Settings() {
         tasaImpuesto: String(profile.tasaImpuesto),
         telefonoWhatsapp: profile.telefonoWhatsapp ?? '',
         descripcionWeb: profile.descripcionWeb ?? '',
+        relevoPedidosUrl: profile.relevoPedidosUrl ?? '',
+        relevoPedidosClave: profile.relevoPedidosClave ?? '',
       });
     }
   }, [profile]);
@@ -170,6 +173,7 @@ export default function Settings() {
       <PageHeader title="Configuracion" subtitle="Datos del negocio, integraciones y usuarios" />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
         <Card className="p-5">
           <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
             Datos del negocio
@@ -226,17 +230,11 @@ export default function Settings() {
           </div>
         </Card>
 
-        <div className="space-y-6">
           <Card className="p-5">
             <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
               Integraciones
             </h2>
             <IntegrationRow label="WhatsApp (Agente Desktop)" ok={Boolean(integrations?.whatsapp)} />
-            <IntegrationRow label="Almacenamiento S3" ok={Boolean(integrations?.s3)} />
-            <p className="mt-3 text-xs text-muted">
-              Estas credenciales se configuran por seguridad como variables de entorno del backend
-              (ver README), no desde esta pantalla.
-            </p>
           </Card>
 
           <Card className="p-5">
@@ -328,6 +326,8 @@ export default function Settings() {
             )}
           </Card>
 
+          <AgregarDatos />
+
           {restoreTarget && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
               <Card className="w-full max-w-sm p-5">
@@ -357,7 +357,9 @@ export default function Settings() {
               </Card>
             </div>
           )}
+        </div>
 
+        <div className="space-y-6">
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">
@@ -383,6 +385,8 @@ export default function Settings() {
           <CatalogoWeb
             telefonoWhatsapp={form.telefonoWhatsapp}
             descripcionWeb={form.descripcionWeb}
+            relevoPedidosUrl={form.relevoPedidosUrl}
+            relevoPedidosClave={form.relevoPedidosClave}
             onChange={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
             onGuardar={() => updateProfile.mutate()}
             guardando={updateProfile.isPending}
@@ -448,13 +452,20 @@ function IntegrationRow({ label, ok }: { label: string; ok: boolean }) {
 function CatalogoWeb({
   telefonoWhatsapp,
   descripcionWeb,
+  relevoPedidosUrl,
+  relevoPedidosClave,
   onChange,
   onGuardar,
   guardando,
 }: {
   telefonoWhatsapp: string;
   descripcionWeb: string;
-  onChange: (campo: 'telefonoWhatsapp' | 'descripcionWeb', valor: string) => void;
+  relevoPedidosUrl: string;
+  relevoPedidosClave: string;
+  onChange: (
+    campo: 'telefonoWhatsapp' | 'descripcionWeb' | 'relevoPedidosUrl' | 'relevoPedidosClave',
+    valor: string,
+  ) => void;
   onGuardar: () => void;
   guardando: boolean;
 }) {
@@ -519,6 +530,42 @@ function CatalogoWeb({
             className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
           />
         </div>
+
+        <div className="border-t border-porcelain-200 pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Pedidos web automaticos (opcional)
+          </p>
+          <p className="mb-2 text-xs text-muted">
+            Sin esto, los pedidos siguen llegando por WhatsApp igual — solo hay que pegar el mensaje en
+            Pedidos web. Con esto puesto, la app los revisa y los crea sola cada pocos minutos.
+          </p>
+          <div className="space-y-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+                URL del relevo
+              </label>
+              <input
+                value={relevoPedidosUrl}
+                onChange={(e) => onChange('relevoPedidosUrl', e.target.value)}
+                placeholder="https://cafe-shopping-pedidos.tu-usuario.workers.dev"
+                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Clave secreta del relevo
+              </label>
+              <input
+                type="password"
+                value={relevoPedidosClave}
+                onChange={(e) => onChange('relevoPedidosClave', e.target.value)}
+                placeholder="La misma que pusiste en Cloudflare"
+                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onGuardar} disabled={guardando}>
             <Save size={15} /> Guardar datos
@@ -554,6 +601,103 @@ function CatalogoWeb({
           </div>
         )}
       </div>
+    </Card>
+  );
+}
+
+/**
+ * Une el inventario de OTRA computadora (ej. la de mama) con el de esta,
+ * a partir de un respaldo .sqlite.gz generado alli en Respaldos automaticos.
+ *
+ * Solo trae productos: nunca toca lo que ya existe en esta base, solo agrega
+ * lo que venga de afuera (renumerando el SKU si ya estaba en uso aqui).
+ */
+function AgregarDatos() {
+  const queryClient = useQueryClient();
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [resultado, setResultado] = useState<{
+    total: number;
+    agregados: number;
+    omitidos: number;
+    renumerados: { nombre: string; skuOriginal: string; skuNuevo: string }[];
+  } | null>(null);
+
+  const importar = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return (await api.post('/data-import/productos', formData, { skipErrorToast: true })).data;
+    },
+    onSuccess: (data) => {
+      setResultado(data);
+      setArchivo(null);
+      toast.success(`Listo: ${data.agregados + data.renumerados.length} productos agregados.`);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo importar ese archivo.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
+
+  return (
+    <Card className="p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
+        <UploadCloud size={15} /> Añadir datos
+      </h2>
+      <p className="mb-3 text-xs text-muted">
+        Si tu y otra persona (ej. mama) trabajan cada quien en su propia computadora, usa esto para
+        traer el inventario de la otra hacia esta. Sube el respaldo <code>.sqlite.gz</code> que se
+        genera en <strong>Respaldos automaticos</strong> de la OTRA computadora. Lo que ya existe aqui
+        no se toca — solo se agrega lo nuevo, y si un codigo se repite se le pone uno nuevo
+        automaticamente.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cursor-pointer rounded-lg border border-porcelain-300 px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-copper-400 hover:text-copper-600">
+          {archivo ? archivo.name : 'Elegir archivo...'}
+          <input
+            type="file"
+            accept=".gz,.sqlite,.db"
+            className="hidden"
+            disabled={importar.isPending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              setArchivo(file ?? null);
+              setResultado(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          onClick={() => archivo && importar.mutate(archivo)}
+          disabled={!archivo || importar.isPending}
+        >
+          <UploadCloud size={14} /> {importar.isPending ? 'Importando...' : 'Importar productos'}
+        </Button>
+      </div>
+
+      {resultado && (
+        <div className="mt-3 rounded-lg bg-sage-100 p-3 text-xs text-sage-700">
+          <p className="font-semibold">
+            {resultado.total} productos en el archivo · {resultado.agregados} agregados tal cual
+            {resultado.renumerados.length > 0 && ` · ${resultado.renumerados.length} renumerados`}
+            {resultado.omitidos > 0 && ` · ${resultado.omitidos} omitidos`}
+          </p>
+          {resultado.renumerados.length > 0 && (
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t border-sage-600/20 pt-2">
+              <p className="text-[11px] text-muted">
+                Estos ya existian con ese codigo en esta base, asi que se les asigno uno nuevo:
+              </p>
+              {resultado.renumerados.map((r, i) => (
+                <p key={i} className="flex items-center gap-1 font-mono text-[11px]">
+                  {r.nombre}: {r.skuOriginal} <ArrowRight size={10} /> {r.skuNuevo}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
