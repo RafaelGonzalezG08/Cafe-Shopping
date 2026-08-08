@@ -13,20 +13,29 @@ export class ClientsService {
   ) {}
 
   async findAll(search?: string) {
+    // Por palabras sueltas, sin importar el orden: "juan perez" encuentra a
+    // "Juan Carlos Perez" aunque "perez" no vaya pegado a "juan". Cada
+    // palabra tiene que aparecer en ALGUNA de las columnas, no
+    // necesariamente todas en la misma.
+    const palabras = search?.trim().split(/\s+/).filter(Boolean) ?? [];
+
     const clients = await this.prisma.client.findMany({
       // Sin `mode: 'insensitive'`: SQLite no lo soporta en Prisma, pero su
       // LIKE ya ignora mayusculas/minusculas para texto ASCII, que es como se
       // escriben los nombres y correos aqui. La unica diferencia frente a
       // Postgres es que las letras acentuadas si distinguen mayusculas.
-      where: search
-        ? {
-            OR: [
-              { nombre: { contains: search } },
-              { telefono: { contains: search } },
-              { email: { contains: search } },
-            ],
-          }
-        : undefined,
+      where:
+        palabras.length > 0
+          ? {
+              AND: palabras.map((palabra) => ({
+                OR: [
+                  { nombre: { contains: palabra } },
+                  { telefono: { contains: palabra } },
+                  { email: { contains: palabra } },
+                ],
+              })),
+            }
+          : undefined,
       orderBy: { nombre: 'asc' },
       include: {
         debts: { where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } } },

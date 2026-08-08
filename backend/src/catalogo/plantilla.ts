@@ -235,9 +235,20 @@ const filtros = { texto: '', materiales: new Set(), desde: null, hasta: null };
 
 const dinero = (n) => n.toLocaleString('es-DO', {minimumFractionDigits:2, maximumFractionDigits:2});
 
+/**
+ * Por palabras sueltas, sin importar el orden: "anillo verde" encuentra
+ * "Anillo Piedra Verde" aunque "verde" no vaya pegado a "anillo". Cada
+ * palabra de la busqueda tiene que aparecer en algun lugar del texto.
+ */
+function coincideTexto(texto, consulta) {
+  if (!consulta) return true;
+  const palabras = consulta.split(/\s+/).filter(Boolean);
+  const textoNormalizado = texto.toLowerCase();
+  return palabras.every((palabra) => textoNormalizado.includes(palabra));
+}
+
 function coincide(p) {
-  const q = filtros.texto;
-  if (q && !p.nombre.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
+  if (!coincideTexto(p.nombre + ' ' + p.sku, filtros.texto)) return false;
   if (filtros.materiales.size > 0 && !filtros.materiales.has(p.material)) return false;
   if (filtros.desde != null && p.precio < filtros.desde) return false;
   if (filtros.hasta != null && p.precio > filtros.hasta) return false;
