@@ -5,7 +5,9 @@ import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, C
 import { api, apiUrl } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
+import { coincideBusqueda } from '../../lib/search';
 import { Button, Card } from '../../components/ui';
+import { ClientPicker } from '../../components/ClientPicker';
 import type { Client, MetodoPago, Product, Sale } from '../../types';
 
 interface CartLine {
@@ -27,8 +29,6 @@ export default function POS() {
   const [cart, setCart] = usePersistedState<CartLine[]>('pos:carrito', []);
   const [manualDesc, setManualDesc] = usePersistedState('pos:manual-desc', '');
   const [manualPrice, setManualPrice] = usePersistedState('pos:manual-precio', '');
-  const [clientSearch, setClientSearch] = useState('');
-  const [clientModalOpen, setClientModalOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = usePersistedState<string | undefined>('pos:cliente-id', undefined);
   const [selectedClient, setSelectedClient] = usePersistedState<Client | null>('pos:cliente', null);
   const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago>('pos:metodo-pago', 'EFECTIVO');
@@ -54,19 +54,8 @@ export default function POS() {
   });
   const tasaImpuesto = businessProfile?.tasaImpuesto ?? 0;
 
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ['clients', clientSearch],
-    queryFn: async () => (await api.get('/clients', { params: { search: clientSearch || undefined } })).data,
-    enabled: metodoPago === 'CREDITO' || clientSearch.length > 0 || clientModalOpen,
-  });
-
   const filteredProducts = useMemo(
-    () =>
-      products.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-          p.sku.toLowerCase().includes(search.toLowerCase()),
-      ),
+    () => products.filter((p) => coincideBusqueda(`${p.nombre} ${p.sku}`, search)),
     [products, search],
   );
 
@@ -147,7 +136,6 @@ export default function POS() {
     setCart([]);
     setSelectedClientId(undefined);
     setSelectedClient(null);
-    setClientSearch('');
     setMetodoPago('EFECTIVO');
     setFechaVencimiento('');
     setEsPedido(false);
@@ -341,92 +329,14 @@ export default function POS() {
         </div>
 
         <div className="mb-3">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            Cliente {metodoPago === 'CREDITO' && <span className="text-brick-500">(requerido)</span>}
-          </p>
-
-          {selectedClient ? (
-            <div className="mb-1.5 flex items-center justify-between rounded-lg border border-sage-500 bg-sage-100 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sage-500 text-white">
-                  <Check size={12} strokeWidth={3} />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-sage-700">{selectedClient.nombre}</p>
-                  <p className="text-xs text-sage-600">{selectedClient.telefono}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedClientId(undefined);
-                  setSelectedClient(null);
-                  setClientSearch('');
-                }}
-                className="rounded p-1 text-sage-600 hover:bg-sage-500/10"
-                title="Quitar cliente"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setClientModalOpen(true)}
-              className="mb-1.5 flex w-full items-center gap-2 rounded-lg border border-porcelain-300 px-3 py-2 text-left text-sm text-muted outline-none transition-colors hover:border-copper-400 focus:border-copper-500"
-            >
-              <Search size={15} /> Buscar cliente...
-            </button>
-          )}
-
-          {clientModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-              <Card className="flex max-h-[70vh] w-full max-w-md flex-col p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-display text-sm font-bold uppercase tracking-wide text-muted">
-                    Buscar cliente
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setClientModalOpen(false)}
-                    className="rounded p-1 text-muted hover:bg-porcelain-100"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <input
-                  autoFocus
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  placeholder="Nombre o telefono..."
-                  className="mb-3 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-                />
-                <div className="flex-1 overflow-y-auto rounded-lg border border-porcelain-200">
-                  {clients.length === 0 ? (
-                    <p className="px-3 py-3 text-sm text-muted">
-                      {clientSearch ? 'Sin resultados.' : 'Escribe para buscar un cliente.'}
-                    </p>
-                  ) : (
-                    clients.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClientId(c.id);
-                          setSelectedClient(c);
-                          setClientModalOpen(false);
-                        }}
-                        className="block w-full border-b border-porcelain-100 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-porcelain-100"
-                      >
-                        <span className="font-medium text-ink">{c.nombre}</span>{' '}
-                        <span className="text-xs text-muted">{c.telefono}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Card>
-            </div>
-          )}
+          <ClientPicker
+            client={selectedClient}
+            onChange={(c) => {
+              setSelectedClient(c);
+              setSelectedClientId(c?.id);
+            }}
+            required={metodoPago === 'CREDITO'}
+          />
 
           {metodoPago === 'CREDITO' && (
             <input
@@ -483,7 +393,7 @@ export default function POS() {
   );
 }
 
-function InvoicePreview({
+export function InvoicePreview({
   sale,
   onNewSale,
 }: {
