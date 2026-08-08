@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Search, Phone, Mail, X, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
@@ -11,13 +11,47 @@ import type { Client, MetodoPago } from '../../types';
 
 export default function Clients() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const esAdmin = user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  // Seleccion multiple: para borrar varios clientes sin historial de una
+  // vez, en lugar de entrar a cada uno por separado.
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+
+  function toggleSeleccion(id: string) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', 'all', search],
     queryFn: async () => (await api.get('/clients', { params: { search: search || undefined } })).data,
+  });
+
+  const bulkEliminar = useMutation({
+    mutationFn: async () =>
+      (await api.post('/clients/bulk/eliminar', { ids: [...seleccionados] })).data as {
+        eliminados: number;
+        omitidos: { id: string; nombre: string; motivo: string }[];
+      },
+    onSuccess: (data) => {
+      toast.success(
+        data.omitidos.length > 0
+          ? `${data.eliminados} eliminados. ${data.omitidos.length} no se pudieron (ya tienen historial).`
+          : `${data.eliminados} clientes eliminados.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setSeleccionados(new Set());
+      if (selectedId && seleccionados.has(selectedId)) setSelectedId(null);
+    },
+    onError: () => toast.error('No se pudo completar la eliminacion.'),
   });
 
   const { data: selectedClient } = useQuery<Client>({
@@ -43,9 +77,22 @@ export default function Clients() {
         title="Clientes"
         subtitle="Historial de compras y deudas por cliente"
         action={
-          <Button onClick={() => setShowForm(true)}>
-            <Plus size={16} /> Nuevo cliente
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {esAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setModoSeleccion((v) => !v);
+                  setSeleccionados(new Set());
+                }}
+              >
+                {modoSeleccion ? 'Cancelar seleccion' : 'Seleccionar varios'}
+              </Button>
+            )}
+            <Button onClick={() => setShowForm(true)}>
+              <Plus size={16} /> Nuevo cliente
+            </Button>
+          </div>
         }
       />
 
@@ -61,6 +108,21 @@ export default function Clients() {
             />
           </div>
 
+          {modoSeleccion && seleccionados.size > 0 && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
+              <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionados</span>
+              <Button
+                size="sm"
+                className="ml-auto !bg-brick-600 hover:!bg-brick-700"
+                disabled={bulkEliminar.isPending}
+                onClick={() => bulkEliminar.mutate()}
+              >
+                {bulkEliminar.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Eliminar
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <Card className="h-40 animate-pulse" />
           ) : clients.length === 0 ? (
@@ -70,16 +132,29 @@ export default function Clients() {
               {clients.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => setSelectedId(c.id)}
+                  onClick={() => (modoSeleccion ? toggleSeleccion(c.id) : setSelectedId(c.id))}
                   className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-porcelain-100 ${
                     selectedId === c.id ? 'bg-copper-50' : ''
                   }`}
                 >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{c.nombre}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted">
-                      <Phone size={11} /> {c.telefono}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    {modoSeleccion && (
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                          seleccionados.has(c.id)
+                            ? 'border-copper-600 bg-copper-600 text-white'
+                            : 'border-porcelain-400'
+                        }`}
+                      >
+                        {seleccionados.has(c.id) && <Check size={13} strokeWidth={3} />}
+                      </span>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-ink">{c.nombre}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted">
+                        <Phone size={11} /> {c.telefono}
+                      </p>
+                    </div>
                   </div>
                   {Boolean(c.deudaPendiente) && (
                     <Badge tone="brick">Debe RD$ {formatMoney(c.deudaPendiente!)}</Badge>

@@ -109,6 +109,40 @@ export class ClientsService {
     return { id, deleted: true };
   }
 
+  /**
+   * Version en lote de remove(), para la seleccion multiple en Clientes.
+   * Cada cliente pasa por la MISMA validacion (sin ventas ni deudas): los que
+   * no la pasan no se borran, se listan aparte con el motivo.
+   */
+  async bulkRemove(ids: string[], userId?: string) {
+    const omitidos: { id: string; nombre: string; motivo: string }[] = [];
+    let eliminados = 0;
+
+    for (const id of ids) {
+      const cliente = await this.prisma.client.findUnique({ where: { id } });
+      if (!cliente) continue;
+
+      const [ventas, deudas] = await Promise.all([
+        this.prisma.sale.count({ where: { clientId: id } }),
+        this.prisma.clientDebt.count({ where: { clientId: id } }),
+      ]);
+
+      if (ventas > 0 || deudas > 0) {
+        omitidos.push({ id, nombre: cliente.nombre, motivo: `tiene ${ventas} venta(s) y ${deudas} deuda(s)` });
+        continue;
+      }
+
+      await this.prisma.client.delete({ where: { id } });
+      eliminados++;
+    }
+
+    if (eliminados > 0) {
+      await this.audit.log('Client', 'eliminar-lote', 'DELETE', userId, { eliminados, omitidos: omitidos.length });
+    }
+
+    return { eliminados, omitidos };
+  }
+
   private async ensureExists(id: string) {
     const found = await this.prisma.client.findUnique({ where: { id } });
     if (!found) throw new NotFoundException('Cliente no encontrado.');

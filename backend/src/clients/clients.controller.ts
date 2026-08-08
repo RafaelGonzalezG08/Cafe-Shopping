@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { BulkRemoveClientsDto } from './dto/bulk-remove-clients.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -58,5 +59,12 @@ export class ClientsController {
   @Roles(Role.ADMIN)
   remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.clientsService.remove(id, user.userId);
+  }
+
+  @Post('bulk/eliminar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  bulkRemove(@Body() dto: BulkRemoveClientsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.clientsService.bulkRemove(dto.ids, user.userId);
   }
 }
