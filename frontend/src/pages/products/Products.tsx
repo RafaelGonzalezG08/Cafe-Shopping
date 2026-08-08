@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, ImagePlus, Gem, X, Pencil, Search } from 'lucide-react';
+import { Plus, ImagePlus, Gem, X, Pencil, Search, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
+import { coincideBusqueda } from '../../lib/search';
 import { Button, Card, PageHeader, EmptyState, Badge } from '../../components/ui';
+import { useAuthStore } from '../../store/auth.store';
 import type { Material, Product } from '../../types';
 import { MATERIAL_LABEL } from '../../types';
 
@@ -30,7 +32,7 @@ const MATERIAL_COLOR: Record<Material, string> = {
 function buildFormData(values: ProductFormValues) {
   const formData = new FormData();
   formData.append('nombre', values.nombre.trim());
-  formData.append('precioUnitario', values.precioUnitario);
+  formData.append('precioUnitario', String(Number(values.precioUnitario) || 0));
   formData.append('costoUnitario', String(Number(values.costoUnitario) || 0));
   formData.append('material', values.material);
   formData.append('stock', String(Number(values.stock) || 0));
@@ -45,6 +47,8 @@ function margenPct(product: Product): number | null {
 
 export default function Products() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const esAdmin = user?.role === 'ADMIN';
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [search, setSearch] = useState('');
@@ -54,11 +58,7 @@ export default function Products() {
     queryFn: async () => (await api.get('/products', { params: { all: true } })).data,
   });
 
-  const filteredProducts = products.filter((product) => {
-    const query = search.trim().toLowerCase();
-    if (!query) return true;
-    return product.nombre.toLowerCase().includes(query) || product.sku.toLowerCase().includes(query);
-  });
+  const filteredProducts = products.filter((product) => coincideBusqueda(`${product.nombre} ${product.sku}`, search));
 
   const createProduct = useMutation({
     mutationFn: async (values: ProductFormValues) =>
@@ -86,6 +86,30 @@ export default function Products() {
       toast.success('Producto actualizado.');
       queryClient.invalidateQueries({ queryKey: ['products'] });
       limpiarBorrador(`productos:editar:${variables.id}`);
+      setEditing(null);
+    },
+  });
+
+  /**
+   * Dar de baja una pieza. En el backend es una baja logica (activo = false),
+   * no un borrado real: las ventas viejas siguen apuntando al producto, asi
+   * que borrarlo de verdad dejaria facturas historicas sin pieza. Deja de
+   * venderse y sale del catalogo web, pero se puede reactivar.
+   */
+  const deleteProduct = useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/products/${id}`)).data,
+    onSuccess: () => {
+      toast.success('Pieza dada de baja. Ya no se vende ni sale en el catalogo web.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setEditing(null);
+    },
+  });
+
+  const restoreProduct = useMutation({
+    mutationFn: async (id: string) => (await api.put(`/products/${id}`, { activo: true })).data,
+    onSuccess: () => {
+      toast.success('Pieza reactivada.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       setEditing(null);
     },
   });
@@ -126,13 +150,21 @@ export default function Products() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {filteredProducts.map((product) => (
-            <Card key={product.id} className="overflow-hidden">
+            <Card key={product.id} className={`overflow-hidden ${product.activo ? '' : 'opacity-60'}`}>
               <button
                 type="button"
                 onClick={() => setEditing(product)}
                 className="group relative flex h-36 w-full items-center justify-center bg-porcelain-200"
                 title="Editar producto"
               >
+                {/* Una pieza dada de baja sigue a la vista (para poder
+                    reactivarla), pero tiene que distinguirse de un vistazo de
+                    las que si estan a la venta. */}
+                {!product.activo && (
+                  <span className="absolute right-1.5 top-1.5 rounded-full bg-espresso-950/75 px-2 py-0.5 text-[10px] font-bold text-white">
+                    Dada de baja
+                  </span>
+                )}
                 {imageSrc(product) ? (
                   <img src={imageSrc(product)!} alt={product.nombre} className="h-full w-full object-cover" />
                 ) : (
@@ -151,8 +183,8 @@ export default function Products() {
                 </span>
               </button>
               <div className="p-3">
-                <p className="font-mono text-[11px] font-semibold text-copper-600">{product.sku}</p>
-                <p className="truncate text-sm font-medium text-ink">{product.nombre}</p>
+                <p className="select-text font-mono text-[11px] font-semibold text-copper-600">{product.sku}</p>
+                <p className="select-text truncate text-sm font-medium text-ink">{product.nombre}</p>
                 <div className="mt-1.5 flex items-center justify-between">
                   <span className="font-display font-bold tabular-nums text-ink">
                     RD$ {formatMoney(product.precioUnitario)}
@@ -200,6 +232,12 @@ export default function Products() {
           persistKey={`productos:editar:${editing.id}`}
           onClose={() => setEditing(null)}
           onSubmit={(values) => updateProduct.mutate({ id: editing.id, values })}
+          // Dar de baja / reactivar es solo de ADMIN, igual que en el backend
+          // (@Roles(Role.ADMIN) en products.controller.ts).
+          activo={editing.activo}
+          onDelete={esAdmin ? () => deleteProduct.mutate(editing.id) : undefined}
+          onRestore={esAdmin ? () => restoreProduct.mutate(editing.id) : undefined}
+          bajaPendiente={deleteProduct.isPending || restoreProduct.isPending}
         />
       )}
     </div>
@@ -215,6 +253,10 @@ function ProductModal({
   persistKey,
   onClose,
   onSubmit,
+  activo = true,
+  onDelete,
+  onRestore,
+  bajaPendiente = false,
 }: {
   title: string;
   submitLabel: string;
@@ -224,7 +266,15 @@ function ProductModal({
   persistKey: string;
   onClose: () => void;
   onSubmit: (values: ProductFormValues) => void;
+  activo?: boolean;
+  /** Solo se pasa a un ADMIN: sin esto no se dibuja el boton. */
+  onDelete?: () => void;
+  onRestore?: () => void;
+  bajaPendiente?: boolean;
 }) {
+  // Pide confirmar dentro del mismo modal en vez de un window.confirm: el
+  // primer clic solo arma el boton, el segundo es el que da de baja.
+  const [confirmandoBaja, setConfirmandoBaja] = useState(false);
   // Solo los campos de texto se guardan como borrador: un File no se puede
   // serializar, y aunque se pudiera, "recordar" un archivo que el usuario ya
   // no ve seleccionado seria mas confuso que util. La foto se vuelve a elegir.
@@ -236,7 +286,15 @@ function ProductModal({
     stock: '',
     file: null,
   };
-  const [texto, setTexto] = usePersistedState(persistKey, initialTexto);
+  // El borrador persistido solo tiene sentido al CREAR: no hay "version del
+  // servidor" que perder. Al EDITAR si se usara igual, abrir el mismo
+  // producto de nuevo restauraria un borrador viejo (o vacio, si se cerro el
+  // formulario a medio escribir) por encima de sus datos reales y actuales
+  // -sin avisar-, y eso es lo que mandaba precio/costo/stock invalidos al
+  // guardar. Al editar, useState arranca siempre desde el producto real.
+  const persisted = usePersistedState(persistKey, initialTexto);
+  const local = useState(initialTexto);
+  const [texto, setTexto] = initial ? local : persisted;
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -373,6 +431,48 @@ function ProductModal({
             {isPending ? 'Guardando...' : submitLabel}
           </Button>
         </form>
+
+        {!activo && onRestore && (
+          <div className="mt-4 border-t border-porcelain-200 pt-3">
+            <p className="mb-2 text-xs text-muted">
+              Esta pieza esta dada de baja: no se puede vender y no aparece en el catalogo web.
+            </p>
+            <Button variant="secondary" className="w-full" disabled={bajaPendiente} onClick={onRestore}>
+              {bajaPendiente ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+              Reactivar pieza
+            </Button>
+          </div>
+        )}
+
+        {activo && onDelete && (
+          <div className="mt-4 border-t border-porcelain-200 pt-3">
+            {confirmandoBaja ? (
+              <>
+                <p className="mb-2 text-xs text-muted">
+                  Deja de venderse y sale del catalogo web. Las facturas donde ya aparece no cambian, y puedes
+                  reactivarla despues.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoBaja(false)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="danger" className="flex-1" disabled={bajaPendiente} onClick={onDelete}>
+                    {bajaPendiente ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    Si, dar de baja
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmandoBaja(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium text-brick-500 hover:bg-brick-100"
+              >
+                <Trash2 size={15} /> Eliminar pieza
+              </button>
+            )}
+          </div>
+        )}
       </Card>
     </div>
   );

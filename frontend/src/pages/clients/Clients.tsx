@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Search, Phone, Mail, X } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, Trash2, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { useAuthStore } from '../../store/auth.store';
 import type { Client, MetodoPago } from '../../types';
 
 export default function Clients() {
@@ -91,7 +92,7 @@ export default function Clients() {
 
         <div>
           {selectedClient ? (
-            <ClientDetail client={selectedClient} />
+            <ClientDetail client={selectedClient} onDeleted={() => setSelectedId(null)} />
           ) : (
             <Card className="p-6 text-center text-sm text-muted">
               Selecciona un cliente para ver su historial y deudas.
@@ -107,9 +108,26 @@ export default function Clients() {
   );
 }
 
-function ClientDetail({ client }: { client: Client }) {
+function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => void }) {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const esAdmin = user?.role === 'ADMIN';
   const [abonoAmount, setAbonoAmount] = useState<Record<string, string>>({});
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+
+  // Borrar un cliente es solo de ADMIN (@Roles(Role.ADMIN) en
+  // clients.controller.ts). El backend ademas se niega si el cliente ya tiene
+  // ventas o deudas — ese mensaje es el que se muestra tal cual, porque
+  // explica exactamente por que no se puede.
+  const deleteClient = useMutation({
+    mutationFn: async () => (await api.delete(`/clients/${client.id}`)).data,
+    onSuccess: () => {
+      toast.success('Cliente eliminado.');
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      onDeleted();
+    },
+    onSettled: () => setConfirmandoBorrado(false),
+  });
 
   const registerPayment = useMutation({
     mutationFn: async ({ debtId, amount, metodo }: { debtId: string; amount: number; metodo: MetodoPago }) =>
@@ -202,6 +220,42 @@ function ClientDetail({ client }: { client: Client }) {
           </div>
         )}
       </Card>
+
+      {esAdmin && (
+        <Card className="p-4">
+          {confirmandoBorrado ? (
+            <>
+              <p className="mb-2 text-sm font-semibold text-ink">Eliminar a {client.nombre}?</p>
+              <p className="mb-3 text-xs text-muted">
+                Esto no se puede deshacer. Si el cliente ya tiene ventas o deudas registradas, el sistema no lo va a
+                dejar borrar (haria desaparecer el rastro de facturas a su nombre).
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoBorrado(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  disabled={deleteClient.isPending}
+                  onClick={() => deleteClient.mutate()}
+                >
+                  {deleteClient.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  Si, eliminar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmandoBorrado(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium text-brick-500 hover:bg-brick-100"
+            >
+              <Trash2 size={15} /> Eliminar cliente
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
