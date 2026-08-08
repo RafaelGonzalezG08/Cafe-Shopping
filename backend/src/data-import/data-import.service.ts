@@ -4,14 +4,17 @@ import { promises as fs, createReadStream, createWriteStream } from 'fs';
 import { createGunzip } from 'zlib';
 import { pipeline as pipelineCb } from 'stream';
 import { promisify } from 'util';
+import { exec } from 'child_process';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { AuditService } from '../audit/audit.service';
 import { CatalogoService } from '../catalogo/catalogo.service';
+import { StorageService } from '../invoices/storage.service';
 
 const pipeline = promisify(pipelineCb);
+const execAsync = promisify(exec);
 
 export interface ProductoRenumerado {
   nombre: string;
@@ -24,6 +27,7 @@ export interface ResumenImportacion {
   agregados: number;
   renumerados: ProductoRenumerado[];
   omitidos: number;
+  conFoto: number;
 }
 
 /**
@@ -48,15 +52,17 @@ export class DataImportService {
     private readonly products: ProductsService,
     private readonly audit: AuditService,
     private readonly catalogo: CatalogoService,
+    private readonly storage: StorageService,
   ) {}
 
-  async importarProductos(buffer: Buffer, userId?: string): Promise<ResumenImportacion> {
+  async importarProductos(buffer: Buffer, fotosBuffer: Buffer | undefined, userId?: string): Promise<ResumenImportacion> {
     const carpetaTemp = await fs.mkdtemp(join(tmpdir(), 'cafe-shopping-import-'));
     const rutaSqlite = join(carpetaTemp, 'origen.sqlite');
     let origen: PrismaClient | null = null;
 
     try {
       await this.prepararArchivo(buffer, rutaSqlite);
+      const carpetaFotos = fotosBuffer ? await this.extraerFotos(carpetaTemp, fotosBuffer) : null;
 
       origen = new PrismaClient({ datasources: { db: { url: `file:${rutaSqlite}` } } });
 
@@ -67,11 +73,20 @@ export class DataImportService {
         costoUnitario: unknown;
         material: string;
         stock: number;
+        imageUrl: string | null;
       }>;
       try {
         productosOrigen = await origen.product.findMany({
           where: { activo: true },
-          select: { sku: true, nombre: true, precioUnitario: true, costoUnitario: true, material: true, stock: true },
+          select: {
+            sku: true,
+            nombre: true,
+            precioUnitario: true,
+            costoUnitario: true,
+            material: true,
+            stock: true,
+            imageUrl: true,
+          },
         });
       } catch (error) {
         this.logger.warn(`No se pudo leer productos del archivo importado: ${error}`);
@@ -83,6 +98,7 @@ export class DataImportService {
       const renumerados: ProductoRenumerado[] = [];
       let agregados = 0;
       let omitidos = 0;
+      let conFoto = 0;
 
       // Secuencial (no Promise.all): generateSku calcula el siguiente
       // consecutivo mirando el ultimo SKU de ESTA base, y si dos inserciones
@@ -96,7 +112,7 @@ export class DataImportService {
         const existente = await this.prisma.product.findUnique({ where: { sku: p.sku } });
         const skuFinal = existente ? await this.products.generateSku(p.nombre) : p.sku;
 
-        await this.prisma.product.create({
+        const creado = await this.prisma.product.create({
           data: {
             sku: skuFinal,
             nombre: p.nombre,
@@ -104,13 +120,18 @@ export class DataImportService {
             costoUnitario: p.costoUnitario as any,
             material: p.material,
             stock: p.stock,
-            // Las fotos viven en la carpeta de uploads de la OTRA computadora:
-            // no hay forma de traerlas solo con este archivo. Se importa sin
-            // foto y se completa despues desde Productos.
             imageUrl: null,
             activo: true,
           },
         });
+
+        if (carpetaFotos && p.imageUrl) {
+          const imageUrl = await this.copiarFoto(carpetaFotos, p.imageUrl, creado.id);
+          if (imageUrl) {
+            await this.prisma.product.update({ where: { id: creado.id }, data: { imageUrl } });
+            conFoto++;
+          }
+        }
 
         if (existente) {
           renumerados.push({ nombre: p.nombre, skuOriginal: p.sku, skuNuevo: skuFinal });
@@ -124,6 +145,7 @@ export class DataImportService {
         agregados,
         renumerados: renumerados.length,
         omitidos,
+        conFoto,
       });
 
       if (agregados + renumerados.length > 0) {
@@ -134,7 +156,7 @@ export class DataImportService {
         }
       }
 
-      return { total: productosOrigen.length, agregados, renumerados, omitidos };
+      return { total: productosOrigen.length, agregados, renumerados, omitidos, conFoto };
     } finally {
       await origen?.$disconnect().catch(() => undefined);
       await fs.rm(carpetaTemp, { recursive: true, force: true }).catch(() => undefined);
@@ -172,6 +194,66 @@ export class DataImportService {
       throw new BadRequestException(
         'Ese archivo no parece un respaldo de base de datos. Sube el archivo .sqlite.gz que genera Configuracion > Respaldos automaticos en la otra computadora.',
       );
+    }
+  }
+
+  /**
+   * Extrae el .tar.gz de uploads de la otra computadora (el mismo que genera
+   * Configuracion > Respaldos automaticos, junto al de la base de datos, con
+   * el mismo sufijo de fecha) a una carpeta temporal, para poder buscar ahi
+   * las fotos de los productos que se esten importando.
+   *
+   * Si algo falla (archivo corrupto, no es un .tar.gz, no hay "tar" en el
+   * sistema) no se detiene la importacion completa: los productos se agregan
+   * igual, simplemente sin foto, como si no se hubiera subido este archivo.
+   */
+  private async extraerFotos(carpetaTemp: string, buffer: Buffer): Promise<string | null> {
+    const esGzip = buffer.length > 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+    if (!esGzip) {
+      this.logger.warn('El archivo de fotos no es un .tar.gz valido; se importa sin fotos.');
+      return null;
+    }
+
+    const archivoTar = join(carpetaTemp, 'fotos.tar.gz');
+    const carpetaExtraida = join(carpetaTemp, 'fotos-extraidas');
+    await fs.writeFile(archivoTar, buffer);
+    await fs.mkdir(carpetaExtraida, { recursive: true });
+
+    try {
+      await execAsync(`tar -xzf "${archivoTar}" -C "${carpetaExtraida}"`);
+    } catch (error) {
+      this.logger.warn(`No se pudo descomprimir el archivo de fotos; se importa sin fotos: ${error}`);
+      return null;
+    }
+
+    // El .tar.gz trae la carpeta de uploads como unico elemento de primer
+    // nivel (se llame como se llame); hay que entrar ahi para llegar a las
+    // subcarpetas tipo "products/...".
+    const entradas = await fs.readdir(carpetaExtraida).catch(() => [] as string[]);
+    return entradas.length === 1 ? join(carpetaExtraida, entradas[0]) : carpetaExtraida;
+  }
+
+  /**
+   * Busca la foto de un producto importado dentro de la carpeta de uploads ya
+   * extraida (con la misma ruta relativa que tenia su imageUrl alla) y la
+   * vuelve a subir aqui bajo el id del producto NUEVO — el id original era de
+   * la otra base de datos y no significa nada en esta.
+   */
+  private async copiarFoto(carpetaFotos: string, imageUrl: string, nuevoId: string): Promise<string | null> {
+    const marca = '/uploads/';
+    const idx = imageUrl.indexOf(marca);
+    if (idx === -1) return null;
+    const key = imageUrl.slice(idx + marca.length);
+
+    const buffer = await fs.readFile(join(carpetaFotos, key)).catch(() => null);
+    if (!buffer) return null;
+
+    const ext = extname(key).replace('.', '') || 'webp';
+    try {
+      return await this.storage.upload(buffer, `products/${nuevoId}-${Date.now()}.${ext}`);
+    } catch (error) {
+      this.logger.warn(`No se pudo copiar la foto de un producto importado: ${error}`);
+      return null;
     }
   }
 }
