@@ -54,6 +54,17 @@ export function renderInvoiceHtml(
     )
     .join('');
 
+  // El descuento se aplica sobre la venta completa, no por linea: cada item
+  // guarda su precio de lista tal cual, asi que el bruto sale de sumarlos.
+  const bruto = sale.items.reduce((sum, item) => sum + Number(item.total), 0);
+  const descuentoMonto = Math.max(0, bruto - Number(sale.subtotal));
+  const descuentoPctTexto =
+    Number(sale.descuentoPct) % 1 === 0 ? Number(sale.descuentoPct).toFixed(0) : Number(sale.descuentoPct).toFixed(2);
+  const descuentoRow =
+    descuentoMonto > 0.004
+      ? `<div class="totals-row"><span>Descuento (${descuentoPctTexto}%)</span><span>-${money(descuentoMonto)}</span></div>`
+      : '';
+
   const totalPagado = sale.payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const saldoPendiente = Math.max(0, Number(sale.total) - totalPagado);
   const esCredito = sale.metodoPago === 'CREDITO';
@@ -172,7 +183,8 @@ export function renderInvoiceHtml(
     </table>
 
     <div class="totals">
-      <div class="totals-row"><span>Subtotal</span><span>${money(sale.subtotal)}</span></div>
+      <div class="totals-row"><span>Subtotal</span><span>${money(bruto)}</span></div>
+      ${descuentoRow}
       <div class="totals-row"><span>Impuestos</span><span>${money(sale.impuestos)}</span></div>
       <div class="totals-row total"><span>Total</span><span>${money(sale.total)}</span></div>
     </div>

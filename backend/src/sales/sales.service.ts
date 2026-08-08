@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { CatalogoService } from '../catalogo/catalogo.service';
 import { parseFromDate, parseToDate } from '../common/date-range';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -14,6 +15,10 @@ export interface SaleTotals {
   subtotal: number;
   impuestos: number;
   total: number;
+}
+
+function redondear(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 const DEFAULT_TAX_RATE = Number(process.env.DEFAULT_TAX_RATE ?? 0.18);
@@ -26,14 +31,43 @@ export class SalesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly invoicesService: InvoicesService,
+    private readonly catalogo: CatalogoService,
   ) {}
 
-  /** Calcula subtotal/impuestos/total. Expuesto tambien para pruebas unitarias. */
-  static calculateTotals(items: { cantidad: number; precioUnitario: number }[], tasaImpuesto: number): SaleTotals {
-    const subtotal = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0);
-    const impuestos = Math.round(subtotal * tasaImpuesto * 100) / 100;
-    const total = Math.round((subtotal + impuestos) * 100) / 100;
-    return { subtotal: Math.round(subtotal * 100) / 100, impuestos, total };
+  /**
+   * Toda venta que descuenta o devuelve stock de un producto del catalogo
+   * puede sacar o volver a meter una pieza del sitio publico (que solo
+   * muestra piezas con existencia). Nunca tumba la venta si falla: es el
+   * mismo motivo que en ProductsService.
+   */
+  private async regenerarCatalogo(): Promise<void> {
+    try {
+      const resultado = await this.catalogo.generar();
+      if (!resultado.ok) {
+        this.logger.warn(`No se pudo actualizar el catalogo web: ${resultado.error}`);
+      }
+    } catch (error) {
+      this.logger.warn(`No se pudo actualizar el catalogo web: ${error}`);
+    }
+  }
+
+  /**
+   * Calcula subtotal/impuestos/total. Expuesto tambien para pruebas unitarias.
+   *
+   * `descuentoPct` (0-100) se resta del bruto ANTES de sacar el impuesto: es
+   * como se factura normalmente (el impuesto se calcula sobre lo que el
+   * cliente de verdad paga, no sobre el precio de lista).
+   */
+  static calculateTotals(
+    items: { cantidad: number; precioUnitario: number }[],
+    tasaImpuesto: number,
+    descuentoPct = 0,
+  ): SaleTotals {
+    const bruto = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0);
+    const subtotal = redondear(bruto * (1 - descuentoPct / 100));
+    const impuestos = redondear(subtotal * tasaImpuesto);
+    const total = redondear(subtotal + impuestos);
+    return { subtotal, impuestos, total };
   }
 
   async create(dto: CreateSaleDto, userId: string) {
@@ -42,7 +76,8 @@ export class SalesService {
     }
 
     const tasaImpuesto = dto.tasaImpuesto ?? (await this.getTasaImpuestoDefault());
-    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    const descuentoPct = dto.descuentoPct ?? 0;
+    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto, descuentoPct);
     const costByProductId = await this.getCostByProductId(dto.items);
 
     const sale = await this.prisma.$transaction(async (tx) => {
@@ -52,6 +87,7 @@ export class SalesService {
           subtotal: totals.subtotal,
           impuestos: totals.impuestos,
           total: totals.total,
+          descuentoPct,
           metodoPago: dto.metodoPago,
           userId,
           clientId: dto.clientId,
@@ -118,6 +154,7 @@ export class SalesService {
       total: totals.total,
       metodoPago: dto.metodoPago,
     });
+    void this.regenerarCatalogo();
 
     if (dto.generarFactura !== false) {
       try {
@@ -135,6 +172,10 @@ export class SalesService {
   /**
    * Edita los items de una venta ya creada (correccion de un error de
    * facturacion: cantidad o precio mal digitado, etc.).
+   *
+   * Tambien permite corregir A QUIEN esta facturada (`dto.clientId`): el caso
+   * tipico es que en el apuro de cobrar se eligio al cliente equivocado o no
+   * se eligio ninguno, y la factura ya salio con el nombre errado.
    *
    * Requiere que quien llama sea ADMIN (verificado por el guard en el
    * controller) Y que vuelva a escribir SU PROPIA clave en `dto.adminPassword`
@@ -157,8 +198,27 @@ export class SalesService {
     if (!existing) throw new NotFoundException('Venta no encontrada.');
     const existingDebt = await this.prisma.clientDebt.findFirst({ where: { saleId: id } });
 
+    // Cliente de la factura. Si el dto no trae `clientId` se deja el actual
+    // (asi las correcciones que solo tocan lineas siguen funcionando igual).
+    const nuevoClientId = dto.clientId === undefined ? existing.clientId : dto.clientId || null;
+    const cambiaCliente = nuevoClientId !== existing.clientId;
+    if (cambiaCliente) {
+      if (nuevoClientId) {
+        const cliente = await this.prisma.client.findUnique({ where: { id: nuevoClientId } });
+        if (!cliente) throw new NotFoundException('El cliente seleccionado ya no existe.');
+      } else if (existing.metodoPago === MetodoPago.CREDITO) {
+        // Sin cliente no hay a quien cobrarle: la deuda quedaria huerfana.
+        throw new BadRequestException(
+          'Una venta a credito tiene que quedar a nombre de un cliente: es quien debe el dinero. ' +
+            'Elige otro cliente en vez de quitarlo.',
+        );
+      }
+    }
+
     const tasaImpuesto = existing.subtotal.gt(0) ? Number(existing.impuestos) / Number(existing.subtotal) : await this.getTasaImpuestoDefault();
-    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    // El descuento de la factura original se mantiene: corregir un item no
+    // deberia hacer desaparecer un descuento que ya se le habia dado al cliente.
+    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto, Number(existing.descuentoPct));
     const costByProductId = await this.getCostByProductId(dto.items);
 
     if (existingDebt && totals.total < Number(existingDebt.amountPaid)) {
@@ -188,6 +248,7 @@ export class SalesService {
           subtotal: totals.subtotal,
           impuestos: totals.impuestos,
           total: totals.total,
+          clientId: nuevoClientId,
           items: {
             create: dto.items.map((item) => ({
               productId: item.productId,
@@ -209,7 +270,16 @@ export class SalesService {
       if (existingDebt) {
         await tx.clientDebt.update({
           where: { id: existingDebt.id },
-          data: { amountTotal: totals.total },
+          data: {
+            amountTotal: totals.total,
+            // La deuda tiene que seguir a la factura: si el cliente cambia y
+            // la cuenta se queda con el anterior, en Cobros le seguiria
+            // apareciendo el saldo a alguien que ya no aparece en la factura.
+            // (nuevoClientId no puede ser null aqui: arriba se rechaza quitar
+            // el cliente de una venta a credito, que es la unica que genera
+            // deuda.)
+            ...(nuevoClientId ? { clientId: nuevoClientId } : {}),
+          },
         });
       }
     });
@@ -218,7 +288,9 @@ export class SalesService {
       accion: 'correccion-factura',
       totalAnterior: Number(existing.total),
       totalNuevo: totals.total,
+      ...(cambiaCliente ? { clienteAnterior: existing.clientId, clienteNuevo: nuevoClientId } : {}),
     });
+    void this.regenerarCatalogo();
 
     // Vuelve a generar el PNG/PDF de la factura para que refleje la correccion.
     try {
@@ -293,6 +365,7 @@ export class SalesService {
         .filter((i) => i.productId)
         .map((i) => ({ productId: i.productId, cantidad: i.cantidad })),
     });
+    void this.regenerarCatalogo();
 
     return { id, deleted: true, numeroFactura: sale.invoice?.numero ?? null };
   }

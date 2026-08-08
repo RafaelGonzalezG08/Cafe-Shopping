@@ -96,7 +96,9 @@ export interface Sale {
   subtotal: number;
   impuestos: number;
   total: number;
+  descuentoPct?: number;
   metodoPago: MetodoPago;
+  clientId?: string | null;
   client?: Client | null;
   items: SaleItem[];
   invoice?: Invoice | null;

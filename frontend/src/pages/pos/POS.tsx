@@ -32,6 +32,7 @@ export default function POS() {
   const [selectedClientId, setSelectedClientId] = usePersistedState<string | undefined>('pos:cliente-id', undefined);
   const [selectedClient, setSelectedClient] = usePersistedState<Client | null>('pos:cliente', null);
   const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago>('pos:metodo-pago', 'EFECTIVO');
+  const [descuentoPct, setDescuentoPct] = usePersistedState('pos:descuento', '');
   const [fechaVencimiento, setFechaVencimiento] = usePersistedState('pos:vencimiento', '');
   // Pedido por entregar: la pieza no sale hoy con el cliente, queda en el
   // registro de Pedidos hasta que se entregue.
@@ -60,10 +61,17 @@ export default function POS() {
   );
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
+    const bruto = cart.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
+    const descuento = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
+    const subtotal = Math.round(bruto * (1 - descuento / 100) * 100) / 100;
     const impuestos = Math.round(subtotal * tasaImpuesto * 100) / 100;
-    return { subtotal: Math.round(subtotal * 100) / 100, impuestos, total: Math.round((subtotal + impuestos) * 100) / 100 };
-  }, [cart, tasaImpuesto]);
+    return {
+      bruto: Math.round(bruto * 100) / 100,
+      subtotal,
+      impuestos,
+      total: Math.round((subtotal + impuestos) * 100) / 100,
+    };
+  }, [cart, tasaImpuesto, descuentoPct]);
 
   function addProduct(product: Product) {
     setCart((prev) => {
@@ -140,6 +148,7 @@ export default function POS() {
     setFechaVencimiento('');
     setEsPedido(false);
     setFechaEntrega('');
+    setDescuentoPct('');
     setCompletedSale(null);
   }
 
@@ -151,6 +160,7 @@ export default function POS() {
         fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
         esPedido: esPedido || undefined,
         fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
+        descuentoPct: Number(descuentoPct) || undefined,
         items: cart.map((l) => ({
           productId: l.productId,
           descripcion: l.descripcion,
@@ -297,7 +307,26 @@ export default function POS() {
         <div className="mb-3 space-y-1 border-t border-porcelain-200 pt-3 text-sm tabular-nums">
           <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>RD$ {formatMoney(totals.subtotal)}</span>
+            <span>RD$ {formatMoney(totals.bruto)}</span>
+          </div>
+          <div className="flex items-center justify-between text-muted">
+            <div className="flex items-center gap-1.5">
+              <span>Descuento</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={descuentoPct}
+                onChange={(e) => setDescuentoPct(e.target.value)}
+                placeholder="0"
+                className="w-14 rounded border border-porcelain-300 px-1.5 py-0.5 text-right text-xs outline-none focus:border-copper-500"
+              />
+              <span className="text-xs">%</span>
+            </div>
+            <span>
+              {totals.bruto > totals.subtotal ? `-RD$ ${formatMoney(totals.bruto - totals.subtotal)}` : 'RD$ 0.00'}
+            </span>
           </div>
           <div className="flex justify-between text-muted">
             <span>Impuestos ({Math.round(tasaImpuesto * 100)}%)</span>

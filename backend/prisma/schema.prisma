@@ -101,6 +101,10 @@ model Sale {
   subtotal   Decimal
   impuestos  Decimal    @default(0)
   total      Decimal
+  // Porcentaje de descuento aplicado sobre el bruto de la venta (0-100),
+  // ANTES de calcular impuestos. Se guarda para que la factura ya generada
+  // siga mostrando el mismo descuento aunque cambie despues.
+  descuentoPct Decimal  @default(0) @map("descuento_pct")
   metodoPago String @map("metodo_pago")
   userId     String     @map("user_id")
   clientId   String?    @map("client_id")

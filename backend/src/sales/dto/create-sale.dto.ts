@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -60,6 +61,14 @@ export class CreateSaleDto {
   @IsNumber()
   @Min(0)
   tasaImpuesto?: number;
+
+  @ApiProperty({ required: false, description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0, { message: 'El descuento no puede ser negativo.' })
+  @Max(100, { message: 'El descuento no puede ser mayor a 100%.' })
+  descuentoPct?: number;
 
   @ApiProperty({ required: false, description: 'Fecha limite de pago si metodoPago=CREDITO' })
   @IsOptional()
