@@ -253,12 +253,23 @@ export class ProductsService {
    * exactamente lo mismo en bytes). De cada grupo de repetidas se conserva
    * la mas antigua y se marcan las demas.
    *
+   * `incluirSinFotoEnGrupos` es para "Eliminar duplicados" (piezas ya dadas
+   * de baja): ahi tambien hay que detectar repetidas SIN foto (mismo nombre
+   * y precio, ninguna de las dos con foto que comparar) — se agrupan entre
+   * si con un valor sentinela en vez de saltarselas, pero nunca se mezclan
+   * con las que si tienen foto. En "Limpiar duplicados" (piezas activas) esto
+   * se deja apagado porque ahi las sin foto YA se marcan todas por separado
+   * (`sinFoto`/`idsSinFoto`); agruparlas tambien las contaria dos veces.
+   *
    * Se aisla en un metodo aparte para que la vista previa y la limpieza real
    * calculen EXACTAMENTE lo mismo — si calcularan cada una por su lado
    * podrian desincronizarse y la vista previa mentiria sobre lo que en
    * realidad se va a borrar.
    */
-  private async calcularLimpieza(activo: boolean): Promise<{
+  private async calcularLimpieza(
+    activo: boolean,
+    incluirSinFotoEnGrupos = false,
+  ): Promise<{
     grupos: GrupoDuplicado[];
     sinFoto: { id: string; sku: string; nombre: string }[];
     idsDuplicados: string[];
@@ -284,12 +295,18 @@ export class ProductsService {
       }),
     );
 
-    // Agrupa por nombre + precio + tamaño de foto en bytes. El orden dentro
-    // de cada grupo ya viene de mas viejo a mas nuevo (orderBy arriba).
-    const grupos = new Map<string, typeof conFoto>();
-    for (const p of conFoto) {
-      const tamano = tamanos.get(p.id);
-      if (tamano == null) continue; // no se pudo leer el archivo: no se compara
+    // Sentinela para "sin foto": nunca coincide con un tamaño real en bytes,
+    // asi que una pieza sin foto jamas se agrupa con una que si tiene.
+    const SIN_FOTO = -1;
+    const candidatos = incluirSinFotoEnGrupos ? productos : conFoto;
+
+    // Agrupa por nombre + precio + tamaño de foto en bytes (o el sentinela,
+    // si no tiene). El orden dentro de cada grupo ya viene de mas viejo a
+    // mas nuevo (orderBy arriba).
+    const grupos = new Map<string, typeof productos>();
+    for (const p of candidatos) {
+      const tamano = p.imageUrl ? tamanos.get(p.id) : SIN_FOTO;
+      if (tamano == null) continue; // tenia foto pero no se pudo leer el archivo: no se compara
       const clave = `${p.nombre.trim().toLowerCase()}|${Number(p.precioUnitario)}|${tamano}`;
       const lista = grupos.get(clave);
       if (lista) lista.push(p);
@@ -304,7 +321,7 @@ export class ProductsService {
       gruposDuplicados.push({
         nombre: mantiene.nombre,
         precioUnitario: Number(mantiene.precioUnitario),
-        tamanoFotoBytes: tamanos.get(mantiene.id) as number,
+        tamanoFotoBytes: mantiene.imageUrl ? (tamanos.get(mantiene.id) as number) : SIN_FOTO,
         mantiene: { id: mantiene.id, sku: mantiene.sku },
         elimina: resto.map((p) => ({ id: p.id, sku: p.sku })),
       });
@@ -365,7 +382,7 @@ export class ProductsService {
    * para que quede claro por que no desaparecieron.
    */
   async vistaPreviaEliminarDuplicados(): Promise<VistaPreviaEliminarDuplicados> {
-    const { grupos, idsDuplicados } = await this.calcularLimpieza(false);
+    const { grupos, idsDuplicados } = await this.calcularLimpieza(false, true);
     const conVentas = await this.idsConVentas(idsDuplicados);
 
     const omitidosPorVentas: { id: string; sku: string; nombre: string }[] = [];
@@ -382,7 +399,7 @@ export class ProductsService {
 
   /** Ejecuta lo que vistaPreviaEliminarDuplicados() calculo: borra de verdad y libera las fotos del disco. */
   async eliminarDuplicados(userId?: string): Promise<{ eliminados: number; omitidosPorVentas: number }> {
-    const { idsDuplicados } = await this.calcularLimpieza(false);
+    const { idsDuplicados } = await this.calcularLimpieza(false, true);
     const conVentas = await this.idsConVentas(idsDuplicados);
     const aEliminar = idsDuplicados.filter((id) => !conVentas.has(id));
 

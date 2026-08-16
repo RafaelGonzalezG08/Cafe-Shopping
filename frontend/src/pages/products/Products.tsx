@@ -322,7 +322,7 @@ export default function Products() {
         </div>
       </div>
 
-      {modoSeleccion && seleccionados.size > 0 && (
+      {seleccionados.size > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
           <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionadas</span>
           <div className="ml-auto flex flex-wrap gap-1.5">
@@ -403,41 +403,55 @@ export default function Products() {
               key={product.id}
               className={`overflow-hidden ${seleccionados.has(product.id) ? 'ring-2 ring-copper-500' : ''}`}
             >
-              <button
-                type="button"
-                onClick={() => (modoSeleccion ? toggleSeleccion(product.id) : setEditing(product))}
-                className="group relative flex h-36 w-full items-center justify-center bg-porcelain-200"
-                title={modoSeleccion ? 'Seleccionar' : 'Editar producto'}
-              >
-                {imageSrc(product) ? (
-                  <img src={imageSrc(product)!} alt={product.nombre} className="h-full w-full object-cover" />
-                ) : (
-                  <Gem size={28} className="text-muted" />
-                )}
+              <div className="group relative flex h-36 w-full items-center justify-center bg-porcelain-200">
+                <button
+                  type="button"
+                  onClick={() => (modoSeleccion ? toggleSeleccion(product.id) : setEditing(product))}
+                  className="absolute inset-0 flex items-center justify-center"
+                  title={modoSeleccion ? 'Seleccionar' : 'Editar producto'}
+                >
+                  {imageSrc(product) ? (
+                    <img src={imageSrc(product)!} alt={product.nombre} className="h-full w-full object-cover" />
+                  ) : (
+                    <Gem size={28} className="text-muted" />
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center bg-espresso-950/0 opacity-0 transition-opacity group-hover:bg-espresso-950/40 group-hover:opacity-100">
+                    <Pencil size={20} className="text-white" />
+                  </span>
+                </button>
                 {/* Insignia de material en la esquina: para confirmar de un
                     vistazo que la pieza quedo con el material correcto,
                     sin tener que abrirla a revisar. */}
                 <span
-                  className={`absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${MATERIAL_COLOR[product.material]}`}
+                  className={`pointer-events-none absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${MATERIAL_COLOR[product.material]}`}
                 >
                   {MATERIAL_LABEL[product.material]}
                 </span>
-                {modoSeleccion ? (
-                  <span
-                    className={`absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded border-2 ${
+                {/* Boton "+" para agregar a la seleccion sin tener que
+                    activar primero "Seleccionar varios": solo en piezas
+                    activas, nunca en las dadas de baja (ahi solo aparece si
+                    ya se activo "Seleccionar varios", que sigue haciendo
+                    falta para elegir cuales reactivar o eliminar). Es un
+                    boton aparte (no anidado en el de editar) para que se
+                    pueda pulsar sin abrir la pieza. */}
+                {(pestana === 'ACTIVOS' || modoSeleccion) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSeleccion(product.id);
+                    }}
+                    title={seleccionados.has(product.id) ? 'Quitar de la seleccion' : 'Agregar a la seleccion'}
+                    className={`absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${
                       seleccionados.has(product.id)
                         ? 'border-copper-600 bg-copper-600 text-white'
-                        : 'border-white bg-black/20'
+                        : 'border-white bg-black/20 text-white hover:bg-black/40'
                     }`}
                   >
-                    {seleccionados.has(product.id) && <Check size={13} strokeWidth={3} />}
-                  </span>
-                ) : (
-                  <span className="absolute inset-0 flex items-center justify-center bg-espresso-950/0 opacity-0 transition-opacity group-hover:bg-espresso-950/40 group-hover:opacity-100">
-                    <Pencil size={20} className="text-white" />
-                  </span>
+                    {seleccionados.has(product.id) ? <Check size={13} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
+                  </button>
                 )}
-              </button>
+              </div>
               <div className="p-3">
                 <p className="select-text font-mono text-[11px] font-semibold text-copper-600">{product.sku}</p>
                 <p className="select-text truncate text-sm font-medium text-ink">{product.nombre}</p>
@@ -679,7 +693,7 @@ function EliminarDuplicadosModal({
             {vistaPrevia.totalEliminables > 0 && (
               <p className="mb-1 text-sm text-ink">
                 Se van a <strong>eliminar de verdad</strong> <strong>{vistaPrevia.totalEliminables}</strong> piezas
-                repetidas (mismo nombre, precio y tamaño de foto).
+                repetidas (mismo nombre y precio, y la misma foto o ninguna de las dos con foto).
               </p>
             )}
             <p className="mb-3 text-xs text-brick-600">
