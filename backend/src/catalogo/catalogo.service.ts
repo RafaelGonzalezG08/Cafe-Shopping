@@ -101,8 +101,14 @@ export class CatalogoService {
       orderBy: { nombre: 'asc' },
       // Se eligen los campos uno a uno para que el costo NUNCA pueda salir
       // publicado por descuido al agregar columnas nuevas al producto.
-      select: { sku: true, nombre: true, precioUnitario: true, imageUrl: true, material: true },
+      select: { sku: true, nombre: true, precioUnitario: true, imageUrl: true, material: true, categoriaId: true },
     });
+
+    // categoriaId no es una relacion real de Prisma (ver schema.prisma), asi
+    // que se resuelve el nombre aparte, con una sola consulta para todas las
+    // piezas en vez de una por cada una.
+    const categorias = await this.prisma.category.findMany({ select: { id: true, nombre: true } });
+    const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
 
     // Una pieza sin precio saldria como "RD$ 0.00", que parece un error del
     // sitio o una ganga; y una sin foto no aporta nada en un catalogo cuyo
@@ -138,6 +144,7 @@ export class CatalogoService {
         // Se manda ya traducido ("Plata" en vez de "PLATA"): la pagina no
         // conoce las constantes del backend, solo lo que va a mostrar.
         material: MATERIAL_LABEL[(p.material as Material) ?? 'OTRO'] ?? MATERIAL_LABEL.OTRO,
+        categoria: p.categoriaId ? (nombreCategoria.get(p.categoriaId) ?? null) : null,
       });
     }
 

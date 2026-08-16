@@ -18,6 +18,8 @@ export interface ProductoCatalogo {
   imagen: string | null;
   /** Ya traducido para mostrar ("Plata", "Oro"...), ver catalogo.service.ts. */
   material: string;
+  /** Nombre de la categoria (Anillo, Collar...), o null si la pieza no tiene una asignada. */
+  categoria: string | null;
 }
 
 export interface DatosCatalogo {
@@ -183,6 +185,10 @@ export function generarHtml(datos: DatosCatalogo): string {
 
 <div class="panel-filtros" id="panelFiltros">
   <div class="contenido">
+    <div id="bloqueCategoria">
+      <h3>Categoria</h3>
+      <div class="chips" id="chipsCategoria"></div>
+    </div>
     <div id="bloqueMaterial">
       <h3>Material</h3>
       <div class="chips" id="chipsMaterial"></div>
@@ -231,7 +237,10 @@ const carrito = new Map();
 // Que filtros de material mostrar: solo los que de verdad tiene el inventario
 // (si el negocio no vende acero, no tiene sentido ofrecer ese chip).
 const MATERIALES_DISPONIBLES = [...new Set(DATOS.productos.map(p => p.material))].sort();
-const filtros = { texto: '', materiales: new Set(), desde: null, hasta: null };
+// Igual para categoria: solo las que de verdad tienen piezas publicadas, y
+// nunca "sin categoria" como chip (esas simplemente no entran en el filtro).
+const CATEGORIAS_DISPONIBLES = [...new Set(DATOS.productos.map(p => p.categoria).filter(Boolean))].sort();
+const filtros = { texto: '', materiales: new Set(), categorias: new Set(), desde: null, hasta: null };
 
 const dinero = (n) => n.toLocaleString('es-DO', {minimumFractionDigits:2, maximumFractionDigits:2});
 
@@ -250,6 +259,7 @@ function coincideTexto(texto, consulta) {
 function coincide(p) {
   if (!coincideTexto(p.nombre + ' ' + p.sku, filtros.texto)) return false;
   if (filtros.materiales.size > 0 && !filtros.materiales.has(p.material)) return false;
+  if (filtros.categorias.size > 0 && (!p.categoria || !filtros.categorias.has(p.categoria))) return false;
   if (filtros.desde != null && p.precio < filtros.desde) return false;
   if (filtros.hasta != null && p.precio > filtros.hasta) return false;
   return true;
@@ -311,8 +321,23 @@ function pintarChipsMaterial() {
   });
 }
 
+function pintarChipsCategoria() {
+  const cont = document.getElementById('chipsCategoria');
+  document.getElementById('bloqueCategoria').hidden = CATEGORIAS_DISPONIBLES.length < 2;
+  cont.innerHTML = CATEGORIAS_DISPONIBLES.map(c =>
+    \`<button type="button" class="chip" data-categoria="\${c}">\${c}</button>\`).join('');
+  cont.querySelectorAll('.chip').forEach(chip => {
+    chip.onclick = () => {
+      const c = chip.dataset.categoria;
+      filtros.categorias.has(c) ? filtros.categorias.delete(c) : filtros.categorias.add(c);
+      chip.classList.toggle('activo');
+      aplicarFiltros();
+    };
+  });
+}
+
 function contarFiltrosActivos() {
-  let n = filtros.materiales.size;
+  let n = filtros.materiales.size + filtros.categorias.size;
   if (filtros.desde != null) n++;
   if (filtros.hasta != null) n++;
   return n;
@@ -340,6 +365,7 @@ document.getElementById('precioHasta').oninput = (e) => {
 
 function limpiarFiltros() {
   filtros.materiales.clear();
+  filtros.categorias.clear();
   filtros.desde = null;
   filtros.hasta = null;
   document.getElementById('precioDesde').value = '';
@@ -410,6 +436,7 @@ document.getElementById('buscar').oninput = (e) => {
 };
 
 pintarChipsMaterial();
+pintarChipsCategoria();
 pintar();
 actualizarPedido();
 </script>
