@@ -598,7 +598,7 @@ function AtenderPedidoWebModal({
                 value={descuentoPct}
                 onChange={(e) => setDescuentoPct(e.target.value)}
                 placeholder="0"
-                className="w-14 rounded border border-porcelain-300 px-1.5 py-0.5 text-right text-xs outline-none focus:border-copper-500"
+                className="w-14 appearance-none rounded border border-porcelain-300 px-1.5 py-0.5 text-right text-xs outline-none [appearance:textfield] focus:border-copper-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="text-xs">%</span>
             </div>
