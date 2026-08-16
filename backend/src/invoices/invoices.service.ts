@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { EstadoFactura } from '../common/enums';
+import { promises as fs } from 'fs';
+import { extname, join } from 'path';
+import { EstadoFactura, MetodoPago } from '../common/enums';
+import { UPLOADS_DIR } from '../common/paths';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RenderService } from './render.service';
@@ -29,7 +32,13 @@ export class InvoicesService {
     if (!sale.invoice) throw new NotFoundException('La venta no tiene una factura asociada.');
 
     const business = await this.getBusinessProfile();
-    const html = renderInvoiceHtml(sale as any, sale.invoice.numero, business);
+    // El render corre en una pagina "data:text/html" (ver nativo.js ->
+    // renderizarParaBackend): no tiene origen ni carpeta propia, asi que una
+    // ruta relativa como "/uploads/logo/x.webp" nunca puede cargar - el logo
+    // simplemente no aparecia. Se incrusta como base64 para que no dependa
+    // de resolver ninguna ruta.
+    const logoParaFactura = await this.resolverLogoParaFactura(business.logoUrl);
+    const html = renderInvoiceHtml(sale as any, sale.invoice.numero, { ...business, logoUrl: logoParaFactura });
 
     try {
       const [pngBuffer, pdfBuffer] = await Promise.all([
@@ -39,8 +48,8 @@ export class InvoicesService {
 
       const keyBase = `invoices/${sale.invoice.numero}`;
       const [pngUrl, pdfUrl] = await Promise.all([
-        this.storage.upload(pngBuffer, `${keyBase}.png`, 'image/png'),
-        this.storage.upload(pdfBuffer, `${keyBase}.pdf`, 'application/pdf'),
+        this.storage.upload(pngBuffer, `${keyBase}.png`),
+        this.storage.upload(pdfBuffer, `${keyBase}.pdf`),
       ]);
 
       const updated = await this.prisma.invoice.update({
@@ -79,7 +88,14 @@ export class InvoicesService {
     }
 
     const business = await this.getBusinessProfile();
-    const mensaje = `Hola ${sale.client.nombre}, gracias por tu compra en ${business.nombre}. Adjuntamos tu factura ${invoice.numero} por un total de ${Number(sale.total).toFixed(2)}.`;
+    // Al contado: mensaje breve, sin el monto (ya va en la imagen adjunta) y
+    // dando las gracias. A credito se deja el mensaje con el monto: ahi si
+    // importa que el cliente vea de una cuanto quedo debiendo.
+    const firma = `${business.nombre}\n_un placer al comprar_`;
+    const mensaje =
+      sale.metodoPago === MetodoPago.CREDITO
+        ? `Hola ${sale.client.nombre}, gracias por tu compra en ${business.nombre}. Adjuntamos tu factura ${invoice.numero} por un total de ${Number(sale.total).toFixed(2)}.`
+        : `¡Hola ${sale.client.nombre}! Gracias por tu compra. Aqui tienes tu factura ${invoice.numero}.\n\n${firma}`;
 
     // El agente de WhatsApp Desktop (send_whatsapp_agent.ahk) saca el PNG
     // directamente del volumen local de uploads, por eso se le pasa la key
@@ -161,6 +177,30 @@ export class InvoicesService {
     return { ok: true };
   }
 
+  /**
+   * Convierte el logo (guardado como ruta relativa "/uploads/logo/x.webp")
+   * en un data URI base64, para que se vea en la factura. Si ya es una URL
+   * absoluta (BACKEND_PUBLIC_URL configurado) se deja tal cual, porque esa
+   * si carga bien desde cualquier pagina. Si el archivo no se puede leer, la
+   * factura sigue generandose igual, solo que sin logo.
+   */
+  private async resolverLogoParaFactura(logoUrl: string | null | undefined): Promise<string | null> {
+    if (!logoUrl) return null;
+    if (/^https?:\/\//i.test(logoUrl)) return logoUrl;
+
+    const relativa = logoUrl.replace(/^\/uploads\//, '');
+    const ruta = join(UPLOADS_DIR, relativa);
+    try {
+      const buffer = await fs.readFile(ruta);
+      const ext = extname(ruta).slice(1).toLowerCase() || 'png';
+      const mime = ext === 'jpg' ? 'jpeg' : ext;
+      return `data:image/${mime};base64,${buffer.toString('base64')}`;
+    } catch (error) {
+      this.logger.warn(`No se pudo leer el logo (${ruta}) para incrustarlo en la factura: ${error}`);
+      return null;
+    }
+  }
+
   private async getBusinessProfile() {
     const profile = await this.prisma.businessProfile.findFirst();
     return (
@@ -176,7 +216,6 @@ export class InvoicesService {
   get integrationsStatus() {
     return {
       whatsapp: this.whatsapp.isConfigured,
-      s3: this.storage.isS3Configured,
     };
   }
 }

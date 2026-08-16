@@ -35,6 +35,10 @@
 SendMode Input
 SetWorkingDir %A_ScriptDir%
 SetTitleMatchMode, 2
+; El backend escribe los .job en UTF-8 sin BOM (fs.writeFile con 'utf-8').
+; Sin esto, FileRead los lee con la codepage ANSI de Windows por defecto, y
+; cualquier acento o "ñ" del mensaje sale corrupto al pegarlo en WhatsApp.
+FileEncoding, UTF-8
 
 ; ===== CONFIGURACION =====
 LOCAL_DIR         := "C:\temp\whatsapp_send"
