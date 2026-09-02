@@ -54,10 +54,14 @@ cd desktop && npm install && npm start
 # Compilar el instalador
 cd desktop && node compilar.js 2.0.24   # sube versión + compila todo + electron-builder
 
-# Chequeos
+# Chequeos (lo mismo que corre .github/workflows/ci.yml en cada push/PR)
 cd backend  && npm run build && npm test && npm run test:e2e
 cd frontend && npm run build   # incluye tsc
 ```
+
+Los tests e2e crean su propia base SQLite temporal (`test/global-setup.ts`),
+no tocan `dev.db`. El instalador se publica al empujar un tag `vX.Y.Z`
+(`build.yml`).
 
 ## Convenciones del código
 
@@ -68,9 +72,14 @@ cd frontend && npm run build   # incluye tsc
   `backend/src/common/enums.ts` y en el schema son `String`. Al filtrar por
   varios valores, **enumerar en positivo** (`{ in: [...] }`), nunca `{ not: X }`:
   con ~2400 clientes, la negación revienta el límite de parámetros de SQLite.
-- **Columnas sueltas sin FK real**: `client_debts.sale_id`, `web_orders.sale_id`
-  (SQLite no deja agregar FKs con `ALTER TABLE`). Al borrar la fila referida hay
-  que limpiar a mano — ver `sales.service.ts → remove()`.
+- **Llaves foráneas**: SQLite no deja `ALTER TABLE ADD CONSTRAINT`, así que las
+  FKs nuevas van con el patrón "recrear tabla" que genera Prisma. `client_debts`,
+  `web_orders` y `products.categoria` YA tienen FK real (CASCADE / SET NULL);
+  `MigrationsService` aplica esas migraciones dentro de una transacción con
+  `PRAGMA defer_foreign_keys = ON`.
+- **Envío por WhatsApp**: no bloquea la petición. `POST /sales/:id/send-invoice-whatsapp`
+  encola (marca `invoice.whatsappEstado = EN_COLA`) y `WhatsappQueueService`
+  procesa en segundo plano con reintentos.
 - **Errores**: lanzar `BadRequestException`/`NotFoundException` con mensaje claro
   en español. `common/filters/http-exception.filter.ts` traduce los errores de
   Prisma (P2002/P2003/P2025) a mensajes legibles; todo lo demás es 500.
