@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { EstadoFactura, MetodoPago } from '../common/enums';
 import * as bcrypt from 'bcryptjs';
@@ -120,7 +126,7 @@ export class SalesService {
               // Copiado del catalogo al momento de vender (nunca del cliente) para
               // que el margen reportado en Costos no cambie si luego se edita el
               // costo del producto.
-              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
+              costoUnitario: item.productId ? (costByProductId.get(item.productId) ?? 0) : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -242,10 +248,16 @@ export class SalesService {
     // existe, decirlo claro en vez de reventar con un error de base de datos.
     await this.validarReferencias({ items: dto.items });
 
-    const tasaImpuesto = existing.subtotal.gt(0) ? Number(existing.impuestos) / Number(existing.subtotal) : await this.getTasaImpuestoDefault();
+    const tasaImpuesto = existing.subtotal.gt(0)
+      ? Number(existing.impuestos) / Number(existing.subtotal)
+      : await this.getTasaImpuestoDefault();
     // El descuento de la factura original se mantiene: corregir un item no
     // deberia hacer desaparecer un descuento que ya se le habia dado al cliente.
-    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto, Number(existing.descuentoPct));
+    const totals = SalesService.calculateTotals(
+      dto.items,
+      tasaImpuesto,
+      Number(existing.descuentoPct),
+    );
     const costByProductId = await this.getCostByProductId(dto.items);
 
     if (existingDebt && totals.total < Number(existingDebt.amountPaid)) {
@@ -282,7 +294,7 @@ export class SalesService {
               descripcion: item.descripcion,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
-              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
+              costoUnitario: item.productId ? (costByProductId.get(item.productId) ?? 0) : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -478,7 +490,10 @@ export class SalesService {
    * existan. Lanza un 400 con un mensaje que dice que quitar, en vez de dejar
    * que la creacion se caiga con un error de base de datos.
    */
-  private async validarReferencias(dto: { clientId?: string; items: { productId?: string; descripcion: string }[] }) {
+  private async validarReferencias(dto: {
+    clientId?: string;
+    items: { productId?: string; descripcion: string }[];
+  }) {
     if (dto.clientId) {
       const cliente = await this.prisma.client.findUnique({
         where: { id: dto.clientId },
@@ -515,7 +530,9 @@ export class SalesService {
 
   /** Trae el costo actual del catalogo para los items que vienen de un producto (ignora items manuales). */
   private async getCostByProductId(items: { productId?: string }[]): Promise<Map<string, number>> {
-    const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))];
+    const productIds = [
+      ...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id))),
+    ];
     if (productIds.length === 0) return new Map();
     const products = await this.prisma.product.findMany({
       where: { id: { in: productIds } },

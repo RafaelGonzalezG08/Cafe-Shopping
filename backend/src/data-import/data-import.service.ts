@@ -55,7 +55,11 @@ export class DataImportService {
     private readonly storage: StorageService,
   ) {}
 
-  async importarProductos(buffer: Buffer, fotosBuffer: Buffer | undefined, userId?: string): Promise<ResumenImportacion> {
+  async importarProductos(
+    buffer: Buffer,
+    fotosBuffer: Buffer | undefined,
+    userId?: string,
+  ): Promise<ResumenImportacion> {
     const carpetaTemp = await fs.mkdtemp(join(tmpdir(), 'cafe-shopping-import-'));
     const rutaSqlite = join(carpetaTemp, 'origen.sqlite');
     let origen: PrismaClient | null = null;
@@ -177,7 +181,9 @@ export class DataImportService {
       try {
         await pipeline(createReadStream(comprimido), createGunzip(), createWriteStream(destino));
       } catch (error) {
-        throw new BadRequestException('El archivo esta corrupto o no es un respaldo valido (no se pudo descomprimir).');
+        throw new BadRequestException(
+          'El archivo esta corrupto o no es un respaldo valido (no se pudo descomprimir).',
+        );
       }
     } else {
       await fs.writeFile(destino, buffer);
@@ -222,7 +228,9 @@ export class DataImportService {
     try {
       await execAsync(`tar -xzf "${archivoTar}" -C "${carpetaExtraida}"`);
     } catch (error) {
-      this.logger.warn(`No se pudo descomprimir el archivo de fotos; se importa sin fotos: ${error}`);
+      this.logger.warn(
+        `No se pudo descomprimir el archivo de fotos; se importa sin fotos: ${error}`,
+      );
       return null;
     }
 
@@ -239,7 +247,11 @@ export class DataImportService {
    * vuelve a subir aqui bajo el id del producto NUEVO — el id original era de
    * la otra base de datos y no significa nada en esta.
    */
-  private async copiarFoto(carpetaFotos: string, imageUrl: string, nuevoId: string): Promise<string | null> {
+  private async copiarFoto(
+    carpetaFotos: string,
+    imageUrl: string,
+    nuevoId: string,
+  ): Promise<string | null> {
     const marca = '/uploads/';
     const idx = imageUrl.indexOf(marca);
     if (idx === -1) return null;

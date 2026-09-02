@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SalesService } from '../sales/sales.service';
@@ -103,7 +108,9 @@ export class WebOrdersService {
 
     const items = JSON.parse(pedido.items) as ItemPedidoWeb[];
     const skus = [...new Set(items.map((i) => i.sku).filter((s): s is string => Boolean(s)))];
-    const productos = skus.length ? await this.prisma.product.findMany({ where: { sku: { in: skus } } }) : [];
+    const productos = skus.length
+      ? await this.prisma.product.findMany({ where: { sku: { in: skus } } })
+      : [];
     const porSku = new Map(productos.map((p) => [p.sku.toUpperCase(), p]));
 
     const saleItems: SaleItemDto[] = items.map((item) => {

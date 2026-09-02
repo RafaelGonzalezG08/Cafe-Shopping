@@ -40,8 +40,9 @@ export class CatalogoService {
   private carpetaSalida(): string {
     // Documentos del usuario: un lugar que la persona sabe encontrar, y que
     // no desaparece al actualizar el programa.
-    const documentos = process.env.CATALOGO_DIR
-      || join(process.env.USERPROFILE || process.cwd(), 'Documents', 'Catalogo Cafe Shopping');
+    const documentos =
+      process.env.CATALOGO_DIR ||
+      join(process.env.USERPROFILE || process.cwd(), 'Documents', 'Catalogo Cafe Shopping');
     return documentos;
   }
 
@@ -101,7 +102,14 @@ export class CatalogoService {
       orderBy: { nombre: 'asc' },
       // Se eligen los campos uno a uno para que el costo NUNCA pueda salir
       // publicado por descuido al agregar columnas nuevas al producto.
-      select: { sku: true, nombre: true, precioUnitario: true, imageUrl: true, material: true, categoriaId: true },
+      select: {
+        sku: true,
+        nombre: true,
+        precioUnitario: true,
+        imageUrl: true,
+        material: true,
+        categoriaId: true,
+      },
     });
 
     // categoriaId no es una relacion real de Prisma (ver schema.prisma), asi

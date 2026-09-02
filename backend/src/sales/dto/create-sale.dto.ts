@@ -40,7 +40,10 @@ export class SaleItemDto {
 }
 
 export class CreateSaleDto {
-  @ApiProperty({ required: false, description: 'Cliente asociado (requerido si metodoPago=CREDITO)' })
+  @ApiProperty({
+    required: false,
+    description: 'Cliente asociado (requerido si metodoPago=CREDITO)',
+  })
   @IsOptional()
   @IsString()
   clientId?: string;
@@ -56,13 +59,19 @@ export class CreateSaleDto {
   @Type(() => SaleItemDto)
   items: SaleItemDto[];
 
-  @ApiProperty({ required: false, description: 'Tasa de impuesto a aplicar (0.18 = 18%). Si se omite se usa la tasa del negocio.' })
+  @ApiProperty({
+    required: false,
+    description: 'Tasa de impuesto a aplicar (0.18 = 18%). Si se omite se usa la tasa del negocio.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   tasaImpuesto?: number;
 
-  @ApiProperty({ required: false, description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).' })
+  @ApiProperty({
+    required: false,
+    description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -75,7 +84,11 @@ export class CreateSaleDto {
   @IsISO8601()
   fechaVencimiento?: string;
 
-  @ApiProperty({ required: false, default: true, description: 'Genera automaticamente el PNG de la factura al crear la venta' })
+  @ApiProperty({
+    required: false,
+    default: true,
+    description: 'Genera automaticamente el PNG de la factura al crear la venta',
+  })
   @IsOptional()
   generarFactura?: boolean;
 

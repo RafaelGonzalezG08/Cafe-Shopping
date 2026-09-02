@@ -85,7 +85,9 @@ export function renderInvoiceHtml(
   const bruto = sale.items.reduce((sum, item) => sum + Number(item.total), 0);
   const descuentoMonto = Math.max(0, bruto - Number(sale.subtotal));
   const descuentoPctTexto =
-    Number(sale.descuentoPct) % 1 === 0 ? Number(sale.descuentoPct).toFixed(0) : Number(sale.descuentoPct).toFixed(2);
+    Number(sale.descuentoPct) % 1 === 0
+      ? Number(sale.descuentoPct).toFixed(0)
+      : Number(sale.descuentoPct).toFixed(2);
   const hayDescuento = descuentoMonto > 0.004;
   const impuestosMonto = Number(sale.impuestos);
   const hayImpuestos = impuestosMonto > 0.004;

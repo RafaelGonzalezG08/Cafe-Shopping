@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EstadoPedidoWeb } from '../common/enums';
 import { WebOrdersService } from './web-orders.service';
@@ -27,13 +37,21 @@ export class WebOrdersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateWebOrderDto, @CurrentUser() user: AuthenticatedUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateWebOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.webOrdersService.update(id, dto, user.userId);
   }
 
   /** Convierte el pedido en una venta real (cliente, metodo de pago, etc.) y lo marca ATENDIDO. */
   @Post(':id/atender')
-  atender(@Param('id') id: string, @Body() dto: AtenderWebOrderDto, @CurrentUser() user: AuthenticatedUser) {
+  atender(
+    @Param('id') id: string,
+    @Body() dto: AtenderWebOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.webOrdersService.atender(id, dto, user.userId);
   }
 

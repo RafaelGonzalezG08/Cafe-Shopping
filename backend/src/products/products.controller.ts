@@ -94,7 +94,10 @@ export class ProductsController {
   }
 
   /** El costo de adquisicion es sensible (margen del negocio): solo ADMIN lo recibe en la respuesta. */
-  private stripCostForNonAdmin<T extends { costoUnitario?: unknown }>(product: T, user?: AuthenticatedUser): T {
+  private stripCostForNonAdmin<T extends { costoUnitario?: unknown }>(
+    product: T,
+    user?: AuthenticatedUser,
+  ): T {
     if (user?.role === Role.ADMIN) return product;
     const { costoUnitario, ...rest } = product;
     return rest as T;

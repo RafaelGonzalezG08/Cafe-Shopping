@@ -185,19 +185,29 @@ export class BackupsService {
    */
   private async escribirFicha(rutaRespaldo: string): Promise<void> {
     try {
-      const [productos, clientes, ventas, facturas, deudas, gastos, pedidos, usuarios] = await Promise.all([
-        this.prisma.product.count(),
-        this.prisma.client.count(),
-        this.prisma.sale.count(),
-        this.prisma.invoice.count(),
-        this.prisma.clientDebt.count(),
-        this.prisma.expense.count(),
-        this.prisma.order.count(),
-        this.prisma.user.count(),
-      ]);
+      const [productos, clientes, ventas, facturas, deudas, gastos, pedidos, usuarios] =
+        await Promise.all([
+          this.prisma.product.count(),
+          this.prisma.client.count(),
+          this.prisma.sale.count(),
+          this.prisma.invoice.count(),
+          this.prisma.clientDebt.count(),
+          this.prisma.expense.count(),
+          this.prisma.order.count(),
+          this.prisma.user.count(),
+        ]);
       await fs.writeFile(
         `${rutaRespaldo}.info.json`,
-        JSON.stringify({ productos, clientes, ventas, facturas, deudas, gastos, pedidos, usuarios }),
+        JSON.stringify({
+          productos,
+          clientes,
+          ventas,
+          facturas,
+          deudas,
+          gastos,
+          pedidos,
+          usuarios,
+        }),
       );
     } catch (error) {
       // La ficha es informativa: si falla, el respaldo sigue siendo valido.
@@ -251,7 +261,9 @@ export class BackupsService {
           // -C a la carpeta PADRE de uploads (no a process.cwd()): en la
           // version nativa uploads vive en los datos del usuario, fuera de la
           // carpeta del programa.
-          await execAsync(`tar -czf "${uploadsFile}" -C "${dirname(UPLOADS_DIR)}" "${basename(UPLOADS_DIR)}"`);
+          await execAsync(
+            `tar -czf "${uploadsFile}" -C "${dirname(UPLOADS_DIR)}" "${basename(UPLOADS_DIR)}"`,
+          );
         }
       } catch (error) {
         this.logger.warn(`No se pudo respaldar la carpeta de uploads: ${error}`);
@@ -259,11 +271,16 @@ export class BackupsService {
 
       await fs.writeFile(
         MARKER_FILE,
-        JSON.stringify({ timestamp: new Date().toISOString(), files: [dbFile, uploadsFile].filter(Boolean) }),
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          files: [dbFile, uploadsFile].filter(Boolean),
+        }),
       );
 
       await this.cleanupOld();
-      this.logger.log(`Respaldo completado (local): ${dbFile}${uploadsFile ? ` + ${uploadsFile}` : ''}`);
+      this.logger.log(
+        `Respaldo completado (local): ${dbFile}${uploadsFile ? ` + ${uploadsFile}` : ''}`,
+      );
       return { ok: true };
     } catch (error: any) {
       this.logger.error(`Fallo el respaldo: ${error?.message ?? error}`);
@@ -280,8 +297,11 @@ export class BackupsService {
    * solo se expone a ADMIN (ver backups.controller.ts) y el frontend pide
    * confirmacion antes de llamarlo.
    */
-  async restore(dbFileName: string): Promise<{ ok: boolean; error?: string; restoredUploads?: boolean }> {
-    if (this.running) return { ok: false, error: 'Hay un respaldo/restauracion en curso, intenta en un momento.' };
+  async restore(
+    dbFileName: string,
+  ): Promise<{ ok: boolean; error?: string; restoredUploads?: boolean }> {
+    if (this.running)
+      return { ok: false, error: 'Hay un respaldo/restauracion en curso, intenta en un momento.' };
     if (!/^db-[\w.-]+\.sqlite\.gz$/.test(dbFileName)) {
       return { ok: false, error: 'Nombre de archivo de respaldo invalido.' };
     }
@@ -309,7 +329,9 @@ export class BackupsService {
       }
       // Comprobacion extra: que sea de verdad una base SQLite (los primeros
       // 16 bytes de todo archivo SQLite son "SQLite format 3\0").
-      const cabecera = await fs.readFile(restoredFile, { encoding: 'latin1', flag: 'r' }).then((c) => c.slice(0, 15));
+      const cabecera = await fs
+        .readFile(restoredFile, { encoding: 'latin1', flag: 'r' })
+        .then((c) => c.slice(0, 15));
       if (cabecera !== 'SQLite format 3') {
         await fs.unlink(restoredFile).catch(() => undefined);
         throw new Error(`El respaldo ${dbFileName} no parece una base de datos valida.`);

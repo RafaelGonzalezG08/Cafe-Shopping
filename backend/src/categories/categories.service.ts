@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -40,7 +45,10 @@ export class CategoriesService {
     const category = await this.prisma.category.findUnique({ where: { id } });
     if (!category) throw new NotFoundException('Categoria no encontrada.');
 
-    await this.prisma.product.updateMany({ where: { categoriaId: id }, data: { categoriaId: null } });
+    await this.prisma.product.updateMany({
+      where: { categoriaId: id },
+      data: { categoriaId: null },
+    });
     await this.prisma.category.delete({ where: { id } });
     await this.audit.log('Category', id, 'DELETE', userId, { nombre: category.nombre });
     return { id, deleted: true };

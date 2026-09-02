@@ -203,7 +203,10 @@ export class ProductsService {
    * Misma regla que eliminarDuplicados(): nunca borra una que tenga una
    * venta encima, y libera su foto del disco si tenia.
    */
-  async bulkEliminar(ids: string[], userId?: string): Promise<{ eliminados: number; omitidosPorVentas: number }> {
+  async bulkEliminar(
+    ids: string[],
+    userId?: string,
+  ): Promise<{ eliminados: number; omitidosPorVentas: number }> {
     const productos = await this.prisma.product.findMany({
       where: { id: { in: ids }, activo: false },
       select: { id: true, imageUrl: true },
@@ -346,12 +349,17 @@ export class ProductsService {
    * Baja logica, igual que remove(): las facturas viejas que ya las mencionan
    * no se ven afectadas, y cualquiera se puede reactivar despues a mano.
    */
-  async limpiarDuplicados(userId?: string): Promise<{ bajaDuplicados: number; bajaSinFoto: number }> {
+  async limpiarDuplicados(
+    userId?: string,
+  ): Promise<{ bajaDuplicados: number; bajaSinFoto: number }> {
     const { idsDuplicados, idsSinFoto } = await this.calcularLimpieza(true);
     const idsTotal = [...idsDuplicados, ...idsSinFoto];
 
     if (idsTotal.length > 0) {
-      await this.prisma.product.updateMany({ where: { id: { in: idsTotal } }, data: { activo: false } });
+      await this.prisma.product.updateMany({
+        where: { id: { in: idsTotal } },
+        data: { activo: false },
+      });
       await this.audit.log('Product', 'limpieza-duplicados', 'DELETE', userId, {
         bajaDuplicados: idsDuplicados.length,
         bajaSinFoto: idsSinFoto.length,
@@ -389,7 +397,8 @@ export class ProductsService {
     let totalEliminables = 0;
     for (const grupo of grupos) {
       for (const p of grupo.elimina) {
-        if (conVentas.has(p.id)) omitidosPorVentas.push({ id: p.id, sku: p.sku, nombre: grupo.nombre });
+        if (conVentas.has(p.id))
+          omitidosPorVentas.push({ id: p.id, sku: p.sku, nombre: grupo.nombre });
         else totalEliminables++;
       }
     }
@@ -398,7 +407,9 @@ export class ProductsService {
   }
 
   /** Ejecuta lo que vistaPreviaEliminarDuplicados() calculo: borra de verdad y libera las fotos del disco. */
-  async eliminarDuplicados(userId?: string): Promise<{ eliminados: number; omitidosPorVentas: number }> {
+  async eliminarDuplicados(
+    userId?: string,
+  ): Promise<{ eliminados: number; omitidosPorVentas: number }> {
     const { idsDuplicados } = await this.calcularLimpieza(false, true);
     const conVentas = await this.idsConVentas(idsDuplicados);
     const aEliminar = idsDuplicados.filter((id) => !conVentas.has(id));

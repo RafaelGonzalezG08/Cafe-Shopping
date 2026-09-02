@@ -10,7 +10,9 @@ import { MetodoPago } from '../../common/enums';
  * tal como el cliente los mando (ver web-orders.service.ts -> atender()).
  */
 export class AtenderWebOrderDto {
-  @ApiPropertyOptional({ description: 'Cliente al que se factura (requerido si metodoPago=CREDITO)' })
+  @ApiPropertyOptional({
+    description: 'Cliente al que se factura (requerido si metodoPago=CREDITO)',
+  })
   @IsOptional()
   @IsString()
   clientId?: string;
@@ -33,7 +35,9 @@ export class AtenderWebOrderDto {
   @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
   fechaEntrega?: string;
 
-  @ApiPropertyOptional({ description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).' })
+  @ApiPropertyOptional({
+    description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

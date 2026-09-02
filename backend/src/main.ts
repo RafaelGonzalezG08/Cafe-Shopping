@@ -21,7 +21,8 @@ async function bootstrap() {
   // empaquetar el CLI de Prisma en la app de escritorio (ver
   // MigrationsService). PRISMA_MIGRATIONS_DIR lo define Electron, que sabe
   // donde quedaron los archivos dentro de la instalacion.
-  const migrationsDir = process.env.PRISMA_MIGRATIONS_DIR || join(process.cwd(), 'prisma', 'migrations');
+  const migrationsDir =
+    process.env.PRISMA_MIGRATIONS_DIR || join(process.cwd(), 'prisma', 'migrations');
   await app.get(MigrationsService).applyPending(migrationsDir);
 
   // Instalacion nueva: crea el primer administrador y el perfil del negocio.

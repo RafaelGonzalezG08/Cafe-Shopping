@@ -12,7 +12,12 @@ export class ExpensesService {
 
   findAll(from?: string, to?: string) {
     return this.prisma.expense.findMany({
-      where: from || to ? { fecha: { gte: from ? new Date(from) : undefined, lte: to ? new Date(to) : undefined } } : undefined,
+      where:
+        from || to
+          ? {
+              fecha: { gte: from ? new Date(from) : undefined, lte: to ? new Date(to) : undefined },
+            }
+          : undefined,
       orderBy: { fecha: 'desc' },
       include: { user: { select: { nombre: true } } },
     });

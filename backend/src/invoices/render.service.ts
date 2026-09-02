@@ -36,7 +36,12 @@ export class RenderService {
    * sin el, dos facturas generadas a la vez podrian quedarse con la respuesta
    * de la otra.
    */
-  private pedirRenderAlPadre(tipo: 'png' | 'pdf', html: string, width: number, scale: number): Promise<Buffer> {
+  private pedirRenderAlPadre(
+    tipo: 'png' | 'pdf',
+    html: string,
+    width: number,
+    scale: number,
+  ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const id = randomUUID();
 
@@ -106,7 +111,9 @@ export class RenderService {
       // la original: el objetivo es que pese menos, no aplicar el filtro porque si.
       return compressed.length < png.length ? compressed : png;
     } catch (error) {
-      this.logger.warn(`No se pudo comprimir el PNG de la factura, se envia sin comprimir: ${error}`);
+      this.logger.warn(
+        `No se pudo comprimir el PNG de la factura, se envia sin comprimir: ${error}`,
+      );
       return png;
     }
   }
@@ -118,5 +125,4 @@ export class RenderService {
 
     return this.sinRenderizador();
   }
-
 }

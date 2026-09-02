@@ -44,12 +44,20 @@ export class ClientDebtsService {
     const sales = saleIds.length
       ? await this.prisma.sale.findMany({
           where: { id: { in: saleIds } },
-          select: { id: true, fecha: true, total: true, invoice: { select: { numero: true, pngUrl: true, estado: true } } },
+          select: {
+            id: true,
+            fecha: true,
+            total: true,
+            invoice: { select: { numero: true, pngUrl: true, estado: true } },
+          },
         })
       : [];
     const saleById = new Map(sales.map((s) => [s.id, s]));
 
-    return debts.map((debt) => ({ ...debt, sale: debt.saleId ? saleById.get(debt.saleId) ?? null : null }));
+    return debts.map((debt) => ({
+      ...debt,
+      sale: debt.saleId ? (saleById.get(debt.saleId) ?? null) : null,
+    }));
   }
 
   async registerPayment(debtId: string, dto: RegisterPaymentDto, userId?: string) {
@@ -135,7 +143,9 @@ export class ClientDebtsService {
     if (!debt) throw new NotFoundException('Deuda no encontrada.');
 
     if (debt.status === EstadoDeuda.PAGADA) {
-      throw new BadRequestException('Esta deuda ya esta saldada. No se puede enviar un recordatorio.');
+      throw new BadRequestException(
+        'Esta deuda ya esta saldada. No se puede enviar un recordatorio.',
+      );
     }
     if (!debt.client.telefono) {
       throw new BadRequestException('El cliente no tiene un telefono registrado.');

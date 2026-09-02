@@ -2,10 +2,7 @@ import { SalesService } from './sales.service';
 
 describe('SalesService.calculateTotals', () => {
   it('calcula subtotal, impuestos y total para un solo item', () => {
-    const totals = SalesService.calculateTotals(
-      [{ cantidad: 2, precioUnitario: 100 }],
-      0.18,
-    );
+    const totals = SalesService.calculateTotals([{ cantidad: 2, precioUnitario: 100 }], 0.18);
     expect(totals.subtotal).toBe(200);
     expect(totals.impuestos).toBe(36);
     expect(totals.total).toBe(236);

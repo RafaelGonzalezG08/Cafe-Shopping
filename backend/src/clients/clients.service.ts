@@ -128,7 +128,11 @@ export class ClientsService {
       ]);
 
       if (ventas > 0 || deudas > 0) {
-        omitidos.push({ id, nombre: cliente.nombre, motivo: `tiene ${ventas} venta(s) y ${deudas} deuda(s)` });
+        omitidos.push({
+          id,
+          nombre: cliente.nombre,
+          motivo: `tiene ${ventas} venta(s) y ${deudas} deuda(s)`,
+        });
         continue;
       }
 
@@ -137,7 +141,10 @@ export class ClientsService {
     }
 
     if (eliminados > 0) {
-      await this.audit.log('Client', 'eliminar-lote', 'DELETE', userId, { eliminados, omitidos: omitidos.length });
+      await this.audit.log('Client', 'eliminar-lote', 'DELETE', userId, {
+        eliminados,
+        omitidos: omitidos.length,
+      });
     }
 
     return { eliminados, omitidos };

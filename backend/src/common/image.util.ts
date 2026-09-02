@@ -51,11 +51,18 @@ export interface OptimizedImage {
  * WebP en vez de JPEG porque pesa bastante menos con la misma calidad visual y
  * conserva la transparencia (util para fotos de joyas recortadas del fondo).
  */
-export async function optimizeProductImage(buffer: Buffer, mimetype: string): Promise<OptimizedImage> {
+export async function optimizeProductImage(
+  buffer: Buffer,
+  mimetype: string,
+): Promise<OptimizedImage> {
   try {
     const optimized = await sharp(buffer)
       .rotate() // respeta la orientacion EXIF del celular (si no, salen acostadas)
-      .resize(PRODUCT_SIZE, PRODUCT_SIZE, { fit: 'cover', position: 'centre', withoutEnlargement: true })
+      .resize(PRODUCT_SIZE, PRODUCT_SIZE, {
+        fit: 'cover',
+        position: 'centre',
+        withoutEnlargement: true,
+      })
       .webp({ quality: 90 })
       .toBuffer();
 

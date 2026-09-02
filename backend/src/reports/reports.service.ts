@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO, MetodoPago, METODOS_PAGO } from '../common/enums';
+import { ESTADOS_DEUDA_CON_SALDO, MetodoPago, METODOS_PAGO } from '../common/enums';
 
 // Metodos de pago que dejan el dinero en la caja al momento de la venta (todos
 // menos el credito, que se cobra despues con abonos). Se enumeran en positivo
@@ -50,7 +50,13 @@ export class ReportsService {
     const buckets = new Map<string, PeriodBucket>();
     for (const sale of sales) {
       const key = bucketKey(sale.fecha, group);
-      const entry = buckets.get(key) ?? { periodo: key, ventas: 0, subtotal: 0, impuestos: 0, total: 0 };
+      const entry = buckets.get(key) ?? {
+        periodo: key,
+        ventas: 0,
+        subtotal: 0,
+        impuestos: 0,
+        total: 0,
+      };
       entry.ventas += 1;
       entry.subtotal += Number(sale.subtotal);
       entry.impuestos += Number(sale.impuestos);
@@ -59,7 +65,12 @@ export class ReportsService {
     }
 
     return Array.from(buckets.values())
-      .map((b) => ({ ...b, subtotal: round(b.subtotal), impuestos: round(b.impuestos), total: round(b.total) }))
+      .map((b) => ({
+        ...b,
+        subtotal: round(b.subtotal),
+        impuestos: round(b.impuestos),
+        total: round(b.total),
+      }))
       .sort((a, b) => a.periodo.localeCompare(b.periodo));
   }
 
@@ -234,7 +245,11 @@ export class ReportsService {
 
     const [ventasHoy, deudas, gastosRecientes, gastosMes, ventasMes, contadoMes, abonosMes] =
       await Promise.all([
-        this.prisma.sale.aggregate({ where: { fecha: { gte: startOfDay } }, _sum: { total: true }, _count: true }),
+        this.prisma.sale.aggregate({
+          where: { fecha: { gte: startOfDay } },
+          _sum: { total: true },
+          _count: true,
+        }),
         this.prisma.clientDebt.aggregate({
           where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
           _sum: { amountTotal: true, amountPaid: true },
@@ -272,7 +287,10 @@ export class ReportsService {
       const str = String(value ?? '');
       return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
-    const lines = [headers.join(','), ...rows.map((row) => headers.map((h) => escape(row[h])).join(','))];
+    const lines = [
+      headers.join(','),
+      ...rows.map((row) => headers.map((h) => escape(row[h])).join(',')),
+    ];
     return lines.join('\n');
   }
 }

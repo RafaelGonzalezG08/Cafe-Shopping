@@ -12,7 +12,9 @@ export class UpdateOrderDto {
   @IsEnum(EstadoPedido, { message: 'Estado de pedido invalido.' })
   estado?: EstadoPedido;
 
-  @ApiPropertyOptional({ description: 'Fecha prometida de entrega. Enviar cadena vacia para quitarla.' })
+  @ApiPropertyOptional({
+    description: 'Fecha prometida de entrega. Enviar cadena vacia para quitarla.',
+  })
   @IsOptional()
   @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
   fechaEntrega?: string;

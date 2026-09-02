@@ -115,7 +115,8 @@ function parseResultFile(raw: string, jobId: string): WhatsappSendResult {
     return { ok: true, sid: jobId };
   }
   const errorMessage = firstLine.startsWith('ERROR:')
-    ? firstLine.slice('ERROR:'.length).trim() || 'El agente de WhatsApp reporto un error sin detalle.'
+    ? firstLine.slice('ERROR:'.length).trim() ||
+      'El agente de WhatsApp reporto un error sin detalle.'
     : firstLine || 'El agente de WhatsApp reporto un error sin detalle.';
   return { ok: false, sid: jobId, errorMessage };
 }

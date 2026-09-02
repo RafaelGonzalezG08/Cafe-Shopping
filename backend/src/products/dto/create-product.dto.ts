@@ -1,12 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { Material, MATERIALES } from '../../common/enums';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
     example: 'AN-0001',
-    description: 'Si se omite, se genera automaticamente a partir del nombre (2 letras + numero secuencial).',
+    description:
+      'Si se omite, se genera automaticamente a partir del nombre (2 letras + numero secuencial).',
   })
   @IsOptional()
   @IsString()
@@ -26,7 +37,8 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     example: 65.0,
-    description: 'Costo de adquisicion de la pieza (solo ADMIN puede verlo/editarlo). Se usa para calcular margen.',
+    description:
+      'Costo de adquisicion de la pieza (solo ADMIN puede verlo/editarlo). Se usa para calcular margen.',
   })
   @IsOptional()
   @Type(() => Number)
@@ -54,7 +66,9 @@ export class CreateProductDto {
    * texto: sin el Transform, "false" seria un string y `@IsBoolean` lo
    * rechazaria — y peor, Prisma guardaria un valor truthy.
    */
-  @ApiPropertyOptional({ description: 'false da de baja la pieza (deja de venderse y sale del catalogo web).' })
+  @ApiPropertyOptional({
+    description: 'false da de baja la pieza (deja de venderse y sale del catalogo web).',
+  })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value === 'true' : value))
   @IsBoolean()

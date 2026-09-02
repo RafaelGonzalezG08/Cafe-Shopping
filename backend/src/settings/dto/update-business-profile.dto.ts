@@ -28,7 +28,10 @@ export class UpdateBusinessProfileDto {
   @Max(1)
   tasaImpuesto: number;
 
-  @ApiProperty({ required: false, description: 'Numero al que llegan los pedidos del catalogo web.' })
+  @ApiProperty({
+    required: false,
+    description: 'Numero al que llegan los pedidos del catalogo web.',
+  })
   @IsOptional()
   @IsString()
   telefonoWhatsapp?: string;
@@ -38,17 +41,26 @@ export class UpdateBusinessProfileDto {
   @IsString()
   descripcionWeb?: string;
 
-  @ApiProperty({ required: false, description: 'Como pagar por transferencia (banco, cuenta, titular).' })
+  @ApiProperty({
+    required: false,
+    description: 'Como pagar por transferencia (banco, cuenta, titular).',
+  })
   @IsOptional()
   @IsString()
   datosPago?: string;
 
-  @ApiProperty({ required: false, description: 'URL del relevo en la nube para automatizar Pedidos web.' })
+  @ApiProperty({
+    required: false,
+    description: 'URL del relevo en la nube para automatizar Pedidos web.',
+  })
   @IsOptional()
   @IsString()
   relevoPedidosUrl?: string;
 
-  @ApiProperty({ required: false, description: 'Clave secreta del relevo (la misma puesta en Cloudflare).' })
+  @ApiProperty({
+    required: false,
+    description: 'Clave secreta del relevo (la misma puesta en Cloudflare).',
+  })
   @IsOptional()
   @IsString()
   relevoPedidosClave?: string;

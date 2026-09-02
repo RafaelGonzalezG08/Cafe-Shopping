@@ -47,7 +47,9 @@ export class WebOrdersRelayService {
         headers: { Authorization: `Bearer ${clave}` },
       });
       if (!respuesta.ok) {
-        this.logger.warn(`El relevo de pedidos respondio ${respuesta.status}; se reintenta en el proximo ciclo.`);
+        this.logger.warn(
+          `El relevo de pedidos respondio ${respuesta.status}; se reintenta en el proximo ciclo.`,
+        );
         return;
       }
 

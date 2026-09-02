@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { SaleItemDto } from './create-sale.dto';
 
 export class UpdateSaleDto {
@@ -22,7 +29,8 @@ export class UpdateSaleDto {
    */
   @ApiPropertyOptional({
     nullable: true,
-    description: 'Cliente al que se refactura. null = consumidor final. Omitirlo deja el cliente actual.',
+    description:
+      'Cliente al que se refactura. null = consumidor final. Omitirlo deja el cliente actual.',
   })
   @IsOptional()
   @IsString()
