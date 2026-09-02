@@ -1,7 +1,26 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { CheckCircle2, XCircle, Save, UserPlus, DatabaseBackup, Play, ShieldCheck, RotateCcw, AlertTriangle, Image as ImageIcon, Globe, UploadCloud, ArrowRight, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  XCircle,
+  Save,
+  UserPlus,
+  DatabaseBackup,
+  Play,
+  ShieldCheck,
+  RotateCcw,
+  AlertTriangle,
+  Image as ImageIcon,
+  Globe,
+  UploadCloud,
+  ArrowRight,
+  Loader2,
+  ChevronDown,
+  Store,
+  Users,
+  KeyRound,
+} from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { Button, Card, PageHeader } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
@@ -46,6 +65,56 @@ interface AppUser {
   email: string;
   role: Role;
   activo: boolean;
+}
+
+/**
+ * Seccion plegable de Configuracion. Todas arrancan cerradas menos la que se
+ * marque con `abiertaPorDefecto`; al pulsar el encabezado se abre hacia abajo.
+ * La animacion usa grid-template-rows 0fr/1fr, que no necesita saber el alto.
+ */
+function Seccion({
+  titulo,
+  icono: Icono,
+  children,
+  abiertaPorDefecto = false,
+  resumen,
+}: {
+  titulo: string;
+  icono: typeof Store;
+  children: ReactNode;
+  abiertaPorDefecto?: boolean;
+  resumen?: string;
+}) {
+  const [abierta, setAbierta] = useState(abiertaPorDefecto);
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAbierta((a) => !a)}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-porcelain-100"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-copper-100 text-copper-700">
+          <Icono size={16} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-sm font-bold text-ink">{titulo}</span>
+          {resumen && <span className="block truncate text-xs text-muted">{resumen}</span>}
+        </span>
+        <ChevronDown
+          size={18}
+          className={`shrink-0 text-muted transition-transform ${abierta ? 'rotate-180' : ''}`}
+        />
+      </button>
+      <div
+        className="grid transition-all duration-200 ease-out"
+        style={{ gridTemplateRows: abierta ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-porcelain-200 p-5">{children}</div>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 export default function Settings() {
@@ -170,14 +239,19 @@ export default function Settings() {
 
   return (
     <div>
-      <PageHeader title="Configuracion" subtitle="Datos del negocio, integraciones y usuarios" />
+      <PageHeader
+        title="Configuracion"
+        subtitle="Datos del negocio, usuarios, catalogo y respaldos"
+        action={<IntegracionesChip whatsapp={Boolean(integrations?.whatsapp)} />}
+      />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
-        <Card className="p-5">
-          <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
-            Datos del negocio
-          </h2>
+      <div className="mx-auto max-w-3xl space-y-3">
+        <Seccion
+          titulo="Datos del negocio"
+          icono={Store}
+          abiertaPorDefecto
+          resumen={form.nombre || 'Nombre, direccion, impuesto e icono'}
+        >
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
@@ -212,7 +286,11 @@ export default function Settings() {
               </div>
             </div>
             <Field label="Nombre" value={form.nombre} onChange={(v) => setForm((f) => ({ ...f, nombre: v }))} />
-            <Field label="Direccion" value={form.direccion} onChange={(v) => setForm((f) => ({ ...f, direccion: v }))} />
+            <Field
+              label="Direccion"
+              value={form.direccion}
+              onChange={(v) => setForm((f) => ({ ...f, direccion: v }))}
+            />
             <Field
               label="RNC / ID fiscal"
               value={form.identifFiscal}
@@ -228,177 +306,30 @@ export default function Settings() {
               <Save size={16} /> Guardar cambios
             </Button>
           </div>
-        </Card>
+        </Seccion>
 
-          <Card className="p-5">
-            <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
-              Integraciones
-            </h2>
-            <IntegrationRow label="WhatsApp (Agente Desktop)" ok={Boolean(integrations?.whatsapp)} />
-          </Card>
-
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
-                <DatabaseBackup size={15} /> Respaldos automaticos
-              </h2>
-              <Button size="sm" variant="secondary" onClick={() => runBackup.mutate()} disabled={runBackup.isPending}>
-                <Play size={13} /> {runBackup.isPending ? 'Generando...' : 'Respaldar ahora'}
-              </Button>
-            </div>
-            <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-lg bg-porcelain-100 p-2.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted">Ultimo respaldo</p>
-                <p className="font-medium text-ink">
-                  {backups?.lastRun ? formatDateTime(backups.lastRun) : 'Aun no se ha ejecutado'}
-                </p>
-              </div>
-              <div className="rounded-lg bg-porcelain-100 p-2.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted">Frecuencia</p>
-                <p className="font-medium text-ink">
-                  Cada {backups?.intervalDays ?? 3} dias &middot; se conservan {backups?.retentionDays ?? 30} dias
-                </p>
-              </div>
-            </div>
-            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-sage-600">
-              <ShieldCheck size={13} /> Se guarda solo en disco local — nunca en el bucket S3/R2 (ese es público).
-            </p>
-            <p className="mt-1 mb-3 text-xs text-muted">
-              {backups?.copiaEnNube
-                ? 'Cada respaldo se copia tambien a tu OneDrive, para que sobreviva si esta computadora falla. Abajo se listan los de ambos lugares.'
-                : 'Los respaldos se guardan solo en esta computadora: no se detecto OneDrive para hacer una copia fuera de ella.'}
-            </p>
-            {backups?.files && backups.files.length > 0 ? (
-              <div className="max-h-64 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
-                {backups.files.slice(0, 10).map((f) => (
-                  <div key={f.name} className="px-3 py-2 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-ink">
-                        {f.name.startsWith('db-') ? 'Base de datos' : 'Fotos y facturas'}
-                        {' · '}
-                        {formatDateTime(f.createdAt)}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {/* De donde salio: importa para saber si se puede
-                            restaurar aunque el disco se haya perdido. */}
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            f.origen === 'nube' ? 'bg-sage-100 text-sage-700' : 'bg-porcelain-200 text-muted'
-                          }`}
-                        >
-                          {f.origen === 'nube' ? 'OneDrive' : 'Esta PC'}
-                        </span>
-                        <span className="text-muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
-                        {/* Solo se ofrece restaurar lo que esta version sabe
-                            leer. Los ".sql.gz" son de cuando la base era
-                            PostgreSQL: ofrecer el boton y que fallara al
-                            pulsarlo, justo en una emergencia, seria peor que
-                            no ofrecerlo. */}
-                        {f.name.endsWith('.sqlite.gz') && (
-                          <button
-                            onClick={() => setRestoreTarget(f.name)}
-                            className="flex items-center gap-1 rounded-md border border-porcelain-300 px-1.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-brick-400 hover:text-brick-600"
-                          >
-                            <RotateCcw size={11} /> Restaurar
-                          </button>
-                        )}
-                        {f.name.startsWith('db-') && !f.name.endsWith('.sqlite.gz') && (
-                          <span className="text-[10px] italic text-muted">formato anterior</span>
-                        )}
-                      </div>
-                    </div>
-                    {/* Que hay dentro, para no tener que adivinar por el nombre
-                        del archivo si el respaldo trae el inventario y los
-                        clientes. */}
-                    {f.contenido && (
-                      <p className="mt-0.5 text-[11px] text-muted">
-                        {f.contenido.productos.toLocaleString('es-DO')} productos ·{' '}
-                        {f.contenido.clientes.toLocaleString('es-DO')} clientes ·{' '}
-                        {f.contenido.ventas.toLocaleString('es-DO')} ventas ·{' '}
-                        {f.contenido.facturas.toLocaleString('es-DO')} facturas
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted">Sin respaldos generados todavia.</p>
-            )}
-          </Card>
-
-          <AgregarDatos />
-
-          {restoreTarget && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-              <Card className="w-full max-w-sm p-5">
-                <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-brick-600">
-                  <AlertTriangle size={16} /> Restaurar respaldo
-                </h3>
-                <p className="mb-1 text-sm text-ink">
-                  Vas a restaurar el punto <span className="font-mono text-xs">{restoreTarget}</span>.
-                </p>
-                <p className="mb-4 text-xs text-muted">
-                  Esto reemplaza los datos actuales (ventas, clientes, productos) por los del respaldo. No se puede
-                  deshacer. Si quieres conservar lo que hay ahora, genera un respaldo antes de continuar.
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setRestoreTarget(null)}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="!bg-brick-600 hover:!bg-brick-700"
-                    disabled={restoreBackup.isPending}
-                    onClick={() => restoreBackup.mutate(restoreTarget)}
-                  >
-                    {restoreBackup.isPending ? 'Restaurando...' : 'Si, restaurar'}
-                  </Button>
+        <Seccion titulo="Usuarios y roles" icono={Users} resumen={`${users.length} usuario(s)`}>
+          <div className="mb-3 divide-y divide-porcelain-200">
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between py-2 text-sm">
+                <div>
+                  <p className="text-ink">{u.nombre}</p>
+                  <p className="text-xs text-muted">{u.email}</p>
                 </div>
-              </Card>
-            </div>
-          )}
+                <span className="rounded-full bg-porcelain-200 px-2 py-0.5 text-xs font-semibold text-muted">
+                  {u.role}
+                </span>
+              </div>
+            ))}
+          </div>
+          <NewUserForm onSubmit={(payload) => createUser.mutate(payload)} />
+        </Seccion>
 
-          {/* Overlay bloqueante mientras restaura: cambiar el archivo de la
-              base de datos en pleno uso es delicado, asi que mientras dura
-              nadie puede hacer clic en nada mas de la app (ver
-              backups.service.ts -> restore(), que ademas desconecta y
-              reconecta Prisma durante el proceso). */}
-          {restoreBackup.isPending && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4">
-              <Card className="w-full max-w-sm p-6 text-center">
-                <Loader2 size={32} className="mx-auto mb-3 animate-spin text-copper-600" />
-                <h3 className="mb-1 font-display text-sm font-bold text-ink">Restaurando respaldo...</h3>
-                <p className="text-xs text-muted">
-                  No cierres el programa ni hagas nada mas mientras termina. Esto toma unos segundos.
-                </p>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">
-                Usuarios y roles
-              </h2>
-            </div>
-            <div className="mb-3 divide-y divide-porcelain-200">
-              {users.map((u) => (
-                <div key={u.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
-                    <p className="text-ink">{u.nombre}</p>
-                    <p className="text-xs text-muted">{u.email}</p>
-                  </div>
-                  <span className="rounded-full bg-porcelain-200 px-2 py-0.5 text-xs font-semibold text-muted">
-                    {u.role}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <NewUserForm onSubmit={(payload) => createUser.mutate(payload)} />
-          </Card>
-
+        <Seccion
+          titulo="Catalogo web"
+          icono={Globe}
+          resumen="Pagina publica de tus piezas + pedidos por WhatsApp"
+        >
           <CatalogoWeb
             telefonoWhatsapp={form.telefonoWhatsapp}
             descripcionWeb={form.descripcionWeb}
@@ -408,11 +339,166 @@ export default function Settings() {
             onGuardar={() => updateProfile.mutate()}
             guardando={updateProfile.isPending}
           />
+        </Seccion>
 
+        <Seccion
+          titulo="Respaldos automaticos"
+          icono={DatabaseBackup}
+          resumen={
+            backups?.lastRun ? `Ultimo: ${formatDateTime(backups.lastRun)}` : 'Aun no se ha ejecutado'
+          }
+        >
+          <div className="mb-3 flex justify-end">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => runBackup.mutate()}
+              disabled={runBackup.isPending}
+            >
+              <Play size={13} /> {runBackup.isPending ? 'Generando...' : 'Respaldar ahora'}
+            </Button>
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg bg-porcelain-100 p-2.5">
+              <p className="text-[10px] uppercase tracking-wide text-muted">Ultimo respaldo</p>
+              <p className="font-medium text-ink">
+                {backups?.lastRun ? formatDateTime(backups.lastRun) : 'Aun no se ha ejecutado'}
+              </p>
+            </div>
+            <div className="rounded-lg bg-porcelain-100 p-2.5">
+              <p className="text-[10px] uppercase tracking-wide text-muted">Frecuencia</p>
+              <p className="font-medium text-ink">
+                Cada {backups?.intervalDays ?? 3} dias &middot; se conservan {backups?.retentionDays ?? 30}{' '}
+                dias
+              </p>
+            </div>
+          </div>
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-sage-600">
+            <ShieldCheck size={13} /> Se guarda solo en disco local.
+          </p>
+          <p className="mb-3 text-xs text-muted">
+            {backups?.copiaEnNube
+              ? 'Cada respaldo se copia tambien a tu OneDrive, para que sobreviva si esta computadora falla. Abajo se listan los de ambos lugares.'
+              : 'Los respaldos se guardan solo en esta computadora: no se detecto OneDrive para hacer una copia fuera de ella.'}
+          </p>
+          {backups?.files && backups.files.length > 0 ? (
+            <div className="max-h-64 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
+              {backups.files.slice(0, 10).map((f) => (
+                <div key={f.name} className="px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink">
+                      {f.name.startsWith('db-') ? 'Base de datos' : 'Fotos y facturas'}
+                      {' · '}
+                      {formatDateTime(f.createdAt)}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          f.origen === 'nube' ? 'bg-sage-100 text-sage-700' : 'bg-porcelain-200 text-muted'
+                        }`}
+                      >
+                        {f.origen === 'nube' ? 'OneDrive' : 'Esta PC'}
+                      </span>
+                      <span className="text-muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+                      {f.name.endsWith('.sqlite.gz') && (
+                        <button
+                          onClick={() => setRestoreTarget(f.name)}
+                          className="flex items-center gap-1 rounded-md border border-porcelain-300 px-1.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-brick-400 hover:text-brick-600"
+                        >
+                          <RotateCcw size={11} /> Restaurar
+                        </button>
+                      )}
+                      {f.name.startsWith('db-') && !f.name.endsWith('.sqlite.gz') && (
+                        <span className="text-[10px] italic text-muted">formato anterior</span>
+                      )}
+                    </div>
+                  </div>
+                  {f.contenido && (
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      {f.contenido.productos.toLocaleString('es-DO')} productos ·{' '}
+                      {f.contenido.clientes.toLocaleString('es-DO')} clientes ·{' '}
+                      {f.contenido.ventas.toLocaleString('es-DO')} ventas ·{' '}
+                      {f.contenido.facturas.toLocaleString('es-DO')} facturas
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted">Sin respaldos generados todavia.</p>
+          )}
+        </Seccion>
+
+        <Seccion
+          titulo="Añadir datos de otra PC"
+          icono={UploadCloud}
+          resumen="Traer el inventario de la computadora de otra persona"
+        >
+          <AgregarDatos />
+        </Seccion>
+
+        <Seccion titulo="Cambiar mi clave" icono={KeyRound} resumen="Contraseña de tu propio usuario">
           <CambiarClave />
-        </div>
+        </Seccion>
       </div>
+
+      {restoreTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+          <Card className="w-full max-w-sm p-5">
+            <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-brick-600">
+              <AlertTriangle size={16} /> Restaurar respaldo
+            </h3>
+            <p className="mb-1 text-sm text-ink">
+              Vas a restaurar el punto <span className="font-mono text-xs">{restoreTarget}</span>.
+            </p>
+            <p className="mb-4 text-xs text-muted">
+              Esto reemplaza los datos actuales (ventas, clientes, productos) por los del respaldo. No se
+              puede deshacer. Si quieres conservar lo que hay ahora, genera un respaldo antes de continuar.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setRestoreTarget(null)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="!bg-brick-600 hover:!bg-brick-700"
+                disabled={restoreBackup.isPending}
+                onClick={() => restoreBackup.mutate(restoreTarget)}
+              >
+                {restoreBackup.isPending ? 'Restaurando...' : 'Si, restaurar'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {restoreBackup.isPending && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4">
+          <Card className="w-full max-w-sm p-6 text-center">
+            <Loader2 size={32} className="mx-auto mb-3 animate-spin text-copper-600" />
+            <h3 className="mb-1 font-display text-sm font-bold text-ink">Restaurando respaldo...</h3>
+            <p className="text-xs text-muted">
+              No cierres el programa ni hagas nada mas mientras termina. Esto toma unos segundos.
+            </p>
+          </Card>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Estado de integraciones — va en la esquina del encabezado, no es una configuracion. */
+function IntegracionesChip({ whatsapp }: { whatsapp: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+        whatsapp ? 'bg-sage-100 text-sage-700' : 'bg-brick-100 text-brick-600'
+      }`}
+      title="Agente de WhatsApp Desktop"
+    >
+      {whatsapp ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+      WhatsApp {whatsapp ? 'conectado' : 'sin conectar'}
+    </span>
   );
 }
 
@@ -441,30 +527,8 @@ function Field({
   );
 }
 
-function IntegrationRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 text-sm">
-      <span className="text-ink">{label}</span>
-      {ok ? (
-        <span className="flex items-center gap-1 text-sage-600">
-          <CheckCircle2 size={15} /> Configurado
-        </span>
-      ) : (
-        <span className="flex items-center gap-1 text-brick-500">
-          <XCircle size={15} /> No configurado
-        </span>
-      )}
-    </div>
-  );
-}
-
 /**
  * Catalogo web: datos que solo usa el sitio publico y el boton que lo genera.
- *
- * El sitio se entrega como una carpeta lista para subir en vez de publicarse
- * solo: publicar exige una cuenta de hosting y sus credenciales, y no tiene
- * sentido pedirle eso al programa cuando arrastrar una carpeta al navegador
- * toma diez segundos y no compromete ninguna contraseña.
  */
 function CatalogoWeb({
   telefonoWhatsapp,
@@ -515,13 +579,10 @@ function CatalogoWeb({
   });
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
-        <Globe size={15} /> Catalogo web
-      </h2>
+    <div>
       <p className="mb-3 text-xs text-muted">
-        Genera una pagina publica con tus piezas. Los clientes arman su pedido y te llega por WhatsApp;
-        el cobro lo coordinas tu por transferencia.
+        Genera una pagina publica con tus piezas. Los clientes arman su pedido y te llega por WhatsApp; el
+        cobro lo coordinas tu por transferencia.
       </p>
 
       <div className="space-y-3">
@@ -609,25 +670,20 @@ function CatalogoWeb({
                   <strong>{resultado.excluidasSinFoto} piezas sin foto</strong>
                 )}
                 {resultado.excluidasSinFoto > 0 && resultado.excluidasSinPrecio > 0 && ' y '}
-                {resultado.excluidasSinPrecio > 0 && (
-                  <strong>{resultado.excluidasSinPrecio} sin precio</strong>
-                )}
+                {resultado.excluidasSinPrecio > 0 && <strong>{resultado.excluidasSinPrecio} sin precio</strong>}
                 . Completalas en Productos y vuelve a generar para incluirlas.
               </p>
             )}
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 
 /**
  * Une el inventario de OTRA computadora (ej. la de mama) con el de esta,
  * a partir de un respaldo .sqlite.gz generado alli en Respaldos automaticos.
- *
- * Solo trae productos: nunca toca lo que ya existe en esta base, solo agrega
- * lo que venga de afuera (renumerando el SKU si ya estaba en uso aqui).
  */
 function AgregarDatos() {
   const queryClient = useQueryClient();
@@ -662,14 +718,11 @@ function AgregarDatos() {
   });
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
-        <UploadCloud size={15} /> Añadir datos
-      </h2>
+    <div>
       <p className="mb-3 text-xs text-muted">
-        Si tu y otra persona (ej. mama) trabajan cada quien en su propia computadora, usa esto para
-        traer el inventario de la otra hacia esta. Lo que ya existe aqui no se toca — solo se agrega
-        lo nuevo, y si un codigo se repite se le pone uno nuevo automaticamente.
+        Si tu y otra persona (ej. mama) trabajan cada quien en su propia computadora, usa esto para traer
+        el inventario de la otra hacia esta. Lo que ya existe aqui no se toca — solo se agrega lo nuevo, y
+        si un codigo se repite se le pone uno nuevo automaticamente.
       </p>
 
       <div className="space-y-2">
@@ -717,8 +770,8 @@ function AgregarDatos() {
           </label>
           <p className="mt-1 text-[11px] text-muted">
             El archivo <code>uploads-....tar.gz</code> (misma fecha que el de arriba, tambien esta en{' '}
-            <strong>Respaldos automaticos</strong>) trae las fotos. Sin este, los productos se agregan
-            igual pero sin foto — se completan despues desde Productos.
+            <strong>Respaldos automaticos</strong>) trae las fotos. Sin este, los productos se agregan igual
+            pero sin foto — se completan despues desde Productos.
           </p>
         </div>
 
@@ -753,17 +806,11 @@ function AgregarDatos() {
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
-/**
- * Cambio de la propia clave.
- *
- * Cualquier rol puede usarlo (cada quien la suya). Es lo primero que deberia
- * hacer el dueño en una instalacion nueva: la aplicacion arranca con una
- * clave inicial conocida y publicada en la guia.
- */
+/** Cambio de la propia clave. */
 function CambiarClave() {
   const [actual, setActual] = useState('');
   const [nueva, setNueva] = useState('');
@@ -804,50 +851,45 @@ function CambiarClave() {
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
-        Cambiar mi clave
-      </h2>
-      <form onSubmit={enviar} className="space-y-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Clave actual
-          </label>
-          <input
-            type="password"
-            value={actual}
-            onChange={(e) => setActual(e.target.value)}
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Clave nueva
-          </label>
-          <input
-            type="password"
-            value={nueva}
-            onChange={(e) => setNueva(e.target.value)}
-            placeholder="Minimo 6 caracteres"
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Repetir la clave nueva
-          </label>
-          <input
-            type="password"
-            value={repetir}
-            onChange={(e) => setRepetir(e.target.value)}
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={!actual || !nueva || cambiar.isPending}>
-          {cambiar.isPending ? 'Guardando...' : 'Cambiar clave'}
-        </Button>
-      </form>
-    </Card>
+    <form onSubmit={enviar} className="space-y-3">
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+          Clave actual
+        </label>
+        <input
+          type="password"
+          value={actual}
+          onChange={(e) => setActual(e.target.value)}
+          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+          Clave nueva
+        </label>
+        <input
+          type="password"
+          value={nueva}
+          onChange={(e) => setNueva(e.target.value)}
+          placeholder="Minimo 6 caracteres"
+          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+          Repetir la clave nueva
+        </label>
+        <input
+          type="password"
+          value={repetir}
+          onChange={(e) => setRepetir(e.target.value)}
+          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={!actual || !nueva || cambiar.isPending}>
+        {cambiar.isPending ? 'Guardando...' : 'Cambiar clave'}
+      </Button>
+    </form>
   );
 }
 
