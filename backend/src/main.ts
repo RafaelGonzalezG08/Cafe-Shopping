@@ -46,7 +46,10 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Sirve los archivos generados localmente (fallback cuando no hay S3 configurado)
+  // Sirve las imagenes de facturas y fotos de productos. NO lleva auth (las
+  // carga el <img> del frontend, que no puede mandar el token), y los nombres
+  // de factura son predecibles (FAC-2026-00001.png). Por eso el backend solo
+  // escucha en 127.0.0.1 (ver app.listen abajo): nadie fuera de esta PC llega.
   app.use('/uploads', express.static(UPLOADS_DIR));
 
   app.setGlobalPrefix('api');
@@ -63,7 +66,10 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await app.listen(port);
+  // Solo 127.0.0.1: la app es de una sola PC. Sin esto el backend escucha en
+  // todas las interfaces y cualquier equipo de la misma red podria pedir
+  // /uploads/invoices/FAC-... (datos de clientes) o pegarle a la API.
+  await app.listen(port, '127.0.0.1');
   // eslint-disable-next-line no-console
   console.log(`Cafe Shopping API escuchando en http://localhost:${port}/api`);
   // eslint-disable-next-line no-console
