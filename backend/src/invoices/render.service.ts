@@ -27,6 +27,10 @@ export class RenderService {
 
   /** true cuando corremos como proceso hijo de la app de escritorio. */
   private get tieneRenderizadorPadre(): boolean {
+    // En los tests (jest) process.send TAMBIEN es una funcion (IPC del worker),
+    // pero del otro lado no hay nadie que renderice: quedaria esperando 30s por
+    // cada factura y jest no cerraria. Se trata como "sin renderizador".
+    if (process.env.NODE_ENV === 'test') return false;
     return typeof process.send === 'function';
   }
 
