@@ -16,6 +16,18 @@ const PRODUCT_SIZE = 1200;
 /** Lado maximo del logo del negocio (se muestra a 42px en la factura y 36px en el menu). */
 const LOGO_SIZE = 256;
 
+/**
+ * Limite de tamaño ANTES de comprimir, para el interceptor de subida.
+ *
+ * La foto se reduce y convierte a WebP en el servidor (ver
+ * optimizeProductImage), asi que este numero no es "cuanto pesa la foto
+ * final" - es solo un techo razonable para lo que sube el celular. Los
+ * celulares modernos (48+ MP) sacan fotos de 10-20 MB sin comprimir; 5 MB
+ * rechazaba fotos reales de joyeria antes de que el servidor llegara a
+ * comprimirlas.
+ */
+export const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+
 export interface OptimizedImage {
   buffer: Buffer;
   contentType: string;

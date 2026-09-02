@@ -63,7 +63,12 @@ console.log(`Compilando Cafe Shopping ${versionActual()} -> ${nueva}`);
 
 paso('1/4  Backend');
 fs.rmSync(path.join(BACKEND, 'tsconfig.build.tsbuildinfo'), { force: true });
-correr('npm run build', BACKEND);
+// "build:desktop" empaqueta con webpack en vez de dejar node_modules suelto:
+// ~28,000 archivos individuales copiados al instalar es lo que hacia que la
+// instalacion/actualizacion tardara 10-30 minutos en una PC modesta. Con el
+// backend adentro de un solo dist/main.js, solo quedan sueltos los paquetes
+// con binarios nativos (Prisma, sharp) que no se pueden empaquetar.
+correr('npm run build:desktop', BACKEND);
 if (!fs.existsSync(path.join(BACKEND, 'dist', 'main.js'))) {
   console.error('\nERROR: no se genero backend/dist/main.js. Revisa los errores de arriba.');
   process.exit(1);

@@ -71,9 +71,29 @@ export class SalesService {
   }
 
   async create(dto: CreateSaleDto, userId: string) {
+    // Normaliza referencias "vacias". El carrito guardado en el navegador (o
+    // una version vieja de la app) puede mandar `clientId` o `productId` como
+    // cadena vacia en vez de omitirlos. Prisma trata "" como un id real y
+    // `sale.create` se cae con un choque de llave foranea que el cajero ve
+    // como "hace referencia a un registro que ya no existe". Aqui "" pasa a
+    // undefined = "sin cliente / articulo manual".
+    dto = {
+      ...dto,
+      clientId: dto.clientId || undefined,
+      items: dto.items.map((i) => ({ ...i, productId: i.productId || undefined })),
+    };
+
     if (dto.metodoPago === MetodoPago.CREDITO && !dto.clientId) {
       throw new BadRequestException('Una venta a credito requiere seleccionar un cliente.');
     }
+
+    // El carrito del POS se guarda en el navegador (localStorage). Si mientras
+    // tanto se borro el cliente o alguno de esos productos (limpieza de
+    // duplicados, importacion de inventario, restauracion de un respaldo...),
+    // los IDs guardados quedan apuntando a nada y `sale.create` reventaba con
+    // un choque de llave foranea que llegaba como "error inesperado". Aqui se
+    // revisa ANTES y se dice exactamente que quitar del carrito.
+    await this.validarReferencias(dto);
 
     const tasaImpuesto = dto.tasaImpuesto ?? (await this.getTasaImpuestoDefault());
     const descuentoPct = dto.descuentoPct ?? 0;
@@ -184,6 +204,9 @@ export class SalesService {
    * deuda de cliente), asi que no basta con tener la sesion abierta.
    */
   async update(id: string, dto: UpdateSaleDto, userId: string) {
+    // Mismo saneo que en create(): productId "" -> undefined (articulo manual).
+    dto = { ...dto, items: dto.items.map((i) => ({ ...i, productId: i.productId || undefined })) };
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado.');
     const passwordOk = await bcrypt.compare(dto.adminPassword, user.passwordHash);
@@ -214,6 +237,10 @@ export class SalesService {
         );
       }
     }
+
+    // Igual que al crear: si algun producto de las lineas corregidas ya no
+    // existe, decirlo claro en vez de reventar con un error de base de datos.
+    await this.validarReferencias({ items: dto.items });
 
     const tasaImpuesto = existing.subtotal.gt(0) ? Number(existing.impuestos) / Number(existing.subtotal) : await this.getTasaImpuestoDefault();
     // El descuento de la factura original se mantiene: corregir un item no
@@ -446,6 +473,46 @@ export class SalesService {
     }
   }
 
+  /**
+   * Verifica que el cliente y los productos referidos por la venta todavia
+   * existan. Lanza un 400 con un mensaje que dice que quitar, en vez de dejar
+   * que la creacion se caiga con un error de base de datos.
+   */
+  private async validarReferencias(dto: { clientId?: string; items: { productId?: string; descripcion: string }[] }) {
+    if (dto.clientId) {
+      const cliente = await this.prisma.client.findUnique({
+        where: { id: dto.clientId },
+        select: { id: true },
+      });
+      if (!cliente) {
+        throw new BadRequestException(
+          'El cliente seleccionado ya no existe (se pudo haber borrado). Busca al cliente otra vez o quitalo de la venta.',
+        );
+      }
+    }
+
+    const productIds = [
+      ...new Set(dto.items.map((i) => i.productId).filter((id): id is string => Boolean(id))),
+    ];
+    if (productIds.length === 0) return;
+
+    const existentes = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true },
+    });
+    const existentesSet = new Set(existentes.map((p) => p.id));
+    const faltantes = dto.items
+      .filter((i) => i.productId && !existentesSet.has(i.productId))
+      .map((i) => i.descripcion);
+
+    if (faltantes.length > 0) {
+      const lista = [...new Set(faltantes)].map((n) => `"${n}"`).join(', ');
+      throw new BadRequestException(
+        `Ya no estan en el inventario: ${lista}. Quitalos del carrito y, si siguen a la venta, vuelve a agregarlos o ponlos como articulo manual.`,
+      );
+    }
+  }
+
   /** Trae el costo actual del catalogo para los items que vienen de un producto (ignora items manuales). */
   private async getCostByProductId(items: { productId?: string }[]): Promise<Map<string, number>> {
     const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))];
@@ -484,14 +551,32 @@ export class SalesService {
     const year = new Date().getFullYear();
     const prefix = `FAC-${year}-`;
 
-    const last = await tx.invoice.findFirst({
+    // Se traen TODOS los numeros del año y se calcula el maximo A MANO (no con
+    // `orderBy: numero desc`). Motivo: si el negocio trae datos de la version
+    // vieja o de un respaldo, puede haber numeros con distinto relleno de ceros
+    // ("FAC-2026-7" y "FAC-2026-00012" a la vez). El orden alfabetico pone
+    // "FAC-2026-7" por encima de "FAC-2026-00012", asi que el "+1" salia 8 —
+    // un numero ya usado — y la venta entera se caia con un choque del indice
+    // unico ("Ocurrio un error inesperado en el servidor"). Comparando como
+    // numeros eso no pasa. Ademas se guarda el conjunto de numeros ya usados
+    // para saltar cualquier hueco ocupado.
+    const existentes = await tx.invoice.findMany({
       where: { numero: { startsWith: prefix } },
-      orderBy: { numero: 'desc' },
       select: { numero: true },
     });
 
-    const lastNumber = last ? parseInt(last.numero.slice(prefix.length), 10) : 0;
-    const next = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-    return `${prefix}${String(next).padStart(5, '0')}`;
+    const usados = new Set<number>();
+    let max = 0;
+    for (const { numero } of existentes) {
+      const n = parseInt(numero.slice(prefix.length), 10);
+      if (Number.isFinite(n)) {
+        usados.add(n);
+        if (n > max) max = n;
+      }
+    }
+
+    let siguiente = max + 1;
+    while (usados.has(siguiente)) siguiente += 1;
+    return `${prefix}${String(siguiente).padStart(5, '0')}`;
   }
 }

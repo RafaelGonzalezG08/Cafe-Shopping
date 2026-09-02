@@ -162,6 +162,7 @@ export class CatalogoService {
         month: 'long',
         year: 'numeric',
       }),
+      relevoUrl: perfil.relevoPedidosUrl?.trim() || undefined,
     };
 
     await fs.writeFile(join(carpeta, 'index.html'), generarHtml(datos), 'utf8');

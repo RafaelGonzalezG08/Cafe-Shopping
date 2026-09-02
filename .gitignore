@@ -2,13 +2,18 @@
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # Variables de entorno y credenciales
 .env
 *.env
 
+# Config local del editor / de Claude Code (rutas propias de cada maquina)
+.claude/settings.local.json
+
 # Archivos pesados y respaldos
 /backups/
+backend/backups/
 *.sql
 *.sql.gz
 
@@ -27,8 +32,15 @@ backend/prisma/*.db
 backend/prisma/*.db-journal
 backend/prisma/*.db.anterior
 
-# JS compilado que se cuela en src/ al compilar el seed
+# El seed compila a prisma/dist/ (aislado, ver prisma/tsconfig.seed.json). Esta
+# regla queda como red de seguridad por si algun build vuelve a colar un .js
+# suelto dentro de src/.
 backend/src/**/*.js
 
 # Cliente de Prisma generado solo para leer Postgres durante la migracion
 backend/prisma/cliente-postgres/
+
+# El .exe del agente de WhatsApp SI se versiona (lo necesita el instalador, ver
+# desktop/package.json > extraResources). El .bak que deja el compilador de
+# AutoHotkey, no.
+send_whatsapp_agent.exe.bak

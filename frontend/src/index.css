@@ -7,8 +7,22 @@ html, body, #root {
 }
 
 body {
-  @apply bg-porcelain-100 text-ink antialiased;
+  @apply bg-porcelain-100 text-ink antialiased select-none;
   font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/*
+ * Sin esto, arrastrar el mouse por error (un clic que se corre un poco)
+ * seleccionaba toda la pantalla como si fuera una pagina web cualquiera -
+ * menus, botones, titulos - y se veia poco profesional para una app de
+ * escritorio. Los campos donde SI se escribe texto quedan seleccionables
+ * (su comportamiento normal), y los nombres de producto tambien, por si se
+ * quieren copiar.
+ */
+input,
+textarea,
+select {
+  @apply select-text;
 }
 
 /* Motivo de recibo: borde perforado usado en previews de factura dentro del POS */

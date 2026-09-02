@@ -1,44 +1,34 @@
 // main.js — proceso principal de Electron.
 //
-// Arranque de la aplicacion, sin Docker:
+// Arranque de la aplicacion (nativo, sin Docker):
 //   1) Levanta el backend como proceso hijo (ver nativo.js).
 //   2) Espera a que la base de datos este lista.
 //   3) Sirve la interfaz compilada desde disco.
 //   4) Lanza el agente de WhatsApp (send_whatsapp_agent.exe o .ahk).
 //   5) Muestra la app en una ventana nativa.
-//
-// Quedan mas abajo algunas funciones de la epoca de Docker (ensureDockerRunning,
-// dockerComposeUp...) que ya nadie llama; se conservan solo como referencia
-// mientras se termina de validar la version nativa.
+//   6) Copia los respaldos a OneDrive y busca actualizaciones, en segundo plano.
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const nativo = require('./nativo');
 const { spawn, execFile } = require('child_process');
-const net = require('net');
 const path = require('path');
 const fs = require('fs');
 
-// 3 minutos y no 90s: en un arranque en frio (Docker Desktop apagado, WSL2
-// levantando la maquina virtual) se han medido esperas de mas de 90s en esta
-// misma PC. Con el limite anterior la app se rendia con un error justo
-// cuando Docker estaba a punto de quedar listo.
-const MAX_WAIT_DOCKER_MS = 180000;
-const MAX_WAIT_FRONTEND_MS = 60000;
-const POLL_MS = 2000;
+// Sin aceleracion por GPU: en una PC con tarjeta grafica vieja/integrada o
+// controladores en mal estado, Chromium (el motor de Electron) puede dejar
+// el proceso de GPU trabado o crashearlo, lo que se ve como que la ventana
+// "se reinicia sola" bajo carga - justo lo que pasaba al enviar una factura
+// por WhatsApp en una PC menos potente. Ademas el proceso de GPU tiene un
+// costo fijo de memoria (~100-150 MB) que asi se ahorra por completo. El
+// dibujo por software es un poco menos fluido, pero esta app es sobre todo
+// texto y formularios, no video ni animaciones pesadas, asi que no se nota.
+// Tiene que llamarse ANTES de app.whenReady()/cualquier BrowserWindow.
+app.disableHardwareAcceleration();
 
-// Nombre fijo del proyecto de Docker Compose. IMPORTANTE: tiene que ser el
-// mismo que usa instalar.ps1/instalar.bat (que toma el nombre de la carpeta
-// del proyecto, normalmente "cafe-shopping"). La app empaquetada corre desde
-// una carpeta interna llamada "app-project", asi que sin esto Docker Compose
-// pensaria que es un proyecto distinto y crearia un segundo set de
-// contenedores/base de datos en paralelo (con el mismo puerto -> choque) en
-// vez de reusar el que ya esta corriendo.
-const COMPOSE_PROJECT_NAME = 'cafe-shopping';
-
-// En produccion (app empaquetada), el proyecto completo (docker-compose.yml,
-// backend/, frontend/, agente de WhatsApp) vive en resources/app-project.
-// En desarrollo ("npm start" dentro de desktop/), es la carpeta padre.
+// En produccion (app empaquetada), el proyecto completo (backend/, frontend/,
+// agente de WhatsApp) vive en resources/app-project. En desarrollo ("npm start"
+// dentro de desktop/), es la carpeta padre.
 const PROJECT_DIR = app.isPackaged
   ? path.join(process.resourcesPath, 'app-project')
   : path.join(__dirname, '..');
@@ -102,80 +92,17 @@ function setSplashStatus(text) {
   splashWindow.webContents.executeJavaScript(`window.setStatus && window.setStatus(${safe})`).catch(() => {});
 }
 
-function dockerListo() {
-  return new Promise((resolve) => {
-    execFile('docker', ['info'], { windowsHide: true, timeout: 8000 }, (error) => {
-      resolve(!error);
-    });
-  });
-}
-
-function puertoAbierto(port) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    const done = (ok) => {
-      socket.destroy();
-      resolve(ok);
-    };
-    socket.setTimeout(1500);
-    socket.once('connect', () => done(true));
-    socket.once('timeout', () => done(false));
-    socket.once('error', () => done(false));
-    socket.connect(port, 'localhost');
-  });
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function dockerDesktopExePath() {
-  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
-  return path.join(programFiles, 'Docker', 'Docker', 'Docker Desktop.exe');
-}
-
-async function ensureDockerRunning() {
-  if (await dockerListo()) return;
-
-  const exePath = dockerDesktopExePath();
-  if (!fs.existsSync(exePath)) {
-    throw new Error(
-      `No se encontro Docker Desktop en:\n${exePath}\n\nAbrelo manualmente y vuelve a iniciar Cafe Shopping.`,
-    );
-  }
-
-  setSplashStatus('Abriendo Docker Desktop...');
-  spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref();
-
-  let elapsed = 0;
-  while (elapsed < MAX_WAIT_DOCKER_MS) {
-    setSplashStatus(`Esperando a que Docker Desktop inicie... (${Math.round(elapsed / 1000)}s)`);
-    if (await dockerListo()) return;
-    await sleep(POLL_MS);
-    elapsed += POLL_MS;
-  }
-
-  throw new Error(
-    'Docker Desktop no respondio a tiempo.\nAbrelo manualmente, espera a que diga "Docker Desktop is running" y vuelve a intentar.',
-  );
-}
-
 // ---------------------------------------------------------------------
 // Copia de respaldos a OneDrive
 //
-// El backend genera los respaldos dentro del contenedor, en /app/backups,
-// que docker-compose monta desde la carpeta "backups" del proyecto. Esa
-// carpeta vive en el MISMO disco que todo lo demas: si el disco falla, lo
-// roban o entra un ransomware, se pierden las ventas y los respaldos juntos.
+// El backend genera los respaldos dentro de la carpeta de datos del usuario
+// (AppData). Esa carpeta vive en el MISMO disco que todo lo demas: si el disco
+// falla, lo roban o entra un ransomware, se pierden las ventas y los respaldos
+// juntos. Por eso, ademas, se copian a OneDrive desde aqui.
 //
-// Por que copiar y no montar OneDrive directo en Docker: se probo y NO
-// funciona. La carpeta de OneDrive es un punto de reanalisis (ReparsePoint)
-// por "Archivos a petición", y Docker con WSL2 no puede montar a traves de
-// ese filtro de nube — el contenedor se queda colgado en estado "Created"
-// sin arrancar nunca. Copiando desde el proceso de Windows (que si lee y
-// escribe esa carpeta con normalidad) se evita el problema por completo, y
-// ademas los respaldos siguen funcionando aunque OneDrive este pausado o
-// desinstalado.
+// Se COPIA (no se le pide a OneDrive que sincronice esa carpeta directamente)
+// para no depender de como este configurado OneDrive: la copia funciona igual
+// aunque OneDrive este pausado o desinstalado.
 // ---------------------------------------------------------------------
 
 /** Carpeta de OneDrive del usuario que tiene la sesion abierta, o null. */
@@ -257,30 +184,6 @@ function syncBackupsToOneDrive() {
 
   if (copiados > 0) console.log(`Respaldos copiados a OneDrive (${destino}): ${copiados}`);
   return { copiados, destino };
-}
-
-function dockerComposeUp() {
-  return new Promise((resolve, reject) => {
-    // "--build": sin esto, si el auto-updater reemplazo los archivos del
-    // proyecto (backend/frontend nuevos) pero las imagenes de Docker locales
-    // quedaron viejas, "up -d" arrancaria igual los contenedores VIEJOS —
-    // la app se actualizaria de nombre pero seguiria corriendo el codigo
-    // anterior por dentro. Con --build, Docker reconstruye solo lo que
-    // cambio (usa cache de capas, asi que en la mayoria de los arranques
-    // sin cambios es casi instantaneo de todos modos).
-    execFile(
-      'docker',
-      ['compose', '-p', COMPOSE_PROJECT_NAME, 'up', '-d', '--build'],
-      { cwd: PROJECT_DIR, windowsHide: true, timeout: 10 * 60 * 1000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(`docker compose up -d --build fallo:\n${stderr || error.message}`));
-        } else {
-          resolve();
-        }
-      },
-    );
-  });
 }
 
 function launchWhatsappAgent() {

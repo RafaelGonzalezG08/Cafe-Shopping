@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO } from '../common/enums';
+import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO, MetodoPago, METODOS_PAGO } from '../common/enums';
+
+// Metodos de pago que dejan el dinero en la caja al momento de la venta (todos
+// menos el credito, que se cobra despues con abonos). Se enumeran en positivo
+// en vez de usar `{ not: CREDITO }` por lo mismo que ESTADOS_DEUDA_CON_SALDO:
+// Prisma no puede partir en lotes una consulta con negacion en SQLite.
+const METODOS_CONTADO = METODOS_PAGO.filter((m) => m !== MetodoPago.CREDITO);
 import { PrismaService } from '../prisma/prisma.service';
 import { localDateKey, parseFromDate, parseToDate } from '../common/date-range';
 
@@ -179,48 +185,82 @@ export class ReportsService {
     };
   }
 
+  /**
+   * Dos maneras de mirar el mismo periodo:
+   *
+   *  - `saldoEnCaja`  = dinero que de verdad entro (ventas de contado + abonos
+   *    cobrados en el periodo) menos los gastos. Una venta a credito NO cuenta
+   *    hasta que el cliente paga. Es lo que el negocio tiene en la mano.
+   *
+   *  - `balanceTotal` = todas las ventas del periodo (contado y credito, aunque
+   *    el credito no se haya cobrado) menos los gastos. Es la foto contable:
+   *    cuanto se vendio, no cuanto se cobro.
+   *
+   * `ingresos` / `egresos` / `neto` se mantienen con el mismo significado de
+   * antes para no romper nada que ya los consuma; `neto` === `balanceTotal`.
+   */
   async cashflow(from?: string, to?: string) {
     const { fromDate, toDate } = this.defaultRange(from, to);
-    const [ventas, gastos] = await Promise.all([
+    const rango = { gte: fromDate, lte: toDate };
+    const [ventas, contado, abonos, gastos] = await Promise.all([
+      this.prisma.sale.aggregate({ where: { fecha: rango }, _sum: { total: true } }),
       this.prisma.sale.aggregate({
-        where: { fecha: { gte: fromDate, lte: toDate } },
+        where: { fecha: rango, metodoPago: { in: [...METODOS_CONTADO] } },
         _sum: { total: true },
       }),
-      this.prisma.expense.aggregate({
-        where: { fecha: { gte: fromDate, lte: toDate } },
-        _sum: { monto: true },
-      }),
+      this.prisma.payment.aggregate({ where: { fecha: rango }, _sum: { amount: true } }),
+      this.prisma.expense.aggregate({ where: { fecha: rango }, _sum: { monto: true } }),
     ]);
 
     const ingresos = Number(ventas._sum.total ?? 0);
     const egresos = Number(gastos._sum.monto ?? 0);
-    return { ingresos: round(ingresos), egresos: round(egresos), neto: round(ingresos - egresos) };
+    const cobrado = Number(contado._sum.total ?? 0) + Number(abonos._sum.amount ?? 0);
+    return {
+      ingresos: round(ingresos),
+      egresos: round(egresos),
+      neto: round(ingresos - egresos),
+      cobrado: round(cobrado),
+      saldoEnCaja: round(cobrado - egresos),
+      balanceTotal: round(ingresos - egresos),
+    };
   }
 
   /** Resumen usado por el Dashboard: ventas de hoy, deudas totales y gastos recientes. */
   async dashboardSummary() {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const mes = { gte: inicioMes };
 
-    const [ventasHoy, deudas, gastosRecientes, gastosMes] = await Promise.all([
-      this.prisma.sale.aggregate({ where: { fecha: { gte: startOfDay } }, _sum: { total: true }, _count: true }),
-      this.prisma.clientDebt.aggregate({
-        where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
-        _sum: { amountTotal: true, amountPaid: true },
-      }),
-      this.prisma.expense.findMany({ orderBy: { fecha: 'desc' }, take: 5 }),
-      this.prisma.expense.aggregate({
-        where: { fecha: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
-        _sum: { monto: true },
-      }),
-    ]);
+    const [ventasHoy, deudas, gastosRecientes, gastosMes, ventasMes, contadoMes, abonosMes] =
+      await Promise.all([
+        this.prisma.sale.aggregate({ where: { fecha: { gte: startOfDay } }, _sum: { total: true }, _count: true }),
+        this.prisma.clientDebt.aggregate({
+          where: { status: { in: [...ESTADOS_DEUDA_CON_SALDO] } },
+          _sum: { amountTotal: true, amountPaid: true },
+        }),
+        this.prisma.expense.findMany({ orderBy: { fecha: 'desc' }, take: 5 }),
+        this.prisma.expense.aggregate({ where: { fecha: mes }, _sum: { monto: true } }),
+        this.prisma.sale.aggregate({ where: { fecha: mes }, _sum: { total: true } }),
+        this.prisma.sale.aggregate({
+          where: { fecha: mes, metodoPago: { in: [...METODOS_CONTADO] } },
+          _sum: { total: true },
+        }),
+        this.prisma.payment.aggregate({ where: { fecha: mes }, _sum: { amount: true } }),
+      ]);
 
     const deudaTotal = Number(deudas._sum.amountTotal ?? 0) - Number(deudas._sum.amountPaid ?? 0);
+    const gastosDelMes = Number(gastosMes._sum.monto ?? 0);
+    const cobradoMes = Number(contadoMes._sum.total ?? 0) + Number(abonosMes._sum.amount ?? 0);
 
     return {
       ventasHoy: { total: round(Number(ventasHoy._sum.total ?? 0)), cantidad: ventasHoy._count },
       deudaTotalPendiente: round(deudaTotal),
-      gastosDelMes: round(Number(gastosMes._sum.monto ?? 0)),
+      gastosDelMes: round(gastosDelMes),
+      // Mismos dos numeros que en Reportes, pero fijos al mes en curso (el
+      // Dashboard no tiene filtro de fechas). Ver cashflow() para que es cada uno.
+      saldoEnCajaMes: round(cobradoMes - gastosDelMes),
+      balanceTotalMes: round(Number(ventasMes._sum.total ?? 0) - gastosDelMes),
       gastosRecientes,
     };
   }

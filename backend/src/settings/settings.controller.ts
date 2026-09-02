@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import { MAX_UPLOAD_SIZE_BYTES } from '../common/image.util';
 
 @ApiTags('settings')
 @ApiBearerAuth()
@@ -31,7 +32,7 @@ export class SettingsController {
   @Post('business-profile/logo')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }))
   uploadLogo(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthenticatedUser) {
     if (!file) throw new BadRequestException('No se recibio ningun archivo.');
     if (!file.mimetype.startsWith('image/')) {

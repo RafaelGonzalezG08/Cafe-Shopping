@@ -30,6 +30,12 @@ export interface DatosCatalogo {
   logo: string | null;
   productos: ProductoCatalogo[];
   generado: string;
+  /**
+   * Direccion del relevo en la nube (ver /cloud-relay), si el negocio lo
+   * configuro. Si falta, el pedido sigue funcionando igual - solo se manda
+   * por WhatsApp y hay que pegarlo a mano en la app, como siempre.
+   */
+  relevoUrl?: string;
 }
 
 /** Escapa texto que entra al HTML, para que un nombre con < o & no rompa la pagina. */
@@ -79,6 +85,7 @@ export function generarHtml(datos: DatosCatalogo): string {
 
   .barra{position:sticky;top:0;z-index:20;background:var(--papel);
     border-bottom:1px solid var(--linea);padding:.75rem 1.25rem;
+    box-shadow:0 2px 8px rgba(36,16,25,.05);
     display:flex;gap:.6rem;align-items:center}
   .barra input{flex:1;min-width:0;padding:.6rem .9rem;border:1px solid var(--linea);
     border-radius:10px;font-size:1rem;outline:none;background:var(--fondo)}
@@ -119,10 +126,26 @@ export function generarHtml(datos: DatosCatalogo): string {
   .rejilla{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 
   .pieza{background:var(--papel);border:1px solid var(--linea);border-radius:14px;
-    overflow:hidden;display:flex;flex-direction:column}
+    overflow:hidden;display:flex;flex-direction:column;
+    box-shadow:0 1px 2px rgba(36,16,25,.04);
+    transition:transform .18s ease,box-shadow .18s ease}
+  .pieza:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(36,16,25,.12)}
   .pieza .foto{position:relative;aspect-ratio:1;background:#F3E0E1;display:flex;
-    align-items:center;justify-content:center;color:var(--suave);font-size:.8rem}
-  .pieza .foto img{width:100%;height:100%;object-fit:cover}
+    align-items:center;justify-content:center;color:var(--suave);font-size:.8rem;
+    overflow:hidden}
+  .pieza .foto img{width:100%;height:100%;object-fit:cover;transition:transform .3s ease}
+  .pieza .foto.clicable{cursor:zoom-in}
+  .pieza .foto.clicable:hover img{transform:scale(1.06)}
+  /* Lupa que aparece al pasar el mouse, para que se note que la foto se
+     puede ampliar antes de hacerle clic (en el celular no aparece, ahi ya
+     es sabido que las fotos se tocan). */
+  .pieza .foto .lupa{position:absolute;right:.5rem;bottom:.5rem;width:28px;height:28px;
+    border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;
+    justify-content:center;opacity:0;transition:opacity .18s ease;color:var(--acento-osc)}
+  .pieza .foto.clicable:hover .lupa{opacity:1}
+  .pieza .foto .sinfoto{display:flex;flex-direction:column;align-items:center;gap:.35rem;
+    color:var(--suave)}
+  .pieza .foto .sinfoto span{font-size:.68rem}
   /* Insignia de material: misma idea que en Productos dentro de la app, para
      que un vistazo baste sin tener que leer el nombre completo de la pieza. */
   .pieza .material{position:absolute;top:.45rem;left:.45rem;padding:.2rem .55rem;
@@ -133,9 +156,27 @@ export function generarHtml(datos: DatosCatalogo): string {
   .pieza .nombre{font-size:.85rem;font-weight:600;line-height:1.3}
   .pieza .precio{font-size:1.05rem;font-weight:800;color:var(--acento-osc);margin-top:auto}
   .pieza button{margin-top:.5rem;width:100%;padding:.5rem;border:0;border-radius:9px;
-    background:var(--acento);color:#fff;font-weight:700;font-size:.8rem;cursor:pointer}
+    background:var(--acento);color:#fff;font-weight:700;font-size:.8rem;cursor:pointer;
+    transition:background .15s ease}
   .pieza button:hover{background:var(--acento-osc)}
   .pieza button.puesto{background:#0E8A5F}
+
+  /* Visor de foto ampliada: se abre al hacer clic en la imagen de una pieza. */
+  .visor{position:fixed;inset:0;z-index:50;background:rgba(20,8,12,.82);
+    display:none;align-items:center;justify-content:center;padding:1.5rem;
+    opacity:0;transition:opacity .2s ease}
+  .visor.abierto{display:flex}
+  .visor.visible{opacity:1}
+  .visor .marco{position:relative;max-width:min(600px,92vw);max-height:88vh;
+    display:flex;flex-direction:column;align-items:center;gap:.75rem}
+  .visor img{max-width:100%;max-height:72vh;border-radius:14px;object-fit:contain;
+    background:var(--papel);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  .visor .info{color:#fff;text-align:center}
+  .visor .info .nombre{font-weight:700;font-size:1rem}
+  .visor .info .precio{color:#F7DEE1;font-weight:800;margin-top:.15rem}
+  .visor .cerrar{position:absolute;top:-.75rem;right:-.75rem;width:36px;height:36px;
+    border-radius:50%;border:0;background:#fff;color:var(--tinta);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.25)}
 
   .vacio{text-align:center;color:var(--suave);padding:3rem 1rem}
   .vacio button{margin-top:.75rem;padding:.5rem 1rem;border:1px solid var(--linea);
@@ -225,6 +266,17 @@ export function generarHtml(datos: DatosCatalogo): string {
   </div>
 </div>
 
+<div class="visor" id="visor">
+  <div class="marco">
+    <button class="cerrar" id="cerrarVisor" type="button" aria-label="Cerrar">&times;</button>
+    <img id="visorImg" src="" alt="">
+    <div class="info">
+      <div class="nombre" id="visorNombre"></div>
+      <div class="precio" id="visorPrecio"></div>
+    </div>
+  </div>
+</div>
+
 <footer>
   <p>${esc(datos.negocio)}${datos.direccion ? ' &middot; ' + esc(datos.direccion) : ''}</p>
   <p style="margin-top:.75rem;color:var(--suave);font-size:.75rem">Precios en pesos dominicanos. Actualizado el ${esc(datos.generado)}.</p>
@@ -275,11 +327,16 @@ function pintar() {
       ? lista.length + (lista.length === 1 ? ' pieza' : ' piezas')
       : 'Mostrando ' + lista.length + ' de ' + DATOS.productos.length + ' piezas';
 
+  const iconoLupa = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+  const iconoGema = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 12L2 9z"></path><path d="M2 9h20M8 3l4 18M16 3l-4 18"></path></svg>';
+
   rejilla.innerHTML = lista.map(p => {
     const puesto = carrito.has(p.sku);
     return \`<article class="pieza">
-      <div class="foto">
-        \${p.imagen ? \`<img src="\${p.imagen}" alt="\${p.nombre}" loading="lazy">\` : 'Sin foto'}
+      <div class="foto\${p.imagen ? ' clicable' : ''}" \${p.imagen ? \`data-visor="\${p.sku}"\` : ''}>
+        \${p.imagen
+          ? \`<img src="\${p.imagen}" alt="\${p.nombre}" loading="lazy"><span class="lupa">\${iconoLupa}</span>\`
+          : \`<span class="sinfoto">\${iconoGema}<span>Sin foto</span></span>\`}
         <span class="material">\${p.material}</span>
       </div>
       <div class="cuerpo">
@@ -296,7 +353,38 @@ function pintar() {
   rejilla.querySelectorAll('button[data-sku]').forEach(b => {
     b.onclick = () => { agregar(b.dataset.sku); };
   });
+  rejilla.querySelectorAll('[data-visor]').forEach(el => {
+    el.onclick = () => abrirVisor(el.dataset.visor);
+  });
 }
+
+// ---- Visor de foto ampliada ----
+
+function abrirVisor(sku) {
+  const p = DATOS.productos.find(x => x.sku === sku);
+  if (!p || !p.imagen) return;
+  document.getElementById('visorImg').src = p.imagen;
+  document.getElementById('visorImg').alt = p.nombre;
+  document.getElementById('visorNombre').textContent = p.nombre;
+  document.getElementById('visorPrecio').textContent = 'RD$ ' + dinero(p.precio);
+  const visor = document.getElementById('visor');
+  visor.classList.add('abierto');
+  requestAnimationFrame(() => visor.classList.add('visible'));
+}
+
+function cerrarVisor() {
+  const visor = document.getElementById('visor');
+  visor.classList.remove('visible');
+  setTimeout(() => visor.classList.remove('abierto'), 200);
+}
+
+document.getElementById('cerrarVisor').onclick = cerrarVisor;
+document.getElementById('visor').onclick = (e) => {
+  if (e.target.id === 'visor') cerrarVisor();
+};
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') cerrarVisor();
+});
 
 function agregar(sku) {
   carrito.set(sku, (carrito.get(sku) || 0) + 1);
@@ -413,8 +501,8 @@ function generarCodigoPedido() {
 }
 
 document.getElementById('enviar').onclick = () => {
-  // El pedido se manda como mensaje de WhatsApp: no hay servidor que lo
-  // reciba, y asi el negocio lo atiende por el canal que ya usa.
+  // El pedido se manda como mensaje de WhatsApp: ese sigue siendo el canal
+  // real con el cliente, pase lo que pase con el relevo de abajo.
   const codigo = generarCodigoPedido();
   const lineas = [];
   let total = 0;
@@ -427,7 +515,22 @@ document.getElementById('enviar').onclick = () => {
   const texto = 'Hola! Quiero hacer este pedido *#' + codigo + '*:\\n\\n' + lineas.join('\\n') +
     '\\n\\nTotal: RD$ ' + dinero(total);
   const tel = DATOS.telefonoWhatsapp.replace(/[^0-9]/g, '');
+  // window.open() va PRIMERO y sin esperar nada: si se pone despues de un
+  // await, el navegador lo trata como ventana emergente no pedida por el
+  // usuario y la bloquea.
   window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(texto), '_blank');
+
+  // Avisa al relevo en la nube (si esta configurado) para que el pedido
+  // caiga solo en la app del negocio, ademas de llegar por WhatsApp. Si esto
+  // falla (sin relevo, sin internet, lo que sea) no pasa nada: el mensaje de
+  // WhatsApp ya salio y es quien de verdad importa.
+  if (DATOS.relevoUrl) {
+    fetch(DATOS.relevoUrl.replace(/\\/$/, '') + '/pedidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo, texto }),
+    }).catch(() => {});
+  }
 };
 
 document.getElementById('buscar').oninput = (e) => {

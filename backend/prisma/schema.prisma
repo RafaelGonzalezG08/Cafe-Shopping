@@ -3,6 +3,11 @@
 
 generator client {
   provider      = "prisma-client-js"
+  // Solo Windows: la app de escritorio nunca corre en otro sistema, y sin
+  // esto Prisma tambien genera el motor de Linux (queda pegado de cuando
+  // este proyecto corria en Docker), que pesa ~35 MB de mas en el instalador
+  // sin que nadie lo use.
+  binaryTargets = ["native"]
 }
 
 datasource db {
@@ -295,6 +300,13 @@ model BusinessProfile {
   // Como pagar por transferencia: banco, tipo de cuenta, numero y a nombre de
   // quien. Es texto libre porque cada negocio lo escribe a su manera.
   datosPago        String? @map("datos_pago")
+
+  // Relevo en la nube (opcional) para que los pedidos del catalogo caigan
+  // solos en Pedidos web, sin pegar el mensaje a mano. Ver /cloud-relay en
+  // la raiz del repo. Sin esto, el catalogo sigue funcionando igual, solo
+  // por WhatsApp.
+  relevoPedidosUrl   String? @map("relevo_pedidos_url")
+  relevoPedidosClave String? @map("relevo_pedidos_clave")
 
   updatedAt    DateTime @updatedAt @map("updated_at")
 

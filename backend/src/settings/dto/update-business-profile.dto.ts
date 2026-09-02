@@ -42,4 +42,14 @@ export class UpdateBusinessProfileDto {
   @IsOptional()
   @IsString()
   datosPago?: string;
+
+  @ApiProperty({ required: false, description: 'URL del relevo en la nube para automatizar Pedidos web.' })
+  @IsOptional()
+  @IsString()
+  relevoPedidosUrl?: string;
+
+  @ApiProperty({ required: false, description: 'Clave secreta del relevo (la misma puesta en Cloudflare).' })
+  @IsOptional()
+  @IsString()
+  relevoPedidosClave?: string;
 }

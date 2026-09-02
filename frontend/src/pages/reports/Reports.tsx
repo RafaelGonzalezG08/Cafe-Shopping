@@ -25,6 +25,10 @@ interface Cashflow {
   ingresos: number;
   egresos: number;
   neto: number;
+  /** Contado + abonos cobrados - gastos. Dinero que de verdad entro a la caja. */
+  saldoEnCaja: number;
+  /** Todas las ventas (contado y credito) - gastos. Foto contable del periodo. */
+  balanceTotal: number;
 }
 
 export default function Reports() {
@@ -108,24 +112,42 @@ export default function Reports() {
             ]}
       </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-sage-600">
             RD$ {formatMoney(cashflow?.ingresos ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Todas las ventas del periodo</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Egresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-brick-500">
             RD$ {formatMoney(cashflow?.egresos ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Gastos del periodo</p>
+        </Card>
+        <Card className="p-4 ring-1 ring-copper-400">
+          <p className="text-xs font-medium uppercase text-copper-600">Saldo en caja</p>
+          <p
+            className={`mt-1 font-display text-xl font-bold tabular-nums ${
+              (cashflow?.saldoEnCaja ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
+            }`}
+          >
+            RD$ {formatMoney(cashflow?.saldoEnCaja ?? 0)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted">Contado + abonos cobrados &minus; gastos</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-medium uppercase text-muted">Flujo neto</p>
-          <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">
-            RD$ {formatMoney(cashflow?.neto ?? 0)}
+          <p className="text-xs font-medium uppercase text-muted">Balance total</p>
+          <p
+            className={`mt-1 font-display text-xl font-bold tabular-nums ${
+              (cashflow?.balanceTotal ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
+            }`}
+          >
+            RD$ {formatMoney(cashflow?.balanceTotal ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Todas las ventas &minus; gastos</p>
         </Card>
       </div>
 

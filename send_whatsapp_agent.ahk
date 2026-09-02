@@ -43,7 +43,9 @@ FileEncoding, UTF-8
 ; ===== CONFIGURACION =====
 LOCAL_DIR         := "C:\temp\whatsapp_send"
 POLL_INTERVAL_MS  := 3000   ; cada cuanto revisa la cola
-CMD_TIMEOUT_MS    := 15000  ; maximo que se espera un comando de Windows (PowerShell)
+; x4 (era 15000): en una PC mas lenta, el comando de PowerShell que copia la
+; imagen al portapapeles puede tardar bastante mas sin que nada este fallando.
+CMD_TIMEOUT_MS    := 60000  ; maximo que se espera un comando de Windows (PowerShell)
 LOG_FILE          := LOCAL_DIR "\agent.log"
 
 ; La app guarda sus datos en AppData\Roaming\<nombre de la app>\datos
@@ -208,23 +210,27 @@ ProcessJob(jobName) {
         PushResult(jobId, result)
         return result
     }
-    Sleep, 400
+    ; Intervalos x4 desde aqui hasta el final del envio (eran 400/10/10/5/
+    ; 1000/1000/1000/3000/600/1200): en una PC menos potente que se traba
+    ; procesando todo, ir tan rapido hacia el siguiente paso sin darle tiempo
+    ; a WhatsApp de ponerse al dia terminaba colgando hasta WhatsApp mismo.
+    Sleep, 1600
 
     ; --- 5) Asegurar que WhatsApp Desktop este activo ---
     LogLine("  [4/5] Activando WhatsApp Desktop...")
     IfWinNotExist, ahk_exe WhatsApp.Root.exe
     {
         Run, whatsapp:
-        WinWait, ahk_exe WhatsApp.Root.exe, , 10
+        WinWait, ahk_exe WhatsApp.Root.exe, , 40
     }
     IfWinNotExist, WhatsApp
     {
         Run, %WHATSAPP_EXE_PATH%
-        WinWait, WhatsApp, , 10
+        WinWait, WhatsApp, , 40
     }
 
     WinActivate, WhatsApp
-    WinWaitActive, WhatsApp, , 5
+    WinWaitActive, WhatsApp, , 20
     if ErrorLevel {
         result := {ok: false, errMsg: "No se pudo activar WhatsApp."}
         PushResult(jobId, result)
@@ -235,23 +241,33 @@ ProcessJob(jobName) {
     LogLine("  [5/5] Buscando chat de " parsed.phone " ...")
     searchDigits := RegExReplace(parsed.phone, "[^0-9]", "")
     Send, ^f
-    Sleep, 1000
+    Sleep, 4000
     SendRaw, %searchDigits%
-    Sleep, 1000
+    Sleep, 4000
     Send, {Enter}
-    Sleep, 1000
+    Sleep, 4000
 
     ; --- 7) Pegar la imagen y escribir el texto ---
     LogLine("  [5/5] Pegando imagen y enviando...")
     Send, ^v
-    Sleep, 3000
+    Sleep, 12000
 
-    caption := StrReplace(parsed.message, "`n", " ")
-    caption := StrReplace(caption, "`r", "")
-    SendRaw, %caption%
-    Sleep, 600
+    ; Los saltos de linea del mensaje (ej. la firma del negocio en su propia
+    ; linea) se mandan como Shift+Enter: un Enter normal ENVIA el mensaje a
+    ; medias en WhatsApp. Antes se aplanaban a espacios y el mensaje perdia
+    ; el formato en varias lineas.
+    lineas := StrSplit(StrReplace(parsed.message, "`r", ""), "`n")
+    Loop, % lineas.Length()
+    {
+        SendRaw, % lineas[A_Index]
+        if (A_Index < lineas.Length()) {
+            Send, +{Enter}
+            Sleep, 200
+        }
+    }
+    Sleep, 2400
     Send, {Enter}
-    Sleep, 1200
+    Sleep, 4800
 
     result := {ok: true, errMsg: ""}
     PushResult(jobId, result)

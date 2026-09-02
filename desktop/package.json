@@ -1,6 +1,6 @@
 {
   "name": "cafe-shopping-desktop",
-  "version": "2.0.3",
+  "version": "2.0.22",
   "description": "Cafe Shopping - punto de venta de escritorio (sin Docker: base local y agente de WhatsApp integrados)",
   "main": "main.js",
   "private": true,
@@ -9,7 +9,7 @@
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
+    "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   },
   "build": {
@@ -33,20 +33,17 @@
           "prisma/migrations/**/*",
           "prisma/schema.prisma",
           "package.json",
-          "node_modules/**/*",
-          "!node_modules/.cache/**",
-          "!node_modules/**/*.md",
-          "!node_modules/**/test/**",
-          "!node_modules/**/tests/**",
-          "!node_modules/@types/**",
-          "!node_modules/typescript/**",
-          "!node_modules/@nestjs/cli/**",
-          "!node_modules/@nestjs/schematics/**",
-          "!node_modules/jest/**",
-          "!node_modules/ts-jest/**",
-          "!node_modules/eslint/**",
-          "!node_modules/prettier/**",
-          "!node_modules/prisma/**",
+          "node_modules/.prisma/**/*",
+          "node_modules/@prisma/client/**/*",
+          "node_modules/sharp/**/*",
+          "node_modules/@img/**/*",
+          "node_modules/detect-libc/**/*",
+          "node_modules/semver/**/*",
+          "node_modules/reflect-metadata/**/*",
+          "node_modules/class-transformer/**/*",
+          "node_modules/class-validator/**/*",
+          "node_modules/libphonenumber-js/**/*",
+          "node_modules/validator/**/*",
           "!prisma/cliente-postgres/**",
           "!prisma/*.db"
         ]

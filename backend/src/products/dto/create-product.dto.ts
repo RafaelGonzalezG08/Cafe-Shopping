@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from 'class-validator';
 import { Material, MATERIALES } from '../../common/enums';
 
 export class CreateProductDto {
@@ -44,4 +44,19 @@ export class CreateProductDto {
   @IsOptional()
   @IsIn(MATERIALES, { message: 'Material invalido.' })
   material?: Material;
+
+  /**
+   * Pieza dada de baja (`false`) o vigente (`true`). Eliminar un producto es
+   * una baja logica (ver ProductsService.remove), asi que reactivarlo es
+   * simplemente volver a poner esto en true desde el formulario de edicion.
+   *
+   * El formulario viaja como multipart (lleva la foto), donde TODO llega como
+   * texto: sin el Transform, "false" seria un string y `@IsBoolean` lo
+   * rechazaria — y peor, Prisma guardaria un valor truthy.
+   */
+  @ApiPropertyOptional({ description: 'false da de baja la pieza (deja de venderse y sale del catalogo web).' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value === 'true' : value))
+  @IsBoolean()
+  activo?: boolean;
 }

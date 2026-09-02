@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   CalendarClock,
   ChevronRight,
+  PiggyBank,
+  Scale,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatMoney, formatDate, ESTADO_PEDIDO_LABEL } from '../lib/format';
@@ -20,11 +22,13 @@ function KpiCard({
   value,
   icon: Icon,
   tone,
+  hint,
 }: {
   label: string;
   value: string;
   icon: typeof DollarSign;
   tone: 'copper' | 'brick' | 'sage' | 'rose';
+  hint?: string;
 }) {
   const toneStyles = {
     copper: 'bg-copper-100 text-copper-700',
@@ -40,6 +44,7 @@ function KpiCard({
       </div>
       <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 font-display text-2xl font-bold tabular-nums text-ink">{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </Card>
   );
 }
@@ -144,7 +149,7 @@ export default function Dashboard() {
 
       {isLoading || !data ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="h-28 animate-pulse" />
           ))}
         </div>
@@ -174,6 +179,20 @@ export default function Dashboard() {
               value={`RD$ ${formatMoney(data.gastosDelMes)}`}
               icon={Wallet}
               tone="copper"
+            />
+            <KpiCard
+              label="Saldo en caja (mes)"
+              value={`RD$ ${formatMoney(data.saldoEnCajaMes)}`}
+              icon={PiggyBank}
+              tone={data.saldoEnCajaMes < 0 ? 'brick' : 'sage'}
+              hint="Contado + abonos − gastos"
+            />
+            <KpiCard
+              label="Balance del mes"
+              value={`RD$ ${formatMoney(data.balanceTotalMes)}`}
+              icon={Scale}
+              tone={data.balanceTotalMes < 0 ? 'brick' : 'rose'}
+              hint="Todas las ventas − gastos"
             />
           </div>
 

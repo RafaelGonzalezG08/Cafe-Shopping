@@ -35,7 +35,11 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
     }
     if (status !== 401 && !error?.config?.skipErrorToast) {
-      toast.error(Array.isArray(message) ? message.join(', ') : message);
+      const texto = Array.isArray(message) ? message.join(', ') : String(message);
+      // `id` estable por mensaje: si varias peticiones fallan con lo mismo
+      // (o el usuario reintenta el mismo boton), react-hot-toast reemplaza el
+      // toast en vez de apilar cinco copias identicas en pantalla.
+      toast.error(texto, { id: `err:${status}:${texto}` });
     }
     return Promise.reject(error);
   },

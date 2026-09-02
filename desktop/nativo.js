@@ -35,9 +35,20 @@ let frontendServer = null;
  * perder vive aqui, nunca dentro de la carpeta del programa: el instalador
  * reemplaza esa carpeta en cada actualizacion, y con ella se irian la base de
  * datos, las fotos de los productos y las facturas.
+ *
+ * OJO: no hay ningun app.setName() en este proyecto, asi que Electron usa
+ * SIEMPRE el mismo nombre de carpeta (el "name" de package.json,
+ * "cafe-shopping-desktop") sin importar si corres en desarrollo, un build
+ * sin instalar (win-unpacked) o la app ya instalada de verdad. Las tres
+ * apuntan al mismo lugar. Probar la app empaquetada (fuera de golpear la API
+ * contra backend/dev.db, que es un archivo aparte y siempre seguro) sin
+ * CAFE_SHOPPING_TEST_DATA_DIR pisa datos reales del negocio.
  */
 function dataDir() {
-  const dir = path.join(app.getPath('userData'), 'datos');
+  // Solo se activa si ALGUIEN lo pone a mano para probar; el negocio nunca
+  // tiene esta variable definida, asi que su carpeta real nunca cambia.
+  const base = process.env.CAFE_SHOPPING_TEST_DATA_DIR || app.getPath('userData');
+  const dir = path.join(base, 'datos');
   fs.mkdirSync(dir, { recursive: true });
   publicarRutaParaElAgente(dir);
   return dir;
@@ -182,6 +193,14 @@ async function startBackend(onLog) {
     cwd: path.join(proyecto, 'backend'),
     silent: true,
     windowsHide: true,
+    // Techo al heap de V8 (era ilimitado, es decir hasta ~1.5GB por defecto
+    // en 64 bits): sin esto, el backend compite por RAM con Chromium (la
+    // ventana principal + WhatsApp Desktop, que tambien es Electron) en una
+    // PC con poca memoria, y todo se pone lento a la vez. 512 MB sobra de
+    // sobra para lo que hace este backend (un negocio con cientos de
+    // productos/ventas, no miles); si algun dia hiciera falta mas, subir
+    // este numero.
+    execArgv: ['--max-old-space-size=512'],
   });
 
   backendProcess.stdout?.on('data', (d) => onLog?.(String(d).trimEnd()));

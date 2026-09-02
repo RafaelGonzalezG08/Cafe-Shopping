@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2 } from 'lucide-react';
+import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2, Search, UserRound } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
-import type { EstadoFactura, Sale } from '../../types';
+import type { Client, EstadoFactura, Sale } from '../../types';
 
 const ESTADO_TONE: Record<EstadoFactura, 'neutral' | 'copper' | 'sage' | 'brick'> = {
   PENDIENTE: 'neutral',
@@ -351,6 +351,23 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
   // disco de la PC en texto plano. Se vuelve a pedir siempre.
   const [adminPassword, setAdminPassword] = useState('');
 
+  // El cliente de la factura SI se puede corregir (se eligio al equivocado, o
+  // se cobro sin elegir ninguno). A diferencia de las lineas, no se persiste
+  // como borrador: arranca siempre del cliente real que tiene la venta hoy,
+  // para no re-aplicar en silencio un cambio a medias de otra sesion.
+  const [cliente, setCliente] = useState<Client | null>(sale.client ?? null);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+
+  const { data: clientes = [] } = useQuery<Client[]>({
+    queryKey: ['clients', clientSearch],
+    queryFn: async () => (await api.get('/clients', { params: { search: clientSearch || undefined } })).data,
+    enabled: buscandoCliente,
+  });
+
+  // Misma regla que en el backend: sin cliente no hay a quien cobrarle la deuda.
+  const faltaCliente = sale.metodoPago === 'CREDITO' && !cliente;
+
   const subtotal = lines.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
 
   function updateLine(index: number, patch: Partial<EditableLine>) {
@@ -368,6 +385,9 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
         `/sales/${sale.id}`,
         {
           adminPassword,
+          // null = consumidor final. Se manda siempre (no solo si cambio) para
+          // que el backend no tenga que adivinar la intencion.
+          clientId: cliente?.id ?? null,
           items: lines.map((l) => ({
             productId: l.productId,
             descripcion: l.descripcion,
@@ -382,6 +402,11 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
     onSuccess: () => {
       toast.success('Factura corregida y regenerada.');
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      // Cambiar el cliente mueve el historial de compras y, si era a credito,
+      // a quien le aparece la deuda en Cobros.
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['client-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
       limpiarBorrador(`factura:corregir:${sale.id}`);
       onDone();
     },
@@ -397,7 +422,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
         <div className="flex items-center justify-between border-b border-porcelain-200 p-5">
           <div>
             <p className="font-display font-bold text-ink">Corregir {sale.invoice?.numero ?? 'factura'}</p>
-            <p className="text-xs text-muted">Ajusta cantidad/precio, o quita una linea equivocada.</p>
+            <p className="text-xs text-muted">Cambia el cliente, ajusta cantidad/precio o quita una linea.</p>
           </div>
           <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
             <X size={18} />
@@ -405,6 +430,71 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
         </div>
 
         <div className="space-y-2 p-5">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Cliente</label>
+          <div className="flex items-center gap-2 rounded-lg border border-porcelain-200 p-2.5">
+            <UserRound size={16} className={cliente ? 'text-sage-600' : 'text-muted'} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm text-ink">{cliente?.nombre ?? 'Consumidor final'}</p>
+              {cliente?.telefono && <p className="truncate text-xs text-muted">{cliente.telefono}</p>}
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setBuscandoCliente((abierto) => !abierto)}>
+              {buscandoCliente ? 'Cerrar' : 'Cambiar'}
+            </Button>
+            {cliente && (
+              <button
+                onClick={() => setCliente(null)}
+                className="rounded-lg p-1.5 text-brick-500 hover:bg-brick-100"
+                title="Dejar la factura como consumidor final"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          {buscandoCliente && (
+            <div className="rounded-lg border border-porcelain-200 p-2.5">
+              <div className="mb-2 flex items-center gap-2 rounded-lg border border-porcelain-300 px-2.5 py-1.5">
+                <Search size={14} className="text-muted" />
+                <input
+                  autoFocus
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  placeholder="Buscar por nombre, telefono o correo..."
+                  className="w-full text-sm outline-none"
+                />
+              </div>
+              <div className="max-h-40 divide-y divide-porcelain-200 overflow-y-auto">
+                {clientes.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-muted">
+                    {clientSearch ? 'Sin resultados.' : 'Escribe para buscar un cliente.'}
+                  </p>
+                ) : (
+                  clientes.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setCliente(c);
+                        setBuscandoCliente(false);
+                        setClientSearch('');
+                      }}
+                      className="flex w-full items-center justify-between px-2 py-2 text-left text-sm hover:bg-porcelain-100"
+                    >
+                      <span className="truncate text-ink">{c.nombre}</span>
+                      <span className="ml-2 shrink-0 text-xs text-muted">{c.telefono}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {faltaCliente && (
+            <p className="text-xs text-brick-600">
+              Esta es una venta a credito: tiene que quedar a nombre de un cliente, porque es quien debe el dinero.
+            </p>
+          )}
+
+          <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Piezas</p>
           {lines.map((line, index) => (
             <div key={index} className="flex items-center gap-2 rounded-lg border border-porcelain-200 p-2.5">
               <div className="min-w-0 flex-1">
@@ -443,7 +533,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
           </div>
           <p className="text-xs text-muted">
             Los impuestos y el total se recalculan automaticamente con la tasa configurada, y la factura (PNG/PDF) se
-            regenera al guardar.
+            regenera al guardar con el cliente y las lineas que queden.
           </p>
 
           <div className="pt-2">
@@ -461,7 +551,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
           <Button
             className="w-full"
-            disabled={saveEdit.isPending || !adminPassword || lines.length === 0}
+            disabled={saveEdit.isPending || !adminPassword || lines.length === 0 || faltaCliente}
             onClick={() => saveEdit.mutate()}
           >
             {saveEdit.isPending ? <Loader2 size={16} className="animate-spin" /> : null}

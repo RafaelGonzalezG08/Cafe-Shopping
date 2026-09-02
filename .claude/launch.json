@@ -3,16 +3,23 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "backend", "run", "start:dev"],
+      "runtimeExecutable": "${workspaceFolder}/.claude/run-backend.cmd",
+      "runtimeArgs": [],
       "port": 3000,
       "autoPort": false
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--host", "--port", "5173"],
+      "runtimeExecutable": "${workspaceFolder}/.claude/run-frontend.cmd",
+      "runtimeArgs": [],
       "port": 5173,
+      "autoPort": false
+    },
+    {
+      "name": "PersonalFinance.WebHost",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "C:/Users/ykaru/source/PersonalFinance/src/PersonalFinance.WebHost", "--urls", "http://localhost:5201"],
+      "port": 5201,
       "autoPort": false
     }
   ]

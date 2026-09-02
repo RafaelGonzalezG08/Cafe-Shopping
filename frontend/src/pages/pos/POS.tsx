@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check, Package } from 'lucide-react';
@@ -43,10 +43,29 @@ export default function POS() {
   // haria pensar que la venta se acaba de hacer otra vez.
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
-  const { data: products = [] } = useQuery<Product[]>({
+  const { data: products = [], isSuccess: productsLoaded } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: async () => (await api.get('/products')).data,
   });
+
+  // El carrito se guarda en el navegador. Si un producto que quedo dentro se
+  // borro despues (limpieza de duplicados, importacion de inventario, etc.),
+  // su ID ya no vale y la venta se caia. Al cargar la lista real de productos
+  // se limpian esas lineas muertas y se avisa cuales.
+  useEffect(() => {
+    if (!productsLoaded) return;
+    const vivos = new Set(products.map((p) => p.id));
+    const muertas = cart.filter((l) => l.productId && !vivos.has(l.productId));
+    if (muertas.length === 0) return;
+    setCart((prev) => prev.filter((l) => !l.productId || vivos.has(l.productId)));
+    toast.error(
+      `Se quitaron del carrito piezas que ya no estan en el inventario: ${muertas
+        .map((l) => l.descripcion)
+        .join(', ')}.`,
+      { id: 'carrito-piezas-muertas', duration: 6000 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsLoaded, products]);
 
   const { data: businessProfile } = useQuery<{ tasaImpuesto: number }>({
     queryKey: ['settings', 'business-profile'],
@@ -155,14 +174,16 @@ export default function POS() {
   const createSale = useMutation({
     mutationFn: async () => {
       const { data } = await api.post('/sales', {
-        clientId: selectedClientId,
+        clientId: selectedClientId || undefined,
         metodoPago,
         fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
         esPedido: esPedido || undefined,
         fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
         descuentoPct: Number(descuentoPct) || undefined,
         items: cart.map((l) => ({
-          productId: l.productId,
+          // `|| undefined`: un articulo manual no lleva producto; si se manda
+          // como cadena vacia el backend lo toma como un producto real y falla.
+          productId: l.productId || undefined,
           descripcion: l.descripcion,
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,

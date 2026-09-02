@@ -34,8 +34,14 @@ export class WhatsappService {
   private readonly queueDir = join(this.uploadsDir, 'whatsapp-queue');
   private readonly resultsDir = join(this.uploadsDir, 'whatsapp-results');
 
-  /** Cuanto esperamos a que el agente de WhatsApp confirme el envio. */
-  private readonly timeoutMs = Number(process.env.WHATSAPP_AGENT_TIMEOUT_MS || 60000);
+  /**
+   * Cuanto esperamos a que el agente de WhatsApp confirme el envio.
+   * x4 (era 60000): send_whatsapp_agent.ahk tambien cuadruplico sus propios
+   * tiempos de espera para PCs menos potentes, asi que este limite tiene que
+   * crecer igual - si no, el backend reportaria "timeout" por un envio que
+   * en realidad iba a terminar bien, solo que un poco mas tarde.
+   */
+  private readonly timeoutMs = Number(process.env.WHATSAPP_AGENT_TIMEOUT_MS || 240000);
   /** Cada cuanto revisamos si ya llego la confirmacion. */
   private readonly pollMs = Number(process.env.WHATSAPP_AGENT_POLL_MS || 1500);
 

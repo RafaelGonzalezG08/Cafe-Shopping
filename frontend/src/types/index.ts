@@ -195,6 +195,10 @@ export interface DashboardSummary {
   ventasHoy: { total: number; cantidad: number };
   deudaTotalPendiente: number;
   gastosDelMes: number;
+  /** Contado + abonos cobrados - gastos, del mes en curso. */
+  saldoEnCajaMes: number;
+  /** Todas las ventas - gastos, del mes en curso. */
+  balanceTotalMes: number;
   gastosRecientes: Expense[];
 }
 
@@ -208,4 +212,6 @@ export interface BusinessProfile {
   telefonoWhatsapp?: string | null;
   descripcionWeb?: string | null;
   datosPago?: string | null;
+  relevoPedidosUrl?: string | null;
+  relevoPedidosClave?: string | null;
 }
