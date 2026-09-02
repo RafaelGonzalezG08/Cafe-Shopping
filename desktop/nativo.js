@@ -30,6 +30,16 @@ const MAX_WAIT_BACKEND_MS = 60000;
 let backendProcess = null;
 let frontendServer = null;
 
+// Estado del reinicio automatico del backend.
+let cerrando = false; // true cuando stopAll() esta cerrando todo a proposito
+let backendEnv = null; // el env ya calculado, para relanzar sin recalcularlo
+let backendEntrada = null;
+let backendCwd = null;
+let backendOnLog = null;
+let reinicios = []; // marcas de tiempo de los ultimos relanzamientos
+const MAX_REINICIOS = 5; // si se cae mas de esto...
+const VENTANA_REINICIOS_MS = 60000; // ...en este lapso, se deja de intentar
+
 /**
  * Carpeta de datos del usuario (AppData). Todo lo que el negocio NO puede
  * perder vive aqui, nunca dentro de la carpeta del programa: el instalador
@@ -161,7 +171,7 @@ async function startBackend(onLog) {
   const uploads = path.join(datos, 'uploads');
   fs.mkdirSync(uploads, { recursive: true });
 
-  const env = {
+  backendEnv = {
     ...process.env,
     // ELECTRON_RUN_AS_NODE hace que el proceso hijo se comporte como Node puro
     // (sin ventana ni APIs de Electron), reutilizando el Node que Electron ya
@@ -187,10 +197,30 @@ async function startBackend(onLog) {
     FRONTEND_URL: `http://localhost:${FRONTEND_PORT}`,
     JWT_SECRET: obtenerJwtSecret(datos),
   };
+  backendEntrada = entrada;
+  backendCwd = path.join(proyecto, 'backend');
+  backendOnLog = onLog;
+  cerrando = false;
+  reinicios = [];
 
-  backendProcess = fork(entrada, [], {
-    env,
-    cwd: path.join(proyecto, 'backend'),
+  return lanzarBackend();
+}
+
+/**
+ * Lanza (o relanza) el proceso hijo del backend con el env ya calculado en
+ * startBackend().
+ *
+ * Antes esto no existia: si el backend se caia (un bug, se quedo sin memoria,
+ * lo mato el antivirus...), `exit` solo dejaba `backendProcess = null` y la app
+ * quedaba muerta con la ventana abierta pero sin responder — habia que
+ * cerrarla y abrirla a mano. Ahora se relanza solo. Si se cae MAX_REINICIOS
+ * veces en VENTANA_REINICIOS_MS, se para de intentar (algo esta roto de
+ * verdad) y se avisa.
+ */
+function lanzarBackend() {
+  backendProcess = fork(backendEntrada, [], {
+    env: backendEnv,
+    cwd: backendCwd,
     silent: true,
     windowsHide: true,
     // Techo al heap de V8 (era ilimitado, es decir hasta ~1.5GB por defecto
@@ -203,18 +233,44 @@ async function startBackend(onLog) {
     execArgv: ['--max-old-space-size=512'],
   });
 
-  backendProcess.stdout?.on('data', (d) => onLog?.(String(d).trimEnd()));
-  backendProcess.stderr?.on('data', (d) => onLog?.(String(d).trimEnd()));
+  backendProcess.stdout?.on('data', (d) => backendOnLog?.(String(d).trimEnd()));
+  backendProcess.stderr?.on('data', (d) => backendOnLog?.(String(d).trimEnd()));
 
   // El backend pide por aqui que se rendericen las facturas (ver
   // RenderService). Se responde con el PNG/PDF ya generado.
   backendProcess.on('message', (mensaje) => {
-    if (mensaje?.tipo === 'render') renderizarParaBackend(mensaje, onLog);
+    if (mensaje?.tipo === 'render') renderizarParaBackend(mensaje, backendOnLog);
   });
 
   backendProcess.on('exit', (code) => {
-    onLog?.(`El backend termino con codigo ${code}`);
     backendProcess = null;
+    if (cerrando) return; // cierre a proposito: no relanzar
+
+    backendOnLog?.(`El backend termino inesperadamente (codigo ${code}). Reiniciandolo...`);
+
+    const ahora = Date.now();
+    reinicios = reinicios.filter((t) => ahora - t < VENTANA_REINICIOS_MS);
+    reinicios.push(ahora);
+
+    if (reinicios.length > MAX_REINICIOS) {
+      backendOnLog?.(
+        `El backend se cayo ${reinicios.length} veces en menos de un minuto. Se deja de reintentar.`,
+      );
+      const { dialog } = require('electron');
+      dialog.showErrorBox(
+        'Cafe Shopping',
+        'El servicio interno se esta cerrando solo una y otra vez.\n\n' +
+          'Cierra la aplicacion y vuelve a abrirla. Si sigue igual, reinicia la ' +
+          'computadora; si aun asi pasa, avisa para revisar el registro de errores.',
+      );
+      return;
+    }
+
+    // Pequeña espera para no entrar en un bucle cerrado si el fallo es al
+    // arrancar (puerto ocupado unos ms, base bloqueada, etc.).
+    setTimeout(() => {
+      if (!cerrando && !backendProcess) lanzarBackend();
+    }, 1500);
   });
 
   return backendProcess;
@@ -426,6 +482,7 @@ function startFrontend() {
 // ---------------------------------------------------------------------
 
 function stopAll() {
+  cerrando = true; // que el handler de 'exit' NO relance el backend
   if (backendProcess) {
     backendProcess.kill();
     backendProcess = null;
