@@ -11,7 +11,12 @@ import { AuditModule } from '../audit/audit.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-inseguro-cambiame',
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
+      // 30 dias por defecto (era 8h): es una app de escritorio de un solo
+      // negocio, en una PC bajo su control fisico, y el cajero no deberia
+      // tener que volver a iniciar sesion a media jornada. Sigue siendo
+      // revocable: JwtStrategy revisa en cada peticion que el usuario exista y
+      // este activo, asi que dar de baja a alguien corta su sesion al instante.
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '30d' },
     }),
     AuditModule,
   ],

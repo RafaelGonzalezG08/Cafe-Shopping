@@ -306,8 +306,13 @@ async function renderizarParaBackend(mensaje, onLog) {
     });
 
     await ventana.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-    // Da un instante a que apliquen fuentes y estilos antes de capturar.
-    await new Promise((r) => setTimeout(r, 300));
+    // Espera a que las fuentes esten listas antes de medir/capturar, en vez de
+    // un tiempo fijo a ojo: en una PC lenta 300 ms podian no alcanzar (texto
+    // con la fuente de reemplazo en la imagen), y en una rapida sobraban.
+    await ventana.webContents
+      .executeJavaScript('document.fonts.ready.then(() => true)')
+      .catch(() => {});
+    await new Promise((r) => setTimeout(r, 80));
 
     let datos;
     if (formato === 'pdf') {

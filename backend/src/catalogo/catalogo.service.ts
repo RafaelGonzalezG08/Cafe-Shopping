@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
-import { join, extname, basename } from 'path';
+import { join, basename } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { UPLOADS_DIR } from '../common/paths';
 import { generarHtml, DatosCatalogo, ProductoCatalogo } from './plantilla';
@@ -43,6 +43,18 @@ export class CatalogoService {
     const documentos =
       process.env.CATALOGO_DIR ||
       join(process.env.USERPROFILE || process.cwd(), 'Documents', 'Catalogo Cafe Shopping');
+
+    // Red de seguridad: mas abajo se hace `fs.rm(carpeta, { recursive: true })`
+    // sobre esto. Si CATALOGO_DIR quedara mal puesto (ej. la carpeta Documentos
+    // entera, o "C:\") se borraria algo que no es. Se exige que el ultimo tramo
+    // de la ruta nombre al catalogo.
+    const ultimoTramo = basename(documentos).toLowerCase();
+    if (!ultimoTramo.includes('catalogo') && !ultimoTramo.includes('catálogo')) {
+      throw new Error(
+        `La carpeta del catalogo (${documentos}) no parece una carpeta del catalogo. ` +
+          `Ajusta CATALOGO_DIR: su ultimo tramo debe contener "Catalogo".`,
+      );
+    }
     return documentos;
   }
 
