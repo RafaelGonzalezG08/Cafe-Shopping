@@ -25,12 +25,16 @@ export default function Sales() {
   const { data: sales = [], isLoading } = useQuery<Sale[]>({
     queryKey: ['sales', from, to],
     queryFn: async () => (await api.get('/sales', { params: { from: from || undefined, to: to || undefined } })).data,
+    // Si alguna factura está EN_COLA, refrescar cada 5s para ver cuándo pasa a
+    // ENVIADA/ERROR (el envío corre en segundo plano).
+    refetchInterval: (query) =>
+      query.state.data?.some((s) => s.invoice?.whatsappEstado === 'EN_COLA') ? 5000 : false,
   });
 
   const sendWhatsapp = useMutation({
     mutationFn: async (saleId: string) => (await api.post(`/sales/${saleId}/send-invoice-whatsapp`)).data,
     onSuccess: () => {
-      toast.success('Factura reenviada.');
+      toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
       queryClient.invalidateQueries({ queryKey: ['sales'] });
     },
   });
@@ -108,11 +112,22 @@ export default function Sales() {
                       {sale.client?.telefono && (
                         <button
                           onClick={() => sendWhatsapp.mutate(sale.id)}
-                          disabled={sendWhatsapp.isPending}
-                          className="rounded-lg p-1.5 text-sage-600 hover:bg-sage-100"
-                          title="Reenviar por WhatsApp"
+                          disabled={sendWhatsapp.isPending || sale.invoice?.whatsappEstado === 'EN_COLA'}
+                          className={`rounded-lg p-1.5 hover:bg-sage-100 ${
+                            sale.invoice?.whatsappEstado === 'ERROR' ? 'text-brick-600' : 'text-sage-600'
+                          }`}
+                          title={
+                            sale.invoice?.whatsappEstado === 'EN_COLA'
+                              ? 'En cola de envío…'
+                              : sale.invoice?.whatsappEstado === 'ERROR'
+                                ? `No se pudo enviar: ${sale.invoice?.ultimoError ?? 'error'}. Clic para reintentar.`
+                                : sale.invoice?.whatsappEstado === 'ENVIADA'
+                                  ? 'Enviada. Clic para enviar de nuevo.'
+                                  : 'Enviar por WhatsApp'
+                          }
                         >
-                          {sendWhatsapp.isPending && sendWhatsapp.variables === sale.id ? (
+                          {(sendWhatsapp.isPending && sendWhatsapp.variables === sale.id) ||
+                          sale.invoice?.whatsappEstado === 'EN_COLA' ? (
                             <Loader2 size={15} className="animate-spin" />
                           ) : (
                             <MessageCircle size={15} />

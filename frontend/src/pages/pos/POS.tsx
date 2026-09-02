@@ -446,23 +446,40 @@ export default function POS() {
 }
 
 export function InvoicePreview({
-  sale,
+  sale: saleInicial,
   onNewSale,
 }: {
   sale: Sale;
   onNewSale: () => void;
 }) {
+  // Tras encolar el envío, la factura pasa por EN_COLA → ENVIADA/ERROR en
+  // segundo plano. Se refresca la venta cada 4s mientras esté en cola para
+  // que el cajero vea el resultado sin recargar.
+  const { data: sale = saleInicial } = useQuery<Sale>({
+    queryKey: ['sale', saleInicial.id],
+    queryFn: async () => (await api.get(`/sales/${saleInicial.id}`)).data,
+    initialData: saleInicial,
+    refetchInterval: (query) =>
+      query.state.data?.invoice?.whatsappEstado === 'EN_COLA' ? 4000 : false,
+  });
+
+  const queryClient = useQueryClient();
   const png = sale.invoice?.pngUrl;
   const imageSrc = png?.startsWith('http') ? png : png ? apiUrl(png) : undefined;
+  const waEstado = sale.invoice?.whatsappEstado;
 
   const sendWhatsapp = useMutation({
     mutationFn: async () =>
       (await api.post(`/sales/${sale.id}/send-invoice-whatsapp`, undefined, { skipErrorToast: true })).data,
-    onSuccess: () => {
-      toast.success('Factura enviada por WhatsApp.');
+    onSuccess: (invoice) => {
+      queryClient.setQueryData<Sale>(['sale', sale.id], (prev) =>
+        prev ? { ...prev, invoice: { ...prev.invoice, ...invoice } } : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: ['sale', sale.id] });
+      toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message ?? 'No se pudo enviar la factura por WhatsApp.');
+      toast.error(error?.response?.data?.message ?? 'No se pudo poner la factura en cola.');
     },
   });
 
@@ -482,19 +499,42 @@ export function InvoicePreview({
           )}
           <div className="receipt-edge mt-0" />
         </div>
-        <div className="space-y-2 p-5 pt-0">
+
+        {waEstado && (
+          <div className="px-5">
+            {waEstado === 'EN_COLA' && (
+              <p className="flex items-center gap-2 rounded-lg bg-copper-50 px-3 py-2 text-sm text-copper-700">
+                <Loader2 size={15} className="animate-spin" /> En cola de envío por WhatsApp…
+              </p>
+            )}
+            {waEstado === 'ENVIADA' && (
+              <p className="flex items-center gap-2 rounded-lg bg-sage-100 px-3 py-2 text-sm font-medium text-sage-700">
+                <Check size={15} /> Enviada por WhatsApp
+              </p>
+            )}
+            {waEstado === 'ERROR' && (
+              <p className="rounded-lg bg-brick-100 px-3 py-2 text-sm text-brick-700">
+                No se pudo enviar: {sale.invoice?.ultimoError ?? 'error desconocido'}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2 p-5">
           {sale.client?.telefono ? (
             <Button
               className="w-full"
               onClick={() => sendWhatsapp.mutate()}
-              disabled={sendWhatsapp.isPending}
+              disabled={sendWhatsapp.isPending || waEstado === 'EN_COLA'}
             >
-              {sendWhatsapp.isPending ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <MessageCircle size={16} />
-              )}
-              {sendWhatsapp.isPending ? 'Enviando...' : 'Enviar por WhatsApp'}
+              {sendWhatsapp.isPending ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+              {waEstado === 'EN_COLA'
+                ? 'En cola…'
+                : waEstado === 'ENVIADA'
+                  ? 'Enviar de nuevo por WhatsApp'
+                  : waEstado === 'ERROR'
+                    ? 'Reintentar envío por WhatsApp'
+                    : 'Enviar por WhatsApp'}
             </Button>
           ) : (
             <Button className="w-full" disabled>

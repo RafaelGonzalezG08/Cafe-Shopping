@@ -8,6 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { RenderService } from './render.service';
 import { StorageService } from './storage.service';
 import { WhatsappService } from './whatsapp.service';
+import { WhatsappQueueService } from './whatsapp-queue.service';
 import { renderInvoiceHtml } from './invoice.template';
 
 @Injectable()
@@ -20,13 +21,20 @@ export class InvoicesService {
     private readonly render: RenderService,
     private readonly storage: StorageService,
     private readonly whatsapp: WhatsappService,
+    private readonly cola: WhatsappQueueService,
   ) {}
 
   /** Renderiza el PNG (y PDF) de la factura de una venta y sube los archivos. */
   async generateForSale(saleId: string) {
     const sale = await this.prisma.sale.findUnique({
       where: { id: saleId },
-      include: { items: true, client: true, user: { select: { nombre: true } }, invoice: true, payments: true },
+      include: {
+        items: true,
+        client: true,
+        user: { select: { nombre: true } },
+        invoice: true,
+        payments: true,
+      },
     });
     if (!sale) throw new NotFoundException('Venta no encontrada.');
     if (!sale.invoice) throw new NotFoundException('La venta no tiene una factura asociada.');
@@ -38,7 +46,10 @@ export class InvoicesService {
     // simplemente no aparecia. Se incrusta como base64 para que no dependa
     // de resolver ninguna ruta.
     const logoParaFactura = await this.resolverLogoParaFactura(business.logoUrl);
-    const html = renderInvoiceHtml(sale as any, sale.invoice.numero, { ...business, logoUrl: logoParaFactura });
+    const html = renderInvoiceHtml(sale as any, sale.invoice.numero, {
+      ...business,
+      logoUrl: logoParaFactura,
+    });
 
     try {
       // PNG y PDF se generan UNO DESPUES DEL OTRO, no en paralelo. Cada uno se
@@ -74,7 +85,12 @@ export class InvoicesService {
     }
   }
 
-  /** Genera (si hace falta) y envia la factura por WhatsApp al cliente de la venta. */
+  /**
+   * Pone la factura de una venta en la cola de envio por WhatsApp y responde
+   * al instante. El envio real lo hace WhatsappQueueService en segundo plano,
+   * con reintentos. El frontend consulta `whatsappEstado` de la factura para
+   * mostrar "en cola" / "enviada" / "error".
+   */
   async sendWhatsapp(saleId: string, userId?: string) {
     const sale = await this.prisma.sale.findUnique({
       where: { id: saleId },
@@ -104,32 +120,7 @@ export class InvoicesService {
         ? `Hola ${sale.client.nombre}, gracias por su compra en ${business.nombre}. Adjuntamos su factura ${invoice.numero} por un total de ${Number(sale.total).toFixed(2)}.`
         : `¡Hola ${sale.client.nombre}! Gracias por su compra. Aquí tiene su factura ${invoice.numero}.\n\n${firma}`;
 
-    // El agente de WhatsApp Desktop (send_whatsapp_agent.ahk) saca el PNG
-    // directamente del volumen local de uploads, por eso se le pasa la key
-    // relativa (ej. "invoices/FAC-2026-00010.png") y no la URL publica.
-    const pngKey = `invoices/${invoice.numero}.png`;
-    const result = await this.whatsapp.sendInvoice(sale.client.telefono, pngKey, mensaje);
-
-    const updated = await this.prisma.invoice.update({
-      where: { saleId },
-      data: result.ok
-        ? { estado: EstadoFactura.ENVIADA, sentWhatsappAt: new Date(), ultimoError: null }
-        : { estado: EstadoFactura.ERROR, ultimoError: result.errorMessage },
-    });
-
-    await this.audit.log('Invoice', invoice.id, 'UPDATE', userId, {
-      accion: 'send-whatsapp',
-      ok: result.ok,
-      sid: result.sid,
-    });
-
-    if (!result.ok) {
-      throw new BadRequestException(
-        `No se pudo enviar la factura por WhatsApp: ${result.errorMessage}`,
-      );
-    }
-
-    return updated;
+    return this.cola.encolar(saleId, mensaje, userId);
   }
 
   async findBySaleId(saleId: string) {
@@ -169,20 +160,8 @@ export class InvoicesService {
       `Le recordamos su saldo pendiente de RD$ ${saldo.toFixed(2)} (factura ${invoice.numero}). ` +
       `Cualquier duda, con gusto le ayudamos. ¡Gracias!`;
 
-    const pngKey = `invoices/${invoice.numero}.png`;
-    const result = await this.whatsapp.sendInvoice(sale.client.telefono, pngKey, mensaje);
-
-    await this.audit.log('Invoice', invoice.id, 'UPDATE', userId, {
-      accion: 'recordatorio-whatsapp',
-      ok: result.ok,
-      sid: result.sid,
-    });
-
-    if (!result.ok) {
-      throw new BadRequestException(`No se pudo enviar el recordatorio por WhatsApp: ${result.errorMessage}`);
-    }
-
-    return { ok: true };
+    await this.cola.encolar(saleId, mensaje, userId);
+    return { ok: true, whatsappEstado: 'EN_COLA' as const };
   }
 
   /**
@@ -192,7 +171,9 @@ export class InvoicesService {
    * si carga bien desde cualquier pagina. Si el archivo no se puede leer, la
    * factura sigue generandose igual, solo que sin logo.
    */
-  private async resolverLogoParaFactura(logoUrl: string | null | undefined): Promise<string | null> {
+  private async resolverLogoParaFactura(
+    logoUrl: string | null | undefined,
+  ): Promise<string | null> {
     if (!logoUrl) return null;
     if (/^https?:\/\//i.test(logoUrl)) return logoUrl;
 
@@ -204,7 +185,9 @@ export class InvoicesService {
       const mime = ext === 'jpg' ? 'jpeg' : ext;
       return `data:image/${mime};base64,${buffer.toString('base64')}`;
     } catch (error) {
-      this.logger.warn(`No se pudo leer el logo (${ruta}) para incrustarlo en la factura: ${error}`);
+      this.logger.warn(
+        `No se pudo leer el logo (${ruta}) para incrustarlo en la factura: ${error}`,
+      );
       return null;
     }
   }

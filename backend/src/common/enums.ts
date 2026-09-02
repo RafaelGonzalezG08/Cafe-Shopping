@@ -36,6 +36,14 @@ export const EstadoFactura = {
 } as const;
 export type EstadoFactura = (typeof EstadoFactura)[keyof typeof EstadoFactura];
 
+/** Estado del envio por WhatsApp de una factura (ver whatsapp-queue.service.ts). */
+export const EstadoWhatsapp = {
+  EN_COLA: 'EN_COLA',
+  ENVIADA: 'ENVIADA',
+  ERROR: 'ERROR',
+} as const;
+export type EstadoWhatsapp = (typeof EstadoWhatsapp)[keyof typeof EstadoWhatsapp];
+
 export const EstadoDeuda = {
   PENDIENTE: 'PENDIENTE',
   PARCIAL: 'PARCIAL',

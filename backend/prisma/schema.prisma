@@ -155,12 +155,22 @@ model Invoice {
   pngUrl         String?       @map("png_url")
   sentWhatsappAt DateTime?     @map("sent_whatsapp_at")
   ultimoError    String?       @map("ultimo_error")
+
+  // Cola de envio por WhatsApp (ver whatsapp-queue.service.ts). El envio ya no
+  // bloquea la peticion: se encola y un proceso en segundo plano lo procesa con
+  // reintentos.
+  whatsappEstado         String?   @map("whatsapp_estado") // EN_COLA | ENVIADA | ERROR | null
+  whatsappIntentos       Int       @default(0) @map("whatsapp_intentos")
+  whatsappProximoIntento DateTime? @map("whatsapp_proximo_intento")
+  whatsappMensaje        String?   @map("whatsapp_mensaje")
+
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   sale Sale @relation(fields: [saleId], references: [id])
 
   @@map("invoices")
+  @@index([whatsappEstado])
 }
 
 model Payment {

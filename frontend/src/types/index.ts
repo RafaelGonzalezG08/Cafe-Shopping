@@ -80,6 +80,8 @@ export interface SaleItem {
   total: number;
 }
 
+export type EstadoWhatsapp = 'EN_COLA' | 'ENVIADA' | 'ERROR';
+
 export interface Invoice {
   id: string;
   numero: string;
@@ -88,6 +90,9 @@ export interface Invoice {
   pngUrl?: string | null;
   sentWhatsappAt?: string | null;
   ultimoError?: string | null;
+  /** Estado del envío por WhatsApp (cola en segundo plano). null = nunca se pidió. */
+  whatsappEstado?: EstadoWhatsapp | null;
+  whatsappIntentos?: number;
 }
 
 export interface Sale {

@@ -130,11 +130,11 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
     mutationFn: async () =>
       (await api.post(`/client-debts/${debt.id}/remind`, undefined, { skipErrorToast: true })).data,
     onSuccess: () => {
-      toast.success('Recordatorio enviado por WhatsApp.');
+      toast.success('Recordatorio en cola. Se enviará por WhatsApp en unos segundos.');
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });
     },
     onError: (error: any) => {
-      const msg = error?.response?.data?.message ?? 'No se pudo enviar el recordatorio por WhatsApp.';
+      const msg = error?.response?.data?.message ?? 'No se pudo poner el recordatorio en cola.';
       toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
     },
   });
@@ -147,7 +147,7 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-sage-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sage-600 disabled:cursor-not-allowed disabled:bg-porcelain-300 disabled:text-muted"
       >
         {sendReminder.isPending ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
-        {sendReminder.isPending ? 'Enviando...' : 'Recordatorio por WhatsApp'}
+        {sendReminder.isPending ? 'Encolando...' : 'Recordatorio por WhatsApp'}
       </button>
     </div>
   );
