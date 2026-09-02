@@ -77,17 +77,17 @@ model Product {
   activo         Boolean  @default(true)
   // Categoria de joya (Anillo, Collar, etc.), asignada SOLA cuando la primera
   // palabra del nombre coincide exactamente con una categoria existente (ver
-  // ProductsService.clasificarCategoria()). Como client_debts.sale_id, es una
-  // columna suelta y no una relacion real de Prisma: al borrar una categoria
-  // no hay que rehacer la tabla completa (SQLite no deja agregar una llave
-  // foranea con ALTER TABLE), solo se pone en null a mano.
+  // ProductsService.clasificarCategoria()). Al borrar la categoria, el producto
+  // queda sin categoria (onDelete: SetNull).
   categoriaId    String?  @map("categoria_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   saleItems SaleItem[]
+  categoria Category?  @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
   @@map("products")
+  @@index([categoriaId])
 }
 
 // Categoria de joya (Anillo, Collar, Aretes, Pulsera, Reloj, ...), que el
@@ -96,6 +96,8 @@ model Category {
   id        String   @id @default(cuid())
   nombre    String   @unique
   createdAt DateTime @default(now()) @map("created_at")
+
+  products Product[]
 
   @@map("categories")
 }
@@ -115,12 +117,14 @@ model Sale {
   clientId   String?    @map("client_id")
   createdAt  DateTime   @default(now()) @map("created_at")
 
-  user     User       @relation(fields: [userId], references: [id])
-  client   Client?    @relation(fields: [clientId], references: [id])
-  items    SaleItem[]
-  invoice  Invoice?
-  payments Payment[]
-  order    Order?
+  user      User        @relation(fields: [userId], references: [id])
+  client    Client?     @relation(fields: [clientId], references: [id])
+  items     SaleItem[]
+  invoice   Invoice?
+  payments  Payment[]
+  order     Order?
+  debts     ClientDebt[]
+  webOrders WebOrder[]
 
   @@map("sales")
   @@index([fecha])
@@ -198,10 +202,14 @@ model ClientDebt {
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   client Client @relation(fields: [clientId], references: [id])
+  // Al borrar la venta se borra su deuda (sales.service.ts ya lo hacia a mano,
+  // y ademas rechaza el borrado si el cliente ya abono algo).
+  sale   Sale?  @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@map("client_debts")
   @@index([clientId])
   @@index([status])
+  @@index([saleId])
 }
 
 model Expense {
@@ -264,15 +272,17 @@ model WebOrder {
   textoOriginal String @map("texto_original")
   notas     String?
   // Venta que se genero al "atender" este pedido (ver web-orders.service.ts
-  // -> atender()). Como client_debts.sale_id, es una columna suelta, no una
-  // relacion real: si esa venta se llegara a borrar, el pedido web no debe
-  // desaparecer con ella, solo queda un vinculo roto (caso raro).
+  // -> atender()). Si esa venta se borra, el pedido web NO desaparece con
+  // ella: solo se queda sin el vinculo (onDelete: SetNull).
   saleId    String?  @map("sale_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  sale Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
   @@map("web_orders")
   @@index([estado])
+  @@index([saleId])
 }
 
 model AuditLog {

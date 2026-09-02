@@ -43,13 +43,25 @@ export class MigrationsService {
       const sql = await fs.readFile(join(migrationsDir, nombre, 'migration.sql'), 'utf8');
       this.logger.log(`Aplicando migracion ${nombre} ...`);
 
-      // Cada sentencia va por separado porque $executeRawUnsafe no acepta
-      // varias en una sola llamada.
-      for (const sentencia of this.splitStatements(sql)) {
-        await this.prisma.$executeRawUnsafe(sentencia);
-      }
+      // Toda la migracion va en UNA transaccion: si algo falla, no queda a
+      // medias ni se registra como aplicada. `defer_foreign_keys = ON` aplaza
+      // el chequeo de llaves foraneas hasta el COMMIT, que es lo que necesitan
+      // las migraciones que recrean una tabla (DROP + CREATE + RENAME): entre
+      // medias hay referencias temporalmente rotas que si no reventarian.
+      // (Prisma mete tambien `PRAGMA foreign_keys=OFF`, pero eso es un no-op
+      // dentro de una transaccion; por eso ademas se hace aqui.)
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe('PRAGMA defer_foreign_keys = ON');
+          for (const sentencia of this.splitStatements(sql)) {
+            if (/^PRAGMA\s/i.test(sentencia)) continue; // ya se maneja aqui
+            await tx.$executeRawUnsafe(sentencia);
+          }
+          await this.registrar(tx, nombre, sql);
+        },
+        { timeout: 120_000, maxWait: 15_000 },
+      );
 
-      await this.registrar(nombre, sql);
       nuevas += 1;
     }
 
@@ -114,10 +126,14 @@ export class MigrationsService {
       .filter((s) => s.length > 0);
   }
 
-  private async registrar(nombre: string, sql: string): Promise<void> {
+  private async registrar(
+    tx: { $executeRawUnsafe: (q: string, ...v: unknown[]) => Promise<number> },
+    nombre: string,
+    sql: string,
+  ): Promise<void> {
     const checksum = createHash('sha256').update(sql).digest('hex');
     const ahora = new Date().toISOString();
-    await this.prisma.$executeRawUnsafe(
+    await tx.$executeRawUnsafe(
       `INSERT INTO "_prisma_migrations"
          (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
        VALUES (?, ?, ?, ?, NULL, NULL, ?, 1)`,

@@ -130,6 +130,49 @@ describe('AppModule (e2e)', () => {
     expect((await prisma.product.findUnique({ where: { id: prod.id } }))!.stock).toBe(5);
   });
 
+  it('borrar una venta a crédito sin abonos borra también su deuda', async () => {
+    const cliente = await prisma.client.create({
+      data: { nombre: 'Cliente deuda e2e', telefono: '8091112222' },
+    });
+    const venta = await auth(request(app.getHttpServer()).post('/api/sales')).send({
+      metodoPago: 'CREDITO',
+      clientId: cliente.id,
+      generarFactura: false,
+      tasaImpuesto: 0,
+      items: [{ descripcion: 'Anillo a crédito', cantidad: 1, precioUnitario: 1200 }],
+    });
+    expect(venta.status).toBe(201);
+    expect(await prisma.clientDebt.count({ where: { clientId: cliente.id } })).toBe(1);
+
+    const del = await auth(request(app.getHttpServer()).delete(`/api/sales/${venta.body.id}`)).send(
+      {
+        adminPassword: 'cafe1234',
+      },
+    );
+    expect(del.status).toBe(200);
+    expect(await prisma.clientDebt.count({ where: { clientId: cliente.id } })).toBe(0);
+  });
+
+  it('borrar una categoría deja sus productos sin categoría (no los borra)', async () => {
+    const cat = await prisma.category.create({ data: { nombre: `Cat e2e ${Date.now()}` } });
+    const prod = await prisma.product.create({
+      data: {
+        sku: `E2E-CAT-${Date.now()}`,
+        nombre: 'Con categoría',
+        precioUnitario: 100,
+        stock: 1,
+        categoriaId: cat.id,
+      },
+    });
+
+    const del = await auth(request(app.getHttpServer()).delete(`/api/categories/${cat.id}`));
+    expect(del.status).toBe(200);
+
+    const despues = await prisma.product.findUnique({ where: { id: prod.id } });
+    expect(despues).not.toBeNull();
+    expect(despues!.categoriaId).toBeNull();
+  });
+
   it('rechaza una venta con un producto que ya no existe, con mensaje claro', async () => {
     const r = await auth(request(app.getHttpServer()).post('/api/sales')).send({
       metodoPago: 'EFECTIVO',
