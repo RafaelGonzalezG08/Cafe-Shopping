@@ -11,6 +11,25 @@ import { localDateKey, parseFromDate, parseToDate } from '../common/date-range';
 
 export type GroupBy = 'day' | 'week' | 'month' | 'year';
 
+export type TipoTransaccion = 'VENTA' | 'ABONO' | 'GASTO';
+
+export interface Transaccion {
+  id: string;
+  tipo: TipoTransaccion;
+  fecha: Date;
+  monto: number;
+  signo: 'INGRESO' | 'EGRESO';
+  descripcion: string;
+  metodoPago: string | null;
+  cliente: string | null;
+  usuario: string | null;
+  /** Numero de factura (venta/abono) o categoria (gasto). */
+  referencia: string | null;
+  /** Estado de la factura (solo VENTA). */
+  estado: string | null;
+  saleId: string | null;
+}
+
 interface PeriodBucket {
   periodo: string;
   ventas: number;
@@ -233,6 +252,142 @@ export class ReportsService {
       cobrado: round(cobrado),
       saldoEnCaja: round(cobrado - egresos),
       balanceTotal: round(ingresos - egresos),
+    };
+  }
+
+  /**
+   * Libro de transacciones: une ventas, abonos y gastos en una sola lista
+   * ordenada por fecha (la mas reciente primero), para ver todo lo que se
+   * movio en el negocio sin tener que abrir Ventas, Cobros y Gastos por
+   * separado. SQLite/Prisma no hacen UNION facil entre tablas con columnas
+   * distintas, asi que se trae cada una por su lado y se mezcla en memoria —
+   * a la escala de un solo negocio (cientos de filas, no millones) esto es
+   * instantaneo.
+   */
+  async transactions(params: {
+    from?: string;
+    to?: string;
+    tipo?: TipoTransaccion[];
+    metodoPago?: string;
+    userId?: string;
+    q?: string;
+  }) {
+    const { fromDate, toDate } = this.defaultRange(params.from, params.to);
+    const rango = { gte: fromDate, lte: toDate };
+    const tipos =
+      params.tipo && params.tipo.length > 0 ? params.tipo : (['VENTA', 'ABONO', 'GASTO'] as const);
+    // Los gastos no tienen metodo de pago propio: si se filtra por metodo, no
+    // pueden aparecer (en vez de mostrarlos igual, que confundiria el filtro).
+    const incluirGastos = tipos.includes('GASTO') && !params.metodoPago;
+
+    const [ventas, abonos, gastos] = await Promise.all([
+      tipos.includes('VENTA')
+        ? this.prisma.sale.findMany({
+            where: {
+              fecha: rango,
+              ...(params.metodoPago ? { metodoPago: params.metodoPago } : {}),
+              ...(params.userId ? { userId: params.userId } : {}),
+            },
+            include: {
+              client: { select: { nombre: true } },
+              user: { select: { nombre: true } },
+              invoice: { select: { numero: true, estado: true } },
+            },
+          })
+        : Promise.resolve([]),
+      tipos.includes('ABONO')
+        ? this.prisma.payment.findMany({
+            where: { fecha: rango, ...(params.metodoPago ? { metodo: params.metodoPago } : {}) },
+            include: {
+              sale: {
+                include: {
+                  client: { select: { nombre: true } },
+                  invoice: { select: { numero: true } },
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      incluirGastos
+        ? this.prisma.expense.findMany({
+            where: { fecha: rango, ...(params.userId ? { userId: params.userId } : {}) },
+            include: { user: { select: { nombre: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    let items: Transaccion[] = [
+      ...ventas.map((s): Transaccion => ({
+        id: `venta-${s.id}`,
+        tipo: 'VENTA',
+        fecha: s.fecha,
+        monto: round(Number(s.total)),
+        signo: 'INGRESO',
+        descripcion: s.metodoPago === 'CREDITO' ? 'Venta a credito' : 'Venta de contado',
+        metodoPago: s.metodoPago,
+        cliente: s.client?.nombre ?? null,
+        usuario: s.user?.nombre ?? null,
+        referencia: s.invoice?.numero ?? null,
+        estado: s.invoice?.estado ?? null,
+        saleId: s.id,
+      })),
+      ...abonos.map((p): Transaccion => ({
+        id: `abono-${p.id}`,
+        tipo: 'ABONO',
+        fecha: p.fecha,
+        monto: round(Number(p.amount)),
+        signo: 'INGRESO',
+        descripcion: 'Abono a cuenta',
+        metodoPago: p.metodo,
+        cliente: p.sale?.client?.nombre ?? null,
+        usuario: null,
+        referencia: p.sale?.invoice?.numero ?? null,
+        estado: null,
+        saleId: p.saleId,
+      })),
+      ...gastos.map((g): Transaccion => ({
+        id: `gasto-${g.id}`,
+        tipo: 'GASTO',
+        fecha: g.fecha,
+        monto: round(Number(g.monto)),
+        signo: 'EGRESO',
+        descripcion: g.descripcion,
+        metodoPago: null,
+        cliente: null,
+        usuario: g.user?.nombre ?? null,
+        referencia: g.categoria,
+        estado: null,
+        saleId: null,
+      })),
+    ];
+
+    if (params.q?.trim()) {
+      const q = params.q.trim().toLowerCase();
+      items = items.filter((t) =>
+        [t.descripcion, t.cliente, t.usuario, t.referencia].some((v) =>
+          v?.toLowerCase().includes(q),
+        ),
+      );
+    }
+
+    items.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+
+    const totales = items.reduce(
+      (acc, t) => {
+        if (t.signo === 'INGRESO') acc.ingresos += t.monto;
+        else acc.egresos += t.monto;
+        return acc;
+      },
+      { ingresos: 0, egresos: 0 },
+    );
+
+    return {
+      items,
+      totales: {
+        ingresos: round(totales.ingresos),
+        egresos: round(totales.egresos),
+        neto: round(totales.ingresos - totales.egresos),
+      },
     };
   }
 

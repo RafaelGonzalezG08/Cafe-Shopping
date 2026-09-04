@@ -196,6 +196,29 @@ export interface Expense {
   user?: { nombre: string };
 }
 
+export type TipoTransaccion = 'VENTA' | 'ABONO' | 'GASTO';
+
+/** Fila del libro de transacciones (Reportes > Transacciones): venta, abono o gasto. */
+export interface Transaccion {
+  id: string;
+  tipo: TipoTransaccion;
+  fecha: string;
+  monto: number;
+  signo: 'INGRESO' | 'EGRESO';
+  descripcion: string;
+  metodoPago: MetodoPago | null;
+  cliente: string | null;
+  usuario: string | null;
+  referencia: string | null;
+  estado: EstadoFactura | null;
+  saleId: string | null;
+}
+
+export interface TransaccionesResponse {
+  items: Transaccion[];
+  totales: { ingresos: number; egresos: number; neto: number };
+}
+
 export interface DashboardSummary {
   ventasHoy: { total: number; cantidad: number };
   deudaTotalPendiente: number;

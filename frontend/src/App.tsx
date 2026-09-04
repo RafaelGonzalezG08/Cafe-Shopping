@@ -11,6 +11,7 @@ import Sales from './pages/sales/Sales';
 import Orders from './pages/orders/Orders';
 import Expenses from './pages/expenses/Expenses';
 import Reports from './pages/reports/Reports';
+import Transactions from './pages/transactions/Transactions';
 import Costs from './pages/costs/Costs';
 import Settings from './pages/settings/Settings';
 
@@ -68,6 +69,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN', 'CONTABILIDAD']}>
                 <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transacciones"
+            element={
+              <ProtectedRoute roles={['ADMIN', 'CONTABILIDAD']}>
+                <Transactions />
               </ProtectedRoute>
             }
           />

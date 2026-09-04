@@ -206,7 +206,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
       <Card className="grid max-h-[85vh] w-full max-w-3xl grid-cols-1 overflow-hidden md:grid-cols-2">
-        <div className="flex max-h-[85vh] flex-col overflow-y-auto border-b border-porcelain-200 p-5 md:border-b-0 md:border-r">
+        <div className="flex max-h-[85vh] min-w-0 flex-col overflow-y-auto overflow-x-hidden border-b border-porcelain-200 p-5 md:border-b-0 md:border-r">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="font-display font-bold text-ink">{debt.client?.nombre ?? 'Cliente'}</h2>
@@ -254,7 +254,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
           {saldo > 0.01 ? (
             <form onSubmit={handleSubmit} className="mt-auto space-y-2.5 rounded-lg bg-porcelain-100 p-3.5">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Registrar abono</p>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="number"
                   min="0"
@@ -262,12 +262,12 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder={`Max. ${formatMoney(saldo)}`}
-                  className="flex-1 rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+                  className="min-w-0 flex-1 rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
                 />
                 <select
                   value={metodo}
                   onChange={(e) => setMetodo(e.target.value as MetodoPago)}
-                  className="rounded-lg border border-porcelain-300 px-2 text-sm outline-none focus:border-copper-500"
+                  className="min-w-0 shrink-0 rounded-lg border border-porcelain-300 px-2 py-2 text-sm outline-none focus:border-copper-500 sm:w-36"
                 >
                   {(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'] as MetodoPago[]).map((m) => (
                     <option key={m} value={m}>

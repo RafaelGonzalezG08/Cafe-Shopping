@@ -32,6 +32,13 @@ export const ESTADO_PEDIDO_WEB_LABEL: Record<string, string> = {
   CANCELADO: 'Cancelado',
 };
 
+export const ESTADO_FACTURA_LABEL: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  GENERADA: 'Generada',
+  ENVIADA: 'Enviada',
+  ERROR: 'Error',
+};
+
 export const METODO_PAGO_LABEL: Record<string, string> = {
   EFECTIVO: 'Efectivo',
   TARJETA: 'Tarjeta',
