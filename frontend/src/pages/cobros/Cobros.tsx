@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { X, Banknote, ImageOff, MessageCircle, Loader2 } from 'lucide-react';
+import { X, Banknote, ImageOff, MessageCircle, Loader2, Trash2 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { formatMoney, formatDate, formatDateTime, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState, Select } from '../../components/ui';
-import type { ClientDebt, EstadoDeuda, MetodoPago, Sale } from '../../types';
+import { Button, Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { useAuthStore } from '../../store/auth.store';
+import type { ClientDebt, EstadoDeuda, MetodoPago, Payment, Sale } from '../../types';
 
 const ESTADO_TONE: Record<EstadoDeuda, 'neutral' | 'copper' | 'sage' | 'brick' | 'rose'> = {
   PENDIENTE: 'neutral',
@@ -155,9 +156,15 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
 
 function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
+  // Igual que en Transacciones: eliminar un abono es una correccion contable,
+  // no una tarea de caja. El backend ya lo rechaza para CAJERO; esto solo
+  // evita mostrarle un boton que le va a devolver un error 403.
+  const puedeEliminarAbonos = role === 'ADMIN' || role === 'CONTABILIDAD';
   const [amount, setAmount] = useState('');
   const [metodo, setMetodo] = useState<MetodoPago>('EFECTIVO');
   const [imgRefreshKey, setImgRefreshKey] = useState(0);
+  const [abonoAEliminar, setAbonoAEliminar] = useState<Payment | null>(null);
   const saleId = debt.sale?.id;
 
   const { data: sale, isLoading } = useQuery<Sale>({
@@ -166,8 +173,15 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
     enabled: Boolean(saleId),
   });
 
-  const total = Number(debt.amountTotal ?? 0);
-  const pagado = Number(debt.amountPaid ?? 0);
+  // El total/abonado/saldo se calculan de `sale` (que se refresca al
+  // registrar o eliminar un abono), no del `debt` que llego por prop: ese es
+  // una foto fija del momento en que se abrio el modal y quedaria mostrando
+  // numeros viejos despues de cualquiera de las dos acciones.
+  const abonos = [...(sale?.payments ?? [])].sort(
+    (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
+  );
+  const total = sale ? Number(sale.total) : Number(debt.amountTotal ?? 0);
+  const pagado = sale ? abonos.reduce((sum, p) => sum + Number(p.amount), 0) : Number(debt.amountPaid ?? 0);
   const saldo = Math.max(0, total - pagado);
 
   const registerPayment = useMutation({
@@ -179,6 +193,27 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
       queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
       setAmount('');
       setImgRefreshKey((k) => k + 1);
+    },
+  });
+
+  const deletePayment = useMutation({
+    mutationFn: async (password: string) =>
+      (
+        await api.delete(`/client-debts/payments/${abonoAEliminar!.id}`, {
+          data: { password },
+          skipErrorToast: true,
+        })
+      ).data,
+    onSuccess: () => {
+      toast.success('Abono eliminado. El saldo de la cuenta se actualizo.');
+      queryClient.invalidateQueries({ queryKey: ['client-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
+      setAbonoAEliminar(null);
+      setImgRefreshKey((k) => k + 1);
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo eliminar el abono.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
     },
   });
 
@@ -251,6 +286,33 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
             </div>
           )}
 
+          {abonos.length > 0 && (
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Historial de abonos</p>
+              <div className="mb-4 divide-y divide-porcelain-200 rounded-lg border border-porcelain-200">
+                {abonos.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div>
+                      <p className="text-ink">RD$ {formatMoney(p.amount)}</p>
+                      <p className="text-xs text-muted">
+                        {formatDateTime(p.fecha)} &middot; {METODO_PAGO_LABEL[p.metodo]}
+                      </p>
+                    </div>
+                    {puedeEliminarAbonos && (
+                      <button
+                        onClick={() => setAbonoAEliminar(p)}
+                        className="rounded p-1.5 text-muted hover:bg-brick-100 hover:text-brick-600"
+                        title="Eliminar abono"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           {saldo > 0.01 ? (
             <form onSubmit={handleSubmit} className="mt-auto space-y-2.5 rounded-lg bg-porcelain-100 p-3.5">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Registrar abono</p>
@@ -313,6 +375,21 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
           {saldo > 0.01 && <ReminderButton debt={debt} className="mt-3" />}
         </div>
       </Card>
+
+      {abonoAEliminar && (
+        <ConfirmPasswordModal
+          titulo="Eliminar abono"
+          mensaje={
+            <>
+              Se eliminara el abono de RD$ {formatMoney(abonoAEliminar.amount)} del{' '}
+              {formatDateTime(abonoAEliminar.fecha)}. El saldo pendiente de la cuenta va a subir de nuevo.
+            </>
+          }
+          pendiente={deletePayment.isPending}
+          onConfirm={(password) => deletePayment.mutate(password)}
+          onClose={() => setAbonoAEliminar(null)}
+        />
+      )}
     </div>
   );
 }

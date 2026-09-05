@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Trash2, X } from 'lucide-react';
 
 export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
@@ -184,6 +184,74 @@ export function EmptyState({ title, description }: { title: string; description?
     <div className="flex flex-col items-center justify-center rounded-xl2 border border-dashed border-porcelain-300 py-14 text-center">
       <p className="font-display font-semibold text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>}
+    </div>
+  );
+}
+
+/**
+ * Confirmacion generica para eliminar algo sensible (una venta, un abono, un
+ * gasto): pide la clave de quien esta logueado como ultimo freno antes de
+ * borrar. Un solo componente para las tres pantallas en vez de repetir el
+ * mismo formulario tres veces.
+ */
+export function ConfirmPasswordModal({
+  titulo,
+  mensaje,
+  etiquetaClave = 'Clave',
+  textoBoton = 'Eliminar',
+  pendiente,
+  onConfirm,
+  onClose,
+}: {
+  titulo: string;
+  mensaje?: ReactNode;
+  etiquetaClave?: string;
+  textoBoton?: string;
+  pendiente: boolean;
+  onConfirm: (password: string) => void;
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
+      <Card className="w-full max-w-sm p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display font-bold text-ink">{titulo}</h2>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
+            <X size={18} />
+          </button>
+        </div>
+
+        {mensaje && <div className="mb-4 rounded-lg bg-brick-100 p-3 text-sm text-brick-700">{mensaje}</div>}
+
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+          {etiquetaClave}
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Confirma tu clave"
+          autoFocus
+          className="mb-4 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+        />
+
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            disabled={!password || pendiente}
+            onClick={() => onConfirm(password)}
+          >
+            {pendiente ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            {pendiente ? 'Eliminando...' : textoBoton}
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

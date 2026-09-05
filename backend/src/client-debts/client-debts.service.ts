@@ -1,10 +1,18 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import * as bcrypt from 'bcryptjs';
 import { EstadoDeuda, ESTADOS_DEUDA_CON_SALDO } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { RegisterPaymentDto } from './dto/register-payment.dto';
+import { DeletePaymentDto } from './dto/delete-payment.dto';
 
 @Injectable()
 export class ClientDebtsService {
@@ -124,6 +132,69 @@ export class ClientDebtsService {
     }
 
     return updated;
+  }
+
+  /**
+   * Elimina un abono ya registrado (se cobro por error, se registro dos
+   * veces, un monto mal digitado, etc.). Pide la clave de quien lo hace,
+   * igual que eliminar una venta: borrar dinero que ya se marco como
+   * recibido es sensible.
+   *
+   * Devuelve el saldo pendiente al estado que tenia antes del abono; si la
+   * deuda ya estaba VENCIDA se mantiene asi (misma logica que registerPayment).
+   */
+  async removePayment(paymentId: string, dto: DeletePaymentDto, userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordOk) throw new ForbiddenException('Clave incorrecta.');
+
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Abono no encontrado.');
+
+    const debt = await this.prisma.clientDebt.findFirst({ where: { saleId: payment.saleId } });
+    if (!debt) {
+      throw new NotFoundException('No se encontro la cuenta por cobrar de este abono.');
+    }
+
+    const nuevoPagado = Math.max(0, Number(debt.amountPaid) - Number(payment.amount));
+    const sigueVencida = debt.dueDate ? debt.dueDate < new Date() : false;
+    const nuevoEstado: EstadoDeuda =
+      nuevoPagado >= Number(debt.amountTotal) - 0.01
+        ? EstadoDeuda.PAGADA
+        : sigueVencida
+          ? EstadoDeuda.VENCIDA
+          : nuevoPagado <= 0.01
+            ? EstadoDeuda.PENDIENTE
+            : EstadoDeuda.PARCIAL;
+
+    await this.prisma.$transaction([
+      this.prisma.clientDebt.update({
+        where: { id: debt.id },
+        data: { amountPaid: nuevoPagado, status: nuevoEstado },
+      }),
+      this.prisma.payment.delete({ where: { id: paymentId } }),
+    ]);
+
+    await this.audit.log('ClientDebt', debt.id, 'UPDATE', userId, {
+      accion: 'eliminar-abono',
+      abonoEliminado: Number(payment.amount),
+      nuevoEstado,
+    });
+
+    // Igual que al registrar el abono: la factura se regenera para reflejar
+    // el saldo actualizado, sin tumbar el borrado si el render falla.
+    if (debt.saleId) {
+      try {
+        await this.invoicesService.generateForSale(debt.saleId);
+      } catch (error) {
+        this.logger.error(
+          `Fallo al regenerar factura tras eliminar abono de la deuda ${debt.id}: ${error}`,
+        );
+      }
+    }
+
+    return { id: paymentId, deleted: true };
   }
 
   /**

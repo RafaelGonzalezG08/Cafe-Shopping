@@ -1,17 +1,18 @@
-import { type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate } from '../../lib/format';
-import { Button, Card, PageHeader, EmptyState } from '../../components/ui';
+import { Button, Card, PageHeader, EmptyState, ConfirmPasswordModal } from '../../components/ui';
 import type { Expense } from '../../types';
 
 export default function Expenses() {
   const queryClient = useQueryClient();
   // El gasto a medio escribir sobrevive si se sale de la pantalla sin querer.
   const [form, setForm] = usePersistedState('gastos:nuevo', { categoria: '', descripcion: '', monto: '' });
+  const [gastoAEliminar, setGastoAEliminar] = useState<Expense | null>(null);
 
   const { data: expenses = [], isLoading } = useQuery<Expense[]>({
     queryKey: ['expenses'],
@@ -30,10 +31,22 @@ export default function Expenses() {
   });
 
   const deleteExpense = useMutation({
-    mutationFn: async (id: string) => api.delete(`/expenses/${id}`),
+    mutationFn: async (password: string) =>
+      (
+        await api.delete(`/expenses/${gastoAEliminar!.id}`, {
+          data: { password },
+          skipErrorToast: true,
+        })
+      ).data,
     onSuccess: () => {
+      toast.success('Gasto eliminado.');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setGastoAEliminar(null);
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo eliminar el gasto.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
     },
   });
 
@@ -71,7 +84,7 @@ export default function Expenses() {
                       RD$ {formatMoney(g.monto)}
                     </p>
                     <button
-                      onClick={() => deleteExpense.mutate(g.id)}
+                      onClick={() => setGastoAEliminar(g)}
                       className="rounded p-1 text-muted hover:bg-brick-100 hover:text-brick-600"
                     >
                       <Trash2 size={14} />
@@ -122,6 +135,20 @@ export default function Expenses() {
           </form>
         </Card>
       </div>
+
+      {gastoAEliminar && (
+        <ConfirmPasswordModal
+          titulo="Eliminar gasto"
+          mensaje={
+            <>
+              Se eliminara "{gastoAEliminar.descripcion}" por RD$ {formatMoney(gastoAEliminar.monto)}.
+            </>
+          }
+          pendiente={deleteExpense.isPending}
+          onConfirm={(password) => deleteExpense.mutate(password)}
+          onClose={() => setGastoAEliminar(null)}
+        />
+      )}
     </div>
   );
 }

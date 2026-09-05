@@ -1,11 +1,26 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
-import { Card, PageHeader, Badge, EmptyState, Select } from '../../components/ui';
-import type { MetodoPago, TipoTransaccion, TransaccionesResponse } from '../../types';
+import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { useAuthStore } from '../../store/auth.store';
+import type { MetodoPago, Transaccion, TipoTransaccion, TransaccionesResponse } from '../../types';
+
+/**
+ * El id de cada fila viene con el prefijo del tipo (`venta-xxx`, `abono-xxx`,
+ * `gasto-xxx`; ver reports.service.ts -> transactions()) porque mezcla tres
+ * tablas distintas. Para eliminar hay que separar el prefijo del id real de
+ * Sale/Payment/Expense y pegarle al endpoint correcto de cada uno.
+ */
+function endpointDeBorrado(t: Transaccion): { url: string; body: (password: string) => Record<string, string> } {
+  const id = t.id.slice(t.id.indexOf('-') + 1);
+  if (t.tipo === 'VENTA') return { url: `/sales/${id}`, body: (password) => ({ adminPassword: password }) };
+  if (t.tipo === 'ABONO') return { url: `/client-debts/payments/${id}`, body: (password) => ({ password }) };
+  return { url: `/expenses/${id}`, body: (password) => ({ password }) };
+}
 
 const TIPOS: { value: TipoTransaccion; label: string; tone: 'copper' | 'sage' | 'brick' }[] = [
   { value: 'VENTA', label: 'Ventas', tone: 'copper' },
@@ -57,12 +72,21 @@ const PRESETS: { id: PresetId; label: string }[] = [
 ];
 
 export default function Transactions() {
+  const queryClient = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
   const [from, setFrom] = usePersistedState('transacciones:desde', rangoDePreset('30d').from);
   const [to, setTo] = usePersistedState('transacciones:hasta', rangoDePreset('30d').to);
   const [preset, setPreset] = usePersistedState<PresetId | ''>('transacciones:preset', '30d');
   const [tipos, setTipos] = usePersistedState<TipoTransaccion[]>('transacciones:tipos', []);
   const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago | ''>('transacciones:metodo', '');
   const [q, setQ] = useState('');
+  const [aEliminar, setAEliminar] = useState<Transaccion | null>(null);
+
+  // Eliminar una venta solo lo puede hacer ADMIN (misma regla que en
+  // Ventas); abonos y gastos los puede corregir tambien Contabilidad.
+  function puedeEliminar(t: Transaccion) {
+    return t.tipo === 'VENTA' ? role === 'ADMIN' : role === 'ADMIN' || role === 'CONTABILIDAD';
+  }
 
   function aplicarPreset(id: PresetId) {
     const r = rangoDePreset(id);
@@ -97,6 +121,28 @@ export default function Transactions() {
   });
 
   const items = data?.items ?? [];
+
+  const eliminar = useMutation({
+    mutationFn: async (password: string) => {
+      const { url, body } = endpointDeBorrado(aEliminar!);
+      return (await api.delete(url, { data: body(password), skipErrorToast: true })).data;
+    },
+    onSuccess: () => {
+      toast.success('Transaccion eliminada.');
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['client-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setAEliminar(null);
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo eliminar la transaccion.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
 
   async function exportarCsv() {
     const response = await api.get('/reports/transactions/export', { params, responseType: 'blob' });
@@ -254,6 +300,7 @@ export default function Transactions() {
                   <th className="px-4 py-2.5">Usuario</th>
                   <th className="px-4 py-2.5">Metodo</th>
                   <th className="px-4 py-2.5 text-right">Monto</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-porcelain-200">
@@ -282,6 +329,17 @@ export default function Transactions() {
                     >
                       {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
                     </td>
+                    <td className="px-4 py-2.5">
+                      {puedeEliminar(t) && (
+                        <button
+                          onClick={() => setAEliminar(t)}
+                          className="rounded p-1.5 text-muted hover:bg-brick-100 hover:text-brick-600"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -291,6 +349,24 @@ export default function Transactions() {
             {items.length} transaccion{items.length === 1 ? '' : 'es'} en este filtro.
           </p>
         </Card>
+      )}
+
+      {aEliminar && (
+        <ConfirmPasswordModal
+          titulo="Eliminar transaccion"
+          mensaje={
+            <>
+              Se eliminara: {aEliminar.descripcion} por RD$ {formatMoney(aEliminar.monto)} del{' '}
+              {formatDateTime(aEliminar.fecha)}.
+              {aEliminar.tipo === 'VENTA' &&
+                ' Las piezas de esta venta volveran al inventario y su factura se borrara.'}
+              {aEliminar.tipo === 'ABONO' && ' El saldo pendiente de la cuenta va a subir de nuevo.'}
+            </>
+          }
+          pendiente={eliminar.isPending}
+          onConfirm={(password) => eliminar.mutate(password)}
+          onClose={() => setAEliminar(null)}
+        />
       )}
     </div>
   );

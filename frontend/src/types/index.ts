@@ -95,6 +95,14 @@ export interface Invoice {
   whatsappIntentos?: number;
 }
 
+export interface Payment {
+  id: string;
+  saleId: string;
+  amount: number;
+  fecha: string;
+  metodo: MetodoPago;
+}
+
 export interface Sale {
   id: string;
   fecha: string;
@@ -107,6 +115,7 @@ export interface Sale {
   client?: Client | null;
   items: SaleItem[];
   invoice?: Invoice | null;
+  payments?: Payment[];
 }
 
 export interface ClientDebt {
