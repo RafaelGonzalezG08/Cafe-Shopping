@@ -69,8 +69,13 @@ export function generarHtml(datos: DatosCatalogo): string {
     --pastel:#F7DEE1;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  /* Nada de la pagina se puede seleccionar/copiar salvo los nombres de las
+     piezas (mas abajo se re-habilita en .nombre). Disuade la copia casual del
+     catalogo; no frena devtools ni capturas de pantalla. */
   body{background:var(--fondo);color:var(--tinta);
-    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.5}
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.5;
+    -webkit-user-select:none;user-select:none}
+  .pieza .nombre,.visor .info .nombre{-webkit-user-select:text;user-select:text}
   img{max-width:100%;display:block}
 
   header{background:var(--pastel);color:var(--tinta);padding:2.5rem 1.25rem;text-align:center}
@@ -201,6 +206,52 @@ export function generarHtml(datos: DatosCatalogo): string {
   footer{background:var(--pastel);color:var(--tinta);padding:2rem 1.25rem;text-align:center;
     font-size:.85rem}
 
+  /* ---- Punto de venta oculto ----
+     Se abre manteniendo pulsado "Filtros" 2s y metiendo una clave que valida
+     el relevo en la nube (nunca viaja en este HTML). */
+  .modal{position:fixed;inset:0;z-index:60;background:rgba(20,8,12,.82);
+    display:none;align-items:center;justify-content:center;padding:1.25rem}
+  .modal.abierto{display:flex}
+  .modal .caja{background:var(--papel);border-radius:16px;padding:1.5rem;
+    width:100%;max-width:380px;max-height:88vh;overflow-y:auto;
+    box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  .modal h2{font-size:1.1rem;margin-bottom:.35rem}
+  .modal p.sub{color:var(--suave);font-size:.85rem;margin-bottom:1rem}
+  .modal label{display:block;font-size:.72rem;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--suave);font-weight:700;margin:.85rem 0 .35rem}
+  .modal input[type=password],.modal input[type=text],.modal input[type=tel],
+  .modal input[type=number]{width:100%;padding:.65rem .8rem;border:1px solid var(--linea);
+    border-radius:10px;font-size:1rem;outline:none;background:var(--fondo)}
+  .modal input:focus{border-color:var(--acento)}
+  .modal .metodos{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.15rem}
+  .modal .metodos button{flex:1;min-width:calc(50% - .2rem);padding:.55rem;border-radius:9px;
+    border:1px solid var(--linea);background:var(--papel);font-size:.82rem;font-weight:700;
+    color:var(--tinta);cursor:pointer}
+  .modal .metodos button.activo{background:var(--acento);border-color:var(--acento);color:#fff}
+  .modal .acciones{display:flex;gap:.5rem;margin-top:1.25rem}
+  .modal .acciones button{flex:1;padding:.7rem;border-radius:10px;border:0;
+    font-weight:700;font-size:.9rem;cursor:pointer}
+  .modal .acciones .ok{background:#0E8A5F;color:#fff}
+  .modal .acciones .cancelar{background:var(--fondo);color:var(--suave);border:1px solid var(--linea)}
+  .modal .error{color:var(--acento-osc);font-size:.82rem;font-weight:700;margin-top:.75rem;min-height:1rem}
+  .modal .contactos{margin-top:.4rem;background:none;border:0;color:var(--acento-osc);
+    font-size:.8rem;font-weight:700;cursor:pointer;padding:0}
+  .modal .resumen-venta{background:var(--fondo);border-radius:10px;padding:.7rem .85rem;
+    font-size:.85rem;margin-bottom:.25rem}
+  .modal .resumen-venta b{font-size:1rem}
+
+  /* Franja "modo venta activo": bloque normal al tope de la pagina (se va con
+     el scroll, es solo un indicador). */
+  .modo-venta{background:var(--acento-osc);color:#fff;font-size:.8rem;font-weight:700;
+    padding:.5rem 1rem;text-align:center;display:none;align-items:center;
+    justify-content:center;gap:.6rem}
+  .modo-venta.visible{display:flex}
+  .modo-venta button{background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;
+    padding:.15rem .5rem;font-size:.72rem;font-weight:700;cursor:pointer}
+
+  .pedido .cobrar{background:var(--acento);color:#fff;display:none}
+  .pedido.modo-venta-activo .cobrar{display:inline-block}
+
   @media(max-width:420px){
     .rejilla{grid-template-columns:repeat(2,1fr);gap:.7rem}
     header{padding:1.75rem 1rem}
@@ -209,6 +260,11 @@ export function generarHtml(datos: DatosCatalogo): string {
 </style>
 </head>
 <body>
+
+<div class="modo-venta" id="modoVenta">
+  <span>&#128274; Modo venta activo</span>
+  <button type="button" id="salirModoVenta">Salir</button>
+</div>
 
 <header>
   ${datos.logo ? `<img src="${esc(datos.logo)}" alt="">` : ''}
@@ -224,7 +280,7 @@ export function generarHtml(datos: DatosCatalogo): string {
   </button>
 </div>
 
-<div class="panel-filtros" id="panelFiltros">
+<div class="panel-filtros abierto" id="panelFiltros">
   <div class="contenido">
     <div id="bloqueCategoria">
       <h3>Categoria</h3>
@@ -261,7 +317,47 @@ export function generarHtml(datos: DatosCatalogo): string {
     </div>
     <div class="acciones">
       <button class="vaciar" id="vaciar">Vaciar</button>
+      <button class="cobrar" id="cobrar">Cobrar venta</button>
       <button class="enviar" id="enviar">Pedir por WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalClave">
+  <div class="caja">
+    <h2>Punto de venta</h2>
+    <p class="sub">Escribe la clave del punto de venta para registrar una venta desde aqui.</p>
+    <label for="claveInput">Clave</label>
+    <input id="claveInput" type="password" autocomplete="off" inputmode="text">
+    <div class="error" id="claveError"></div>
+    <div class="acciones">
+      <button type="button" class="cancelar" id="claveCancelar">Cancelar</button>
+      <button type="button" class="ok" id="claveEntrar">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalCobrar">
+  <div class="caja">
+    <h2>Cobrar venta</h2>
+    <div class="resumen-venta" id="resumenVenta"></div>
+    <label>Metodo de pago</label>
+    <div class="metodos" id="metodosPago">
+      <button type="button" data-metodo="EFECTIVO" class="activo">Efectivo</button>
+      <button type="button" data-metodo="TARJETA">Tarjeta</button>
+      <button type="button" data-metodo="TRANSFERENCIA">Transferencia</button>
+      <button type="button" data-metodo="CREDITO">Credito</button>
+    </div>
+    <label for="descuentoInput">Descuento %</label>
+    <input id="descuentoInput" type="number" min="0" max="100" inputmode="numeric" placeholder="0">
+    <label for="clienteNombre">Cliente <span id="clienteObligatorio" style="color:var(--acento-osc)" hidden>(obligatorio a credito)</span></label>
+    <input id="clienteNombre" type="text" autocomplete="off" placeholder="Nombre">
+    <input id="clienteTelefono" type="tel" autocomplete="off" placeholder="Telefono" style="margin-top:.4rem">
+    <button type="button" class="contactos" id="elegirContacto" hidden>Elegir de mis contactos</button>
+    <div class="error" id="cobrarError"></div>
+    <div class="acciones">
+      <button type="button" class="cancelar" id="cobrarCancelar">Cancelar</button>
+      <button type="button" class="ok" id="cobrarConfirmar">Confirmar venta</button>
     </div>
   </div>
 </div>
@@ -387,6 +483,12 @@ document.addEventListener('keydown', (e) => {
 });
 
 function agregar(sku) {
+  // En modo venta el carrito no puede pasar de 30 productos distintos: es el
+  // tope que acepta el relevo (evita que alguien intente saturar la app).
+  if (pos.activo && !carrito.has(sku) && carrito.size >= 30) {
+    alert('Maximo 30 productos distintos por venta.');
+    return;
+  }
   carrito.set(sku, (carrito.get(sku) || 0) + 1);
   pintar();
   actualizarPedido();
@@ -438,9 +540,26 @@ function aplicarFiltros() {
   pintar();
 }
 
-document.getElementById('btnFiltros').onclick = () => {
-  document.getElementById('panelFiltros').classList.toggle('abierto');
-};
+// El boton "Filtros": un toque normal abre/cierra el panel; mantenerlo
+// pulsado 2s abre el punto de venta oculto (ver mas abajo).
+(function () {
+  const btn = document.getElementById('btnFiltros');
+  let timer = null;
+  let fueLargo = false;
+  const arrancar = () => {
+    fueLargo = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => { fueLargo = true; abrirModalClave(); }, 2000);
+  };
+  const cortar = () => clearTimeout(timer);
+  btn.addEventListener('pointerdown', arrancar);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, cortar));
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  btn.addEventListener('click', (e) => {
+    if (fueLargo) { e.preventDefault(); e.stopPropagation(); fueLargo = false; return; }
+    document.getElementById('panelFiltros').classList.toggle('abierto');
+  });
+})();
 
 document.getElementById('precioDesde').oninput = (e) => {
   filtros.desde = e.target.value === '' ? null : Number(e.target.value);
@@ -536,6 +655,178 @@ document.getElementById('enviar').onclick = () => {
 document.getElementById('buscar').oninput = (e) => {
   filtros.texto = e.target.value.trim().toLowerCase();
   pintar();
+};
+
+// ---- No copiar (todo salvo los nombres de las piezas) ----
+function seleccionEnNombre() {
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+  var nodo = sel.getRangeAt(0).commonAncestorContainer;
+  if (nodo.nodeType === 3) nodo = nodo.parentElement;
+  return !!(nodo && nodo.closest && nodo.closest('.nombre'));
+}
+document.addEventListener('copy', (e) => { if (!seleccionEnNombre()) e.preventDefault(); });
+
+// ---- Punto de venta oculto ----
+// La clave NUNCA esta en esta pagina: se manda al relevo en la nube y ese la
+// compara con un secreto que solo vive en Cloudflare. El estado desbloqueado
+// vive solo en memoria (no localStorage): recargar la pagina o pasar 5
+// minutos lo vuelve a pedir.
+const RELEVO = (DATOS.relevoUrl || '').replace(/\\/$/, '');
+const DURACION_POS_MS = 5 * 60 * 1000;
+const pos = { activo: false, clave: '', desde: 0, metodo: 'EFECTIVO', temporizador: null };
+
+function abrirModalClave() {
+  if (!RELEVO) { alert('El punto de venta web no esta configurado.'); return; }
+  document.getElementById('claveError').textContent = '';
+  document.getElementById('claveInput').value = '';
+  document.getElementById('modalClave').classList.add('abierto');
+  setTimeout(() => document.getElementById('claveInput').focus(), 50);
+}
+function cerrarModalClave() {
+  document.getElementById('modalClave').classList.remove('abierto');
+}
+document.getElementById('claveCancelar').onclick = cerrarModalClave;
+document.getElementById('claveInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('claveEntrar').click();
+});
+document.getElementById('claveEntrar').onclick = async () => {
+  const clave = document.getElementById('claveInput').value;
+  if (!clave) return;
+  const err = document.getElementById('claveError');
+  err.textContent = 'Verificando...';
+  try {
+    const r = await fetch(RELEVO + '/pos/verificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clave }),
+    });
+    if (r.ok) { activarModoVenta(clave); cerrarModalClave(); }
+    else if (r.status === 429) err.textContent = 'Demasiados intentos. Espera unos minutos.';
+    else if (r.status === 503) err.textContent = 'El punto de venta web no esta configurado en Cloudflare.';
+    else err.textContent = 'Clave incorrecta.';
+  } catch { err.textContent = 'No se pudo verificar (sin conexion?).'; }
+};
+
+function activarModoVenta(clave) {
+  pos.activo = true;
+  pos.clave = clave;
+  pos.desde = Date.now();
+  clearTimeout(pos.temporizador);
+  pos.temporizador = setTimeout(salirModoVenta, DURACION_POS_MS);
+  document.getElementById('modoVenta').classList.add('visible');
+  document.getElementById('pedido').classList.add('modo-venta-activo');
+}
+function salirModoVenta() {
+  pos.activo = false;
+  pos.clave = '';
+  clearTimeout(pos.temporizador);
+  document.getElementById('modoVenta').classList.remove('visible');
+  document.getElementById('pedido').classList.remove('modo-venta-activo');
+  document.getElementById('modalCobrar').classList.remove('abierto');
+}
+function sesionPosValida() {
+  return pos.activo && (Date.now() - pos.desde) < DURACION_POS_MS;
+}
+document.getElementById('salirModoVenta').onclick = salirModoVenta;
+
+// ---- Hoja de cobro ----
+const metodosCont = document.getElementById('metodosPago');
+metodosCont.querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    metodosCont.querySelectorAll('button').forEach(x => x.classList.remove('activo'));
+    b.classList.add('activo');
+    pos.metodo = b.dataset.metodo;
+    document.getElementById('clienteObligatorio').hidden = pos.metodo !== 'CREDITO';
+  };
+});
+
+const btnContacto = document.getElementById('elegirContacto');
+if (navigator.contacts && navigator.contacts.select) {
+  btnContacto.hidden = false;
+  btnContacto.onclick = async () => {
+    try {
+      const elegidos = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      const c = elegidos && elegidos[0];
+      if (c) {
+        if (c.name && c.name[0]) document.getElementById('clienteNombre').value = c.name[0];
+        if (c.tel && c.tel[0]) document.getElementById('clienteTelefono').value = c.tel[0];
+      }
+    } catch {}
+  };
+}
+
+function abrirCobrar() {
+  if (!sesionPosValida()) { salirModoVenta(); abrirModalClave(); return; }
+  if (carrito.size === 0) { alert('Agrega al menos un producto.'); return; }
+  let piezas = 0, total = 0;
+  for (const [sku, cant] of carrito) {
+    const p = DATOS.productos.find(x => x.sku === sku);
+    if (p) { piezas += cant; total += p.precio * cant; }
+  }
+  document.getElementById('resumenVenta').innerHTML =
+    piezas + (piezas === 1 ? ' pieza' : ' piezas') + ' &middot; <b>RD$ ' + dinero(total) + '</b>';
+  document.getElementById('cobrarError').textContent = '';
+  document.getElementById('modalCobrar').classList.add('abierto');
+}
+document.getElementById('cobrar').onclick = abrirCobrar;
+document.getElementById('cobrarCancelar').onclick = () =>
+  document.getElementById('modalCobrar').classList.remove('abierto');
+
+function generarCodigoVenta() {
+  const fecha = Date.now().toString(36).slice(-5).toUpperCase();
+  const azar = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return 'VNT-' + fecha + azar;
+}
+
+document.getElementById('cobrarConfirmar').onclick = async () => {
+  if (!sesionPosValida()) { salirModoVenta(); abrirModalClave(); return; }
+  const err = document.getElementById('cobrarError');
+  const nombre = document.getElementById('clienteNombre').value.trim();
+  const telefono = document.getElementById('clienteTelefono').value.trim();
+  const descuentoPct = Math.max(0, Math.min(100, Number(document.getElementById('descuentoInput').value) || 0));
+  if (pos.metodo === 'CREDITO' && (!nombre || !telefono)) {
+    err.textContent = 'A credito hace falta el nombre y el telefono del cliente.';
+    return;
+  }
+  const items = [];
+  for (const [sku, cant] of carrito) {
+    const p = DATOS.productos.find(x => x.sku === sku);
+    if (p) items.push({ sku, cantidad: cant, precio: p.precio });
+  }
+  if (items.length === 0) { err.textContent = 'El carrito esta vacio.'; return; }
+  const venta = {
+    items,
+    metodoPago: pos.metodo,
+    descuentoPct,
+    cliente: (nombre || telefono) ? { nombre, telefono } : null,
+  };
+  const codigo = generarCodigoVenta();
+  err.textContent = 'Enviando...';
+  try {
+    const r = await fetch(RELEVO + '/pos/ventas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo, venta, clave: pos.clave }),
+    });
+    if (r.ok) {
+      carrito.clear();
+      pintar();
+      actualizarPedido();
+      document.getElementById('modalCobrar').classList.remove('abierto');
+      document.getElementById('descuentoInput').value = '';
+      document.getElementById('clienteNombre').value = '';
+      document.getElementById('clienteTelefono').value = '';
+      alert('Venta ' + codigo + ' enviada. Va a aparecer en la app en un momento.');
+    } else if (r.status === 429) {
+      err.textContent = 'Se alcanzo el limite de ventas por ahora. Intenta en unos minutos.';
+    } else if (r.status === 401) {
+      err.textContent = 'La sesion expiro. Vuelve a entrar la clave.';
+      salirModoVenta();
+    } else {
+      err.textContent = 'No se pudo enviar la venta (codigo ' + r.status + ').';
+    }
+  } catch { err.textContent = 'No se pudo enviar (sin conexion?).'; }
 };
 
 pintarChipsMaterial();

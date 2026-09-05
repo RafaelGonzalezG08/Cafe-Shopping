@@ -24,6 +24,34 @@ por unos minutos, hasta que la app los recoge.
    guarda esto en su base de datos, no en un archivo — el negocio lo cambia
    el mismo cuando quiera, sin editar nada a mano.
 
+## Punto de venta oculto del catalogo (opcional)
+
+El catalogo tiene un punto de venta escondido: manteniendo pulsado el boton
+"Filtros" 2 segundos aparece un cuadro para meter una clave, y con eso el
+personal puede registrar una **venta real** desde el celular; esa venta cae
+sola en la app (factura, stock, deuda si es a credito).
+
+La clave de ese punto de venta es **otro secreto del mismo Worker**, aparte de
+`CLAVE_SECRETA`:
+
+1. Cloudflare -> tu Worker `cafe-shopping-pedidos` -> **Settings > Variables and
+   Secrets > Add**.
+2. Nombre: `CLAVE_POS`, tipo **Secret**, valor: una clave larga y dificil de
+   adivinar (no la misma que `CLAVE_SECRETA`). No se comparte con clientes, solo
+   con quien vaya a cobrar desde la web.
+3. **Save and Deploy.**
+
+Se puede cambiar cuando quieras desde ahi, sin regenerar el catalogo. Si
+`CLAVE_POS` no esta puesta, el punto de venta oculto simplemente no funciona
+(el cuadro dice "no esta configurado").
+
+Limites automaticos contra saturacion (no hay que tocar nada):
+- 5 intentos de clave por IP cada 10 min.
+- 10 ventas por IP cada 10 min; 40 ventas por hora en total.
+- Maximo 30 productos distintos por venta.
+- La app procesa hasta 15 ventas web por ciclo y como mucho 60 al dia de forma
+  automatica; si se pasa, las deja pendientes y avisa en el log.
+
 ## Piezas que hablan con esto
 
 - `backend/src/catalogo/plantilla.ts` — el boton "Pedir por WhatsApp" del

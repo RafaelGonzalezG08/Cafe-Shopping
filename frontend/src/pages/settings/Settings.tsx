@@ -680,6 +680,25 @@ function CatalogoWeb({
           </div>
         </div>
 
+        <div className="border-t border-porcelain-200 pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Punto de venta desde el catalogo (opcional)
+          </p>
+          <p className="text-xs leading-relaxed text-muted">
+            En la pagina del catalogo, manteniendo pulsado el boton <strong>Filtros</strong> por 2
+            segundos aparece un cuadro para una clave. Con esa clave, el personal puede registrar una
+            venta real desde el celular y esa venta cae sola en la app (factura, stock, y deuda si es
+            a credito), a nombre del usuario <strong>Ventas web</strong>.
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            La clave del punto de venta es <strong>otro secreto de Cloudflare</strong>, aparte de la
+            de arriba: en tu Worker <code>cafe-shopping-pedidos</code> &rarr;{' '}
+            <strong>Settings &rarr; Variables and Secrets &rarr; Add</strong>, nombre{' '}
+            <code>CLAVE_POS</code>, tipo Secret. La pide de nuevo en cada recarga de la pagina o
+            pasados 5 minutos. Sin ese secreto puesto, el punto de venta simplemente no funciona.
+          </p>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onGuardar} disabled={guardando}>
             <Save size={15} /> Guardar datos
