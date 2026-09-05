@@ -58,6 +58,22 @@ async function main() {
     },
   });
 
+  // Usuario de sistema para atribuir las ventas hechas desde el punto de venta
+  // oculto del catalogo web. No puede iniciar sesion (hash de un valor
+  // aleatorio descartado). En produccion lo crea la migracion
+  // 20260905120100_usuario_ventas_web.
+  await prisma.user.upsert({
+    where: { email: 'ventas-web@cafeshopping.local' },
+    update: {},
+    create: {
+      id: 'usuario-ventas-web',
+      nombre: 'Ventas web',
+      email: 'ventas-web@cafeshopping.local',
+      passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
+      role: Role.CAJERO,
+    },
+  });
+
   const productos = [
     { sku: 'AN-001', nombre: 'Anillo solitario oro 18k 0.5ct', precioUnitario: 45000, stock: 5 },
     { sku: 'AN-002', nombre: 'Anillo argolla plata 925', precioUnitario: 3200, stock: 20 },

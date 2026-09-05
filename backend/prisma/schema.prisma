@@ -115,6 +115,10 @@ model Sale {
   metodoPago String @map("metodo_pago")
   userId     String     @map("user_id")
   clientId   String?    @map("client_id")
+  // Codigo (VNT-XXXX) de la venta hecha desde el punto de venta oculto del
+  // catalogo web. Unico para que el relevo no cree la misma venta dos veces.
+  // null en las ventas normales del mostrador.
+  webCodigo  String?    @unique @map("web_codigo")
   createdAt  DateTime   @default(now()) @map("created_at")
 
   user      User        @relation(fields: [userId], references: [id])

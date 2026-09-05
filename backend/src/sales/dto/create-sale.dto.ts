@@ -104,4 +104,14 @@ export class CreateSaleDto {
   @IsOptional()
   @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
   fechaEntrega?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Codigo (VNT-XXXX) de la venta hecha desde el punto de venta del catalogo web. ' +
+      'Uso interno del relevo; unico, evita crear la misma venta dos veces.',
+  })
+  @IsOptional()
+  @IsString()
+  webCodigo?: string;
 }

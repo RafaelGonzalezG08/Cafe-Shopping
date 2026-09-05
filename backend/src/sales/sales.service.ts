@@ -117,6 +117,7 @@ export class SalesService {
           metodoPago: dto.metodoPago,
           userId,
           clientId: dto.clientId,
+          webCodigo: dto.webCodigo,
           items: {
             create: dto.items.map((item) => ({
               productId: item.productId,

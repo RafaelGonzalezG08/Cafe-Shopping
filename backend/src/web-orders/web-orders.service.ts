@@ -69,6 +69,36 @@ export class WebOrdersService {
     return conItems(creado);
   }
 
+  /**
+   * Crea un pedido web a partir de items ya estructurados, sin pasar por el
+   * parser de texto. Lo usa el relevo de ventas web (`WebSalesRelayService`)
+   * cuando una venta del catalogo no se pudo crear como venta automatica por
+   * un error de datos: en vez de perderla, cae aqui como pedido pendiente
+   * para que alguien la revise.
+   */
+  async crearDesdeItems(
+    params: { codigo: string; items: ItemPedidoWeb[]; total: number; nota: string },
+    userId?: string,
+  ) {
+    const existente = await this.prisma.webOrder.findUnique({ where: { codigo: params.codigo } });
+    if (existente) {
+      throw new ConflictException(`El pedido ${params.codigo} ya estaba registrado.`);
+    }
+    const creado = await this.prisma.webOrder.create({
+      data: {
+        codigo: params.codigo,
+        items: JSON.stringify(params.items),
+        total: params.total,
+        textoOriginal: params.nota,
+      },
+    });
+    await this.audit.log('WebOrder', creado.id, 'CREATE', userId, {
+      codigo: creado.codigo,
+      origen: 'venta-web-fallback',
+    });
+    return conItems(creado);
+  }
+
   async findAll(estado?: EstadoPedidoWeb) {
     const pedidos = await this.prisma.webOrder.findMany({
       where: estado ? { estado } : undefined,
