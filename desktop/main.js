@@ -428,7 +428,21 @@ async function startup() {
     // maquina virtual despierte. El backend es un proceso hijo y el frontend
     // se sirve desde disco (ver nativo.js).
     setSplashStatus('Iniciando el servicio...');
-    await nativo.startBackend((linea) => console.log(`[backend] ${linea}`));
+    // Ademas de la consola (que en la app empaquetada nadie ve), cada linea
+    // que imprime el backend queda en un archivo. Sin esto, cuando algo como
+    // el relevo de pedidos fallaba en silencio no habia ninguna forma de
+    // saber por que -- ni el negocio ni quien lo soporta podian ver nada.
+    const logBackendFile = path.join(app.getPath('userData'), 'backend-log.txt');
+    await nativo.startBackend((linea) => {
+      const conFecha = `[${new Date().toISOString()}] ${linea}\n`;
+      console.log(`[backend] ${linea}`);
+      try {
+        fs.appendFileSync(logBackendFile, conFecha);
+      } catch {
+        // Si ni siquiera se puede escribir el log, no hay nada mas que hacer
+        // aqui: no debe tumbar el arranque de la app por esto.
+      }
+    });
 
     setSplashStatus('Preparando la base de datos...');
     const backendListo = await nativo.waitForBackend(setSplashStatus);

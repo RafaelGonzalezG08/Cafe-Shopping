@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Max,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 
 export class UpdateBusinessProfileDto {
   @ApiProperty({ example: 'Cafe Shopping' })
@@ -53,8 +62,20 @@ export class UpdateBusinessProfileDto {
     required: false,
     description: 'URL del relevo en la nube para automatizar Pedidos web.',
   })
-  @IsOptional()
-  @IsString()
+  // No @IsOptional(): esa deja pasar undefined/null pero NO un string vacio,
+  // y aqui el campo vacio ("no usar el relevo") es un valor valido -- por
+  // eso la validacion de URL solo corre si de verdad viene algo escrito.
+  // Sin esto, una URL mal tipeada (sin "https://", con un caracter raro)
+  // se guardaba tal cual y el error salia recien 3 minutos despues, en un
+  // log que nadie ve.
+  @ValidateIf((o: UpdateBusinessProfileDto) => Boolean(o.relevoPedidosUrl))
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    {
+      message:
+        'La URL del relevo no es valida. Tiene que empezar con https:// y ser la direccion completa de tu Worker de Cloudflare.',
+    },
+  )
   relevoPedidosUrl?: string;
 
   @ApiProperty({
