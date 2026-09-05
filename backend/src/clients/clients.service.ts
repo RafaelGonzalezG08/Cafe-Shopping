@@ -12,6 +12,19 @@ export class ClientsService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Filas para exportar la lista de clientes a Excel (CSV). */
+  async exportarCsv() {
+    const clientes = await this.prisma.client.findMany({ orderBy: { nombre: 'asc' } });
+    return clientes.map((c) => ({
+      Nombre: c.nombre,
+      Telefono: c.telefono,
+      Email: c.email ?? '',
+      Direccion: c.direccion ?? '',
+      Notas: c.notas ?? '',
+      'Cliente desde': c.createdAt.toISOString().slice(0, 10),
+    }));
+  }
+
   async findAll(search?: string) {
     // Por palabras sueltas, sin importar el orden: "juan perez" encuentra a
     // "Juan Carlos Perez" aunque "perez" no vaya pegado a "juan". Cada

@@ -7,6 +7,7 @@ import { StorageService } from '../invoices/storage.service';
 import { optimizeProductImage } from '../common/image.util';
 import { CatalogoService } from '../catalogo/catalogo.service';
 import { UPLOADS_DIR } from '../common/paths';
+import { MATERIAL_LABEL, Material } from '../common/enums';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -61,6 +62,31 @@ export class ProductsService {
     } catch (error) {
       this.logger.warn(`No se pudo actualizar el catalogo web: ${error}`);
     }
+  }
+
+  /**
+   * Filas para exportar el inventario a Excel (CSV). Sin fotos: son binario,
+   * no tienen sentido en una hoja de calculo. El costo solo se incluye para
+   * ADMIN, igual que en la lista normal (stripCostForNonAdmin en el
+   * controller) - es el margen del negocio.
+   */
+  async exportarCsv(onlyActive: boolean, incluirCosto: boolean) {
+    const productos = await this.prisma.product.findMany({
+      where: onlyActive ? { activo: true } : undefined,
+      orderBy: { nombre: 'asc' },
+      include: { categoria: { select: { nombre: true } } },
+    });
+
+    return productos.map((p) => ({
+      SKU: p.sku,
+      Nombre: p.nombre,
+      Categoria: p.categoria?.nombre ?? '',
+      Material: MATERIAL_LABEL[p.material as Material] ?? p.material,
+      Precio: Number(p.precioUnitario),
+      ...(incluirCosto ? { Costo: Number(p.costoUnitario) } : {}),
+      Stock: p.stock,
+      Estado: p.activo ? 'Activo' : 'Dado de baja',
+    }));
   }
 
   findAll(onlyActive = true) {

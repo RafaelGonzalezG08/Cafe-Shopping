@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, ImagePlus, Gem, X, Pencil, Search, Trash2, RotateCcw, Loader2, Sparkles, ArrowRight, Tag, Check } from 'lucide-react';
+import { Plus, ImagePlus, Gem, X, Pencil, Search, Trash2, RotateCcw, Loader2, Sparkles, ArrowRight, Tag, Check, Download } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
@@ -256,6 +256,22 @@ export default function Products() {
     return product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl);
   }
 
+  async function exportarCsv() {
+    // Siempre el inventario completo (activos + dados de baja): mas
+    // predecible que depender de en cual pestana se este parado al pulsar
+    // el boton.
+    const response = await api.get('/products/export', {
+      params: { all: 'true' },
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data as Blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'inventario.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <PageHeader
@@ -263,6 +279,9 @@ export default function Products() {
         subtitle="Catalogo con codigo unico y foto por pieza"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={exportarCsv}>
+              <Download size={16} /> Exportar Excel
+            </Button>
             <Button variant="secondary" onClick={() => setShowCategorias(true)}>
               <Tag size={16} /> Categorias
             </Button>

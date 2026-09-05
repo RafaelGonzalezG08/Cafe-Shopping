@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -9,6 +21,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums';
+import { toCsv } from '../common/csv.util';
 
 @ApiTags('clients')
 @ApiBearerAuth()
@@ -20,6 +33,15 @@ export class ClientsController {
   @Get()
   findAll(@Query('search') search?: string) {
     return this.clientsService.findAll(search);
+  }
+
+  @Get('export')
+  async exportCsv(@Res() res: Response) {
+    const filas = await this.clientsService.exportarCsv();
+    const csv = toCsv(filas);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="clientes.csv"');
+    res.send(csv);
   }
 
   @Get(':id')

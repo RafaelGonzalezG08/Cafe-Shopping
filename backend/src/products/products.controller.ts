@@ -8,10 +8,12 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
@@ -24,6 +26,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums';
 import { MAX_UPLOAD_SIZE_BYTES } from '../common/image.util';
+import { toCsv } from '../common/csv.util';
 
 @ApiTags('products')
 @ApiBearerAuth()
@@ -36,6 +39,19 @@ export class ProductsController {
   async findAll(@Query('all') all?: string, @CurrentUser() user?: AuthenticatedUser) {
     const products = await this.productsService.findAll(all !== 'true');
     return products.map((p) => this.stripCostForNonAdmin(p, user));
+  }
+
+  @Get('export')
+  async exportCsv(
+    @Res() res: Response,
+    @Query('all') all: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const filas = await this.productsService.exportarCsv(all !== 'true', user.role === Role.ADMIN);
+    const csv = toCsv(filas);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="inventario.csv"');
+    res.send(csv);
   }
 
   @Get(':id')

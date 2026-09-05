@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
@@ -71,6 +71,16 @@ export default function Clients() {
     },
   });
 
+  async function exportarCsv() {
+    const response = await api.get('/clients/export', { responseType: 'blob' });
+    const url = URL.createObjectURL(response.data as Blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'clientes.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <PageHeader
@@ -78,6 +88,9 @@ export default function Clients() {
         subtitle="Historial de compras y deudas por cliente"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={exportarCsv}>
+              <Download size={16} /> Exportar Excel
+            </Button>
             {esAdmin && (
               <Button
                 variant="secondary"
