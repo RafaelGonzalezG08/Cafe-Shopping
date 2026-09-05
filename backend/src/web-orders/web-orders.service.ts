@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SalesService } from '../sales/sales.service';
@@ -13,6 +15,7 @@ import { parsearPedidoWeb, ItemPedidoWeb } from './parser';
 import { CreateWebOrderDto } from './dto/create-web-order.dto';
 import { UpdateWebOrderDto } from './dto/update-web-order.dto';
 import { AtenderWebOrderDto } from './dto/atender-web-order.dto';
+import { DeleteWebOrderDto } from './dto/delete-web-order.dto';
 
 /** Fila de web_orders con `items` ya vuelto a ser un arreglo, listo para la interfaz. */
 function conItems<T extends { items: string }>(pedido: T) {
@@ -145,7 +148,12 @@ export class WebOrdersService {
     return sale;
   }
 
-  async remove(id: string, userId?: string) {
+  async remove(id: string, dto: DeleteWebOrderDto, userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    const passwordOk = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordOk) throw new ForbiddenException('Clave incorrecta.');
+
     const pedido = await this.prisma.webOrder.findUnique({ where: { id } });
     if (!pedido) throw new NotFoundException('Pedido web no encontrado.');
 

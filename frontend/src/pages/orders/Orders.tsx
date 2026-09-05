@@ -21,7 +21,7 @@ import {
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, ESTADO_PEDIDO_LABEL, ESTADO_PEDIDO_WEB_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { Button, Card, PageHeader, Badge, EmptyState, ConfirmPasswordModal } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import { InvoicePreview } from '../pos/POS';
 import { ClientPicker } from '../../components/ClientPicker';
@@ -326,6 +326,7 @@ function PedidosWeb() {
   const [filtro, setFiltro] = usePersistedState<EstadoPedidoWeb | 'TODOS'>('pedidos-web:filtro', 'PENDIENTE');
   const [texto, setTexto] = useState('');
   const [atendiendo, setAtendiendo] = useState<WebOrder | null>(null);
+  const [aEliminar, setAEliminar] = useState<WebOrder | null>(null);
 
   const { data: pedidos = [], isLoading } = useQuery<WebOrder[]>({
     queryKey: ['web-orders', filtro],
@@ -364,10 +365,21 @@ function PedidosWeb() {
   });
 
   const eliminar = useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/web-orders/${id}`)).data,
+    mutationFn: async (password: string) =>
+      (
+        await api.delete(`/web-orders/${aEliminar!.id}`, {
+          data: { password },
+          skipErrorToast: true,
+        })
+      ).data,
     onSuccess: () => {
       toast.success('Pedido eliminado.');
+      setAEliminar(null);
       refrescar();
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo eliminar el pedido.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
     },
   });
 
@@ -484,7 +496,7 @@ function PedidosWeb() {
                     <Receipt size={13} /> Convertido en venta
                   </span>
                 )}
-                <Button size="sm" variant="ghost" onClick={() => eliminar.mutate(pedido.id)} disabled={eliminar.isPending}>
+                <Button size="sm" variant="ghost" onClick={() => setAEliminar(pedido)}>
                   <Trash2 size={15} /> Eliminar
                 </Button>
               </div>
@@ -501,6 +513,20 @@ function PedidosWeb() {
             setAtendiendo(null);
             refrescar();
           }}
+        />
+      )}
+
+      {aEliminar && (
+        <ConfirmPasswordModal
+          titulo="Eliminar pedido"
+          mensaje={
+            <>
+              Se eliminara el pedido {aEliminar.codigo} por RD$ {formatMoney(aEliminar.total)}.
+            </>
+          }
+          pendiente={eliminar.isPending}
+          onConfirm={(password) => eliminar.mutate(password)}
+          onClose={() => setAEliminar(null)}
         />
       )}
     </div>

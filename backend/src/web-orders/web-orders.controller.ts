@@ -15,6 +15,7 @@ import { WebOrdersService } from './web-orders.service';
 import { CreateWebOrderDto } from './dto/create-web-order.dto';
 import { UpdateWebOrderDto } from './dto/update-web-order.dto';
 import { AtenderWebOrderDto } from './dto/atender-web-order.dto';
+import { DeleteWebOrderDto } from './dto/delete-web-order.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
@@ -56,7 +57,11 @@ export class WebOrdersController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.webOrdersService.remove(id, user.userId);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeleteWebOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.webOrdersService.remove(id, dto, user.userId);
   }
 }
