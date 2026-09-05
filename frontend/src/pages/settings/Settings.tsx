@@ -20,10 +20,13 @@ import {
   Store,
   Users,
   KeyRound,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
-import { Button, Card, PageHeader, Select } from '../../components/ui';
+import { Button, Card, PageHeader, Select, Badge } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { useAuthStore } from '../../store/auth.store';
 import type { BusinessProfile, Role } from '../../types';
 
 /** Cuantos registros trae un respaldo (lo calcula el backend al generarlo). */
@@ -119,6 +122,7 @@ function Seccion({
 
 export default function Settings() {
   const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
@@ -237,6 +241,21 @@ export default function Settings() {
     },
   });
 
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, activo }: { id: string; activo: boolean }) =>
+      (await api.patch(`/users/${id}/activo`, { activo }, { skipErrorToast: true })).data,
+    onSuccess: (_data, variables) => {
+      toast.success(
+        variables.activo ? 'Usuario activado.' : 'Usuario desactivado. Ya no podra iniciar sesion.',
+      );
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message ?? 'No se pudo actualizar el usuario.';
+      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
+    },
+  });
+
   return (
     <div>
       <PageHeader
@@ -311,14 +330,31 @@ export default function Settings() {
         <Seccion titulo="Usuarios y roles" icono={Users} resumen={`${users.length} usuario(s)`}>
           <div className="mb-3 divide-y divide-porcelain-200">
             {users.map((u) => (
-              <div key={u.id} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <p className="text-ink">{u.nombre}</p>
-                  <p className="text-xs text-muted">{u.email}</p>
+              <div key={u.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className={`truncate ${u.activo ? 'text-ink' : 'text-muted line-through'}`}>{u.nombre}</p>
+                  <p className="truncate text-xs text-muted">{u.email}</p>
                 </div>
-                <span className="rounded-full bg-porcelain-200 px-2 py-0.5 text-xs font-semibold text-muted">
-                  {u.role}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!u.activo && <Badge tone="brick">Inactivo</Badge>}
+                  <span className="rounded-full bg-porcelain-200 px-2 py-0.5 text-xs font-semibold text-muted">
+                    {u.role}
+                  </span>
+                  {u.id !== currentUserId && (
+                    <button
+                      onClick={() => toggleActive.mutate({ id: u.id, activo: !u.activo })}
+                      disabled={toggleActive.isPending}
+                      title={u.activo ? 'Desactivar (no podra iniciar sesion)' : 'Activar'}
+                      className={`rounded p-1 transition-colors ${
+                        u.activo
+                          ? 'text-sage-600 hover:bg-brick-100 hover:text-brick-600'
+                          : 'text-muted hover:bg-sage-100 hover:text-sage-600'
+                      }`}
+                    >
+                      {u.activo ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

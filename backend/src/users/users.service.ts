@@ -1,8 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { Role } from '../common/enums';
 
 @Injectable()
 export class UsersService {
@@ -53,9 +59,31 @@ export class UsersService {
     return { ok: true };
   }
 
+  /**
+   * Activa/desactiva un usuario. Desactivar corta la sesion al instante
+   * (jwt.strategy.ts revalida "activo" en cada peticion), asi que sin estos
+   * dos frenos un admin podria dejarse a si mismo, o dejar al negocio
+   * entero, sin nadie que pueda volver a entrar.
+   */
   async setActive(id: string, activo: boolean, currentUserId: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado.');
+
+    if (!activo) {
+      if (id === currentUserId) {
+        throw new BadRequestException('No puedes desactivar tu propia cuenta.');
+      }
+      if (user.role === Role.ADMIN) {
+        const otrosAdminsActivos = await this.prisma.user.count({
+          where: { role: Role.ADMIN, activo: true, id: { not: id } },
+        });
+        if (otrosAdminsActivos === 0) {
+          throw new BadRequestException(
+            'No puedes desactivar el unico administrador activo: nadie podria volver a entrar.',
+          );
+        }
+      }
+    }
 
     const updated = await this.prisma.user.update({
       where: { id },
