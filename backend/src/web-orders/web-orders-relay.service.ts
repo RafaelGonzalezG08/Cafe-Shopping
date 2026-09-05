@@ -45,6 +45,11 @@ export class WebOrdersRelayService {
     try {
       const respuesta = await fetch(`${url.replace(/\/$/, '')}/pedidos`, {
         headers: { Authorization: `Bearer ${clave}` },
+        // Sin esto, una peticion que se quede colgada (DNS que no resuelve,
+        // el Worker sin responder, etc.) dejaria `revisando` en true para
+        // siempre: la app se quedaria de por vida sin volver a revisar el
+        // relevo, sin ningun error visible en ningun lado.
+        signal: AbortSignal.timeout(15000),
       });
       if (!respuesta.ok) {
         this.logger.warn(
@@ -109,6 +114,7 @@ export class WebOrdersRelayService {
       await fetch(`${url.replace(/\/$/, '')}/pedidos/${encodeURIComponent(pedido.codigo)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${clave}` },
+        signal: AbortSignal.timeout(15000),
       });
     } catch (error) {
       this.logger.warn(`No se pudo quitar ${pedido.codigo} del relevo (se reintentara): ${error}`);
