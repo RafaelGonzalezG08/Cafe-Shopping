@@ -104,11 +104,7 @@ export default function Reports() {
       </div>
 
       <p className="mb-5 -mt-3 text-xs text-muted">
-        {from || to
-          ? 'Usando el rango de fechas de arriba.'
-          : { day: 'Mostrando los ultimos 30 dias.', week: 'Mostrando las ultimas ~12 semanas.', month: 'Mostrando el ultimo año.', year: 'Mostrando los ultimos 5 años.' }[
-              group
-            ]}
+        {from || to ? 'Usando el rango de fechas de arriba.' : 'Mostrando todo el historial.'}
       </p>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

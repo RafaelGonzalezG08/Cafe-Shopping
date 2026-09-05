@@ -42,25 +42,21 @@ interface PeriodBucket {
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private defaultRange(from?: string, to?: string, group: GroupBy = 'day') {
+  private defaultRange(from?: string, to?: string) {
     // parseToDate lleva "hasta" al final del dia (23:59:59.999 local), asi el
     // rango incluye las ventas del propio dia elegido. Ver common/date-range.ts.
     const toDate = to ? parseToDate(to) : new Date();
     if (from) {
       return { fromDate: parseFromDate(from), toDate };
     }
-    const spanMs: Record<GroupBy, number> = {
-      day: 30 * 24 * 60 * 60 * 1000,
-      week: 90 * 24 * 60 * 60 * 1000,
-      month: 365 * 24 * 60 * 60 * 1000,
-      year: 5 * 365 * 24 * 60 * 60 * 1000,
-    };
-    const fromDate = new Date(toDate.getTime() - spanMs[group]);
-    return { fromDate, toDate };
+    // Sin fecha de inicio: todo el historial. Antes eran "los ultimos 30
+    // dias" (o 12 semanas / 1 año / 5 años segun el agrupado), pero el
+    // negocio prefiere ver todo de entrada y acotar el rango si quiere.
+    return { fromDate: new Date('2000-01-01T00:00:00'), toDate };
   }
 
   async salesByPeriod(from: string | undefined, to: string | undefined, group: GroupBy = 'day') {
-    const { fromDate, toDate } = this.defaultRange(from, to, group);
+    const { fromDate, toDate } = this.defaultRange(from, to);
     const sales = await this.prisma.sale.findMany({
       where: { fecha: { gte: fromDate, lte: toDate } },
       select: { fecha: true, total: true, subtotal: true, impuestos: true },

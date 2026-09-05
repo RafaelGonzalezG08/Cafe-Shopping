@@ -7,6 +7,7 @@ import { createGzip, createGunzip } from 'zlib';
 import { pipeline as pipelineCb } from 'stream';
 import { join, isAbsolute, resolve, dirname, basename } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { MigrationsService } from '../prisma/migrations.service';
 import { BACKUPS_DIR, BACKUPS_MIRROR_DIR, UPLOADS_DIR } from '../common/paths';
 
 /** Cuantos registros guarda un respaldo (se calcula al generarlo). */
@@ -80,7 +81,10 @@ export class BackupsService {
 
   // Se usa para el snapshot con VACUUM INTO y para soltar/retomar la conexion
   // al restaurar (Windows no permite sobrescribir un archivo abierto).
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly migrations: MigrationsService,
+  ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async checkAndRun() {
@@ -352,6 +356,27 @@ export class BackupsService {
         await this.prisma.$connect();
       }
       await fs.unlink(restoredFile).catch(() => undefined);
+
+      // Un respaldo viejo puede ser de antes de una migracion (una columna
+      // nueva, etc.). Sin esto, la base restaurada se queda desfasada del
+      // esquema que espera la app y todo revienta con "P2022: columna no
+      // existe" hasta el siguiente reinicio. Se aplican aqui mismo las que
+      // falten, igual que hace el arranque.
+      try {
+        const dir =
+          process.env.PRISMA_MIGRATIONS_DIR || join(process.cwd(), 'prisma', 'migrations');
+        const aplicadas = await this.migrations.applyPending(dir);
+        if (aplicadas > 0) {
+          this.logger.warn(
+            `El respaldo era de una version anterior: se aplicaron ${aplicadas} migracion(es) para ponerlo al dia.`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `La base se restauro pero fallaron las migraciones para ponerla al dia: ${error}. ` +
+            `Reinicia la aplicacion para que se apliquen al arrancar.`,
+        );
+      }
 
       // El archivo de uploads comparte el mismo sufijo de timestamp que el
       // de la base de datos (ej. db-2026-...gz / uploads-2026-...tar.gz).
