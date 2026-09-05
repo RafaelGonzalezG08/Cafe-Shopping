@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { X, Banknote, ImageOff, MessageCircle, Loader2 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { formatMoney, formatDate, formatDateTime, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { Button, Card, PageHeader, Badge, EmptyState, Select } from '../../components/ui';
 import type { ClientDebt, EstadoDeuda, MetodoPago, Sale } from '../../types';
 
 const ESTADO_TONE: Record<EstadoDeuda, 'neutral' | 'copper' | 'sage' | 'brick' | 'rose'> = {
@@ -264,17 +264,15 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
                   placeholder={`Max. ${formatMoney(saldo)}`}
                   className="min-w-0 flex-1 rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
                 />
-                <select
+                <Select
                   value={metodo}
-                  onChange={(e) => setMetodo(e.target.value as MetodoPago)}
-                  className="min-w-0 shrink-0 rounded-lg border border-porcelain-300 px-2 py-2 text-sm outline-none focus:border-copper-500 sm:w-36"
-                >
-                  {(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'] as MetodoPago[]).map((m) => (
-                    <option key={m} value={m}>
-                      {METODO_PAGO_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setMetodo(v as MetodoPago)}
+                  options={(['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'] as MetodoPago[]).map((m) => ({
+                    value: m,
+                    label: METODO_PAGO_LABEL[m],
+                  }))}
+                  className="w-full shrink-0 sm:w-36"
+                />
               </div>
               <Button type="submit" className="w-full" disabled={registerPayment.isPending}>
                 <Banknote size={16} />

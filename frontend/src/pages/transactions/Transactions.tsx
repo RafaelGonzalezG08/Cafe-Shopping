@@ -4,7 +4,7 @@ import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale } from 'lucide-
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
-import { Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { Card, PageHeader, Badge, EmptyState, Select } from '../../components/ui';
 import type { MetodoPago, TipoTransaccion, TransaccionesResponse } from '../../types';
 
 const TIPOS: { value: TipoTransaccion; label: string; tone: 'copper' | 'sage' | 'brick' }[] = [
@@ -211,18 +211,16 @@ export default function Transactions() {
             </button>
           ))}
 
-          <select
+          <Select
             value={metodoPago}
-            onChange={(e) => setMetodoPago(e.target.value as MetodoPago | '')}
-            className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-xs font-semibold text-ink outline-none focus:border-copper-500"
-          >
-            <option value="">Todos los metodos</option>
-            {METODOS.map((m) => (
-              <option key={m} value={m}>
-                {METODO_PAGO_LABEL[m]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setMetodoPago(v as MetodoPago | '')}
+            className="w-44 shrink-0"
+            size="sm"
+            options={[
+              { value: '', label: 'Todos los metodos' },
+              ...METODOS.map((m) => ({ value: m, label: METODO_PAGO_LABEL[m] })),
+            ]}
+          />
 
           <div className="ml-auto flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-porcelain-300 px-2.5 py-1.5 sm:max-w-xs">
             <Search size={14} className="shrink-0 text-muted" />

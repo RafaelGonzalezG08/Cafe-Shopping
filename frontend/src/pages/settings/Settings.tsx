@@ -22,7 +22,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
-import { Button, Card, PageHeader } from '../../components/ui';
+import { Button, Card, PageHeader, Select } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 import type { BusinessProfile, Role } from '../../types';
 
@@ -933,17 +933,19 @@ function NewUserForm({
           type="password"
           value={form.password}
           onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-          className="flex-1 rounded-lg border border-porcelain-300 px-3 py-1.5 text-sm outline-none focus:border-copper-500"
+          className="min-w-0 flex-1 rounded-lg border border-porcelain-300 px-3 py-1.5 text-sm outline-none focus:border-copper-500"
         />
-        <select
+        <Select
           value={form.role}
-          onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
-          className="rounded-lg border border-porcelain-300 px-2 py-1.5 text-sm outline-none focus:border-copper-500"
-        >
-          <option value="CAJERO">Cajero</option>
-          <option value="CONTABILIDAD">Contabilidad</option>
-          <option value="ADMIN">Admin</option>
-        </select>
+          onChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}
+          className="w-36 shrink-0"
+          size="sm"
+          options={[
+            { value: 'CAJERO', label: 'Cajero' },
+            { value: 'CONTABILIDAD', label: 'Contabilidad' },
+            { value: 'ADMIN', label: 'Admin' },
+          ]}
+        />
       </div>
       <Button type="submit" size="sm" variant="secondary" className="w-full">
         <UserPlus size={14} /> Crear usuario

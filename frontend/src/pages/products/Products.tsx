@@ -6,7 +6,7 @@ import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
-import { Button, Card, PageHeader, EmptyState, Badge } from '../../components/ui';
+import { Button, Card, PageHeader, EmptyState, Badge, Select } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import type { Category, Material, Product } from '../../types';
 import { MATERIAL_LABEL } from '../../types';
@@ -368,18 +368,15 @@ export default function Products() {
           />
         </div>
         {categorias.length > 0 && (
-          <select
+          <Select
             value={filtroCategoria}
-            onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          >
-            <option value="">Todas las categorias</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
+            onChange={setFiltroCategoria}
+            className="w-52"
+            options={[
+              { value: '', label: 'Todas las categorias' },
+              ...categorias.map((c) => ({ value: c.id, label: c.nombre })),
+            ]}
+          />
         )}
       </div>
 
