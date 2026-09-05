@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -14,9 +15,11 @@ import {
   Settings,
   LogOut,
   HandCoins,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api, apiUrl } from '../lib/api';
+import { Button, Card } from './ui';
 import type { BusinessProfile, Role } from '../types';
 
 interface NavItem {
@@ -38,11 +41,14 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['ADMIN', 'CONTABILIDAD'] },
   { to: '/transacciones', label: 'Transacciones', icon: History, roles: ['ADMIN', 'CONTABILIDAD'] },
   { to: '/costos', label: 'Costos', icon: PiggyBank, roles: ['ADMIN'] },
-  { to: '/configuracion', label: 'Configuracion', icon: Settings, roles: ['ADMIN'] },
 ];
+
+/** Solo ADMIN administra la configuracion del negocio. */
+const ROLES_CONFIGURACION: Role[] = ['ADMIN'];
 
 export function Layout() {
   const { user, logout } = useAuthStore();
+  const [confirmandoSalir, setConfirmandoSalir] = useState(false);
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
@@ -51,6 +57,7 @@ export function Layout() {
   });
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
+  const puedeVerConfiguracion = Boolean(user && ROLES_CONFIGURACION.includes(user.role));
   const logoSrc = profile?.logoUrl
     ? profile.logoUrl.startsWith('http')
       ? profile.logoUrl
@@ -59,7 +66,7 @@ export function Layout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
-      <aside className="flex w-64 shrink-0 flex-col bg-espresso-900 text-porcelain-100">
+      <aside className="flex w-72 shrink-0 flex-col bg-espresso-900 text-porcelain-100">
         <div className="flex items-center gap-2.5 px-5 py-6">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-copper-500">
             {logoSrc ? (
@@ -76,21 +83,21 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3">
+        <nav className="flex-1 space-y-1 px-3">
           {visibleItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-copper-500/15 text-copper-100'
                     : 'text-porcelain-300/70 hover:bg-espresso-800 hover:text-porcelain-100'
                 }`
               }
             >
-              <Icon size={17} strokeWidth={2} />
+              <Icon size={18} strokeWidth={2} />
               {label}
             </NavLink>
           ))}
@@ -106,15 +113,58 @@ export function Layout() {
               <p className="truncate text-[11px] text-porcelain-300/60">{user?.role}</p>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-porcelain-300/70 transition-colors hover:bg-espresso-800 hover:text-porcelain-100"
-          >
-            <LogOut size={17} strokeWidth={2} />
-            Cerrar sesion
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setConfirmandoSalir(true)}
+              className="flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-porcelain-300/70 transition-colors hover:bg-espresso-800 hover:text-porcelain-100"
+            >
+              <LogOut size={17} strokeWidth={2} />
+              Cerrar sesion
+            </button>
+            {puedeVerConfiguracion && (
+              <NavLink
+                to="/configuracion"
+                title="Configuracion"
+                className={({ isActive }) =>
+                  `flex shrink-0 items-center justify-center rounded-lg p-2.5 transition-colors ${
+                    isActive
+                      ? 'bg-copper-500/15 text-copper-100'
+                      : 'text-porcelain-300/70 hover:bg-espresso-800 hover:text-porcelain-100'
+                  }`
+                }
+              >
+                <Settings size={18} strokeWidth={2} />
+              </NavLink>
+            )}
+          </div>
         </div>
       </aside>
+
+      {confirmandoSalir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
+          <Card className="w-full max-w-sm p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display font-bold text-ink">Cerrar sesion</h2>
+              <button
+                onClick={() => setConfirmandoSalir(false)}
+                className="rounded p-1 text-muted hover:bg-porcelain-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-muted">Seguro que quieres cerrar tu sesion?</p>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoSalir(false)}>
+                Cancelar
+              </Button>
+              <Button variant="danger" className="flex-1" onClick={logout}>
+                <LogOut size={16} />
+                Cerrar sesion
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-6 py-8 md:px-10">
