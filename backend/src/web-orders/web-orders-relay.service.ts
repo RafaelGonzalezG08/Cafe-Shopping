@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { WebOrdersService } from './web-orders.service';
@@ -73,23 +73,36 @@ export class WebOrdersRelayService {
     }
   }
 
-  /** Crea el pedido y, sea cual sea el resultado, lo quita del relevo para no reprocesarlo. */
+  /**
+   * Crea el pedido. Solo se quita del relevo cuando ya no hace falta volver a
+   * verlo: se creo, o ya existia (alguien lo pego a mano mientras tanto, o un
+   * ciclo anterior lo creo pero fallo al borrarlo del relevo).
+   *
+   * Para cualquier OTRO error -- el texto no se pudo interpretar, la base de
+   * datos no respondio, lo que sea -- el pedido se queda en el relevo para
+   * reintentar en el proximo ciclo y se avisa en el log. Antes se borraba
+   * igual pasara lo que pasara: un pedido que no se pudiera interpretar
+   * (ej. la pagina del catalogo publicada quedo desactualizada respecto al
+   * formato que este backend espera) desaparecia de Cloudflare para siempre
+   * sin ningun rastro en ningun lado -- el pedido se perdia en silencio.
+   */
   private async procesarUno(
     pedido: PedidoRelevo,
     url: string,
     clave: string,
-  ): Promise<'creado' | 'omitido'> {
-    let resultado: 'creado' | 'omitido' = 'omitido';
+  ): Promise<'creado' | 'duplicado' | 'error'> {
+    let resultado: 'creado' | 'duplicado';
     try {
       await this.webOrders.create({ texto: pedido.texto });
       resultado = 'creado';
     } catch (error) {
-      // Ya existia (se pegó a mano mientras tanto, o un ciclo anterior fallo
-      // borrandolo del relevo) o el texto no se pudo interpretar: en ambos
-      // casos no tiene sentido reintentarlo por siempre.
-      if (!(error instanceof BadRequestException) && !(error as { status?: number })?.status) {
-        this.logger.warn(`Pedido ${pedido.codigo} del relevo no se pudo crear: ${error}`);
+      if (!(error instanceof ConflictException)) {
+        this.logger.warn(
+          `Pedido ${pedido.codigo} del relevo no se pudo crear (se reintentara): ${error}`,
+        );
+        return 'error';
       }
+      resultado = 'duplicado';
     }
 
     try {
