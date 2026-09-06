@@ -788,11 +788,20 @@ function CategoriasModal({
   const [nombre, setNombre] = useState('');
 
   const crear = useMutation({
-    mutationFn: async () => (await api.post('/categories', { nombre }, { skipErrorToast: true })).data,
-    onSuccess: () => {
-      toast.success('Categoria creada.');
+    mutationFn: async () =>
+      (await api.post('/categories', { nombre }, { skipErrorToast: true })).data as {
+        clasificadas?: number;
+      },
+    onSuccess: (data) => {
+      const n = data.clasificadas ?? 0;
+      toast.success(
+        n > 0
+          ? `Categoria creada. ${n} pieza${n === 1 ? '' : 's'} clasificada${n === 1 ? '' : 's'}.`
+          : 'Categoria creada.',
+      );
       setNombre('');
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message ?? 'No se pudo crear la categoria.');

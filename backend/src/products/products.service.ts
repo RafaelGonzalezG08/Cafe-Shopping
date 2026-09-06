@@ -8,6 +8,7 @@ import { optimizeProductImage } from '../common/image.util';
 import { CatalogoService } from '../catalogo/catalogo.service';
 import { UPLOADS_DIR } from '../common/paths';
 import { MATERIAL_LABEL, Material } from '../common/enums';
+import { normalizarTexto, primeraPalabraNormalizada } from '../common/texto.util';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -122,18 +123,36 @@ export class ProductsService {
    * ninguna, queda sin categoria — nunca se inventa una nueva sola.
    */
   private async clasificarCategoria(nombre: string): Promise<string | null> {
-    const primeraPalabra = nombre.trim().split(/\s+/)[0];
-    if (!primeraPalabra) return null;
-
-    const normalizar = (texto: string) =>
-      texto
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '') // quita acentos (á -> a)
-        .toLowerCase();
+    const palabra = primeraPalabraNormalizada(nombre);
+    if (!palabra) return null;
 
     const categorias = await this.prisma.category.findMany({ select: { id: true, nombre: true } });
-    const encontrada = categorias.find((c) => normalizar(c.nombre) === normalizar(primeraPalabra));
+    const encontrada = categorias.find((c) => normalizarTexto(c.nombre) === palabra);
     return encontrada?.id ?? null;
+  }
+
+  /**
+   * Al crear una categoria nueva: mete en ella todas las piezas cuya primera
+   * palabra coincida (misma regla que clasificarCategoria). Sirve cuando el
+   * inventario ya existia antes de crear la categoria. Devuelve cuantas
+   * piezas se movieron.
+   */
+  async clasificarExistentesEn(categoriaId: string, nombreCategoria: string): Promise<number> {
+    const objetivo = normalizarTexto(nombreCategoria);
+    if (!objetivo) return 0;
+
+    const productos = await this.prisma.product.findMany({ select: { id: true, nombre: true } });
+    const ids = productos
+      .filter((p) => primeraPalabraNormalizada(p.nombre) === objetivo)
+      .map((p) => p.id);
+    if (ids.length === 0) return 0;
+
+    await this.prisma.product.updateMany({
+      where: { id: { in: ids } },
+      data: { categoriaId },
+    });
+    void this.regenerarCatalogo();
+    return ids.length;
   }
 
   /**

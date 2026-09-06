@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ProductsService } from '../products/products.service';
 
 @Injectable()
 export class CategoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly products: ProductsService,
   ) {}
 
   findAll() {
@@ -31,8 +33,17 @@ export class CategoriesService {
     if (yaExiste) throw new ConflictException('Ya existe una categoria con ese nombre.');
 
     const category = await this.prisma.category.create({ data: { nombre: limpio } });
-    await this.audit.log('Category', category.id, 'CREATE', userId, { nombre: limpio });
-    return category;
+
+    // Mete en la categoria nueva las piezas del inventario cuya primera
+    // palabra coincida: si no, una categoria creada despues de cargar el
+    // inventario se quedaba vacia hasta re-guardar cada pieza a mano.
+    const clasificadas = await this.products.clasificarExistentesEn(category.id, limpio);
+
+    await this.audit.log('Category', category.id, 'CREATE', userId, {
+      nombre: limpio,
+      clasificadas,
+    });
+    return { ...category, clasificadas };
   }
 
   /**
