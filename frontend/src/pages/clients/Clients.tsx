@@ -76,7 +76,7 @@ export default function Clients() {
     const url = URL.createObjectURL(response.data as Blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'clientes.csv';
+    link.download = 'clientes.xlsx';
     link.click();
     URL.revokeObjectURL(url);
   }

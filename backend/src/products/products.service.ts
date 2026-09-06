@@ -65,12 +65,12 @@ export class ProductsService {
   }
 
   /**
-   * Filas para exportar el inventario a Excel (CSV). Sin fotos: son binario,
-   * no tienen sentido en una hoja de calculo. El costo solo se incluye para
+   * Filas para exportar el inventario a Excel. Sin fotos: son binario, no
+   * tienen sentido en una hoja de calculo. El costo solo se incluye para
    * ADMIN, igual que en la lista normal (stripCostForNonAdmin en el
    * controller) - es el margen del negocio.
    */
-  async exportarCsv(onlyActive: boolean, incluirCosto: boolean) {
+  async filasParaExportar(onlyActive: boolean, incluirCosto: boolean) {
     const productos = await this.prisma.product.findMany({
       where: onlyActive ? { activo: true } : undefined,
       orderBy: { nombre: 'asc' },

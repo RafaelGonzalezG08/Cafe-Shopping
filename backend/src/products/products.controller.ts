@@ -26,7 +26,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums';
 import { MAX_UPLOAD_SIZE_BYTES } from '../common/image.util';
-import { toCsv } from '../common/csv.util';
+import { generarXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx.util';
 
 @ApiTags('products')
 @ApiBearerAuth()
@@ -42,16 +42,19 @@ export class ProductsController {
   }
 
   @Get('export')
-  async exportCsv(
+  async exportExcel(
     @Res() res: Response,
     @Query('all') all: string | undefined,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const filas = await this.productsService.exportarCsv(all !== 'true', user.role === Role.ADMIN);
-    const csv = toCsv(filas);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="inventario.csv"');
-    res.send(csv);
+    const filas = await this.productsService.filasParaExportar(
+      all !== 'true',
+      user.role === Role.ADMIN,
+    );
+    const xlsx = await generarXlsx('Inventario', filas);
+    res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', 'attachment; filename="inventario.xlsx"');
+    res.send(xlsx);
   }
 
   @Get(':id')

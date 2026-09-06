@@ -12,8 +12,8 @@ export class ClientsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Filas para exportar la lista de clientes a Excel (CSV). */
-  async exportarCsv() {
+  /** Filas para exportar la lista de clientes a Excel. */
+  async filasParaExportar() {
     const clientes = await this.prisma.client.findMany({ orderBy: { nombre: 'asc' } });
     return clientes.map((c) => ({
       Nombre: c.nombre,
