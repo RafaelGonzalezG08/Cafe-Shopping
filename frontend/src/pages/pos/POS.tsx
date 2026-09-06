@@ -7,6 +7,7 @@ import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
 import { Button, Card } from '../../components/ui';
+import { FacturaImagen } from '../../components/FacturaImagen';
 import { ClientPicker } from '../../components/ClientPicker';
 import type { Client, MetodoPago, Product, Sale } from '../../types';
 
@@ -465,7 +466,6 @@ export function InvoicePreview({
 
   const queryClient = useQueryClient();
   const png = sale.invoice?.pngUrl;
-  const imageSrc = png?.startsWith('http') ? png : png ? apiUrl(png) : undefined;
   const waEstado = sale.invoice?.whatsappEstado;
 
   const sendWhatsapp = useMutation({
@@ -490,13 +490,7 @@ export function InvoicePreview({
           <p className="font-display text-sm font-bold text-sage-600">Venta registrada &middot; {sale.invoice?.numero}</p>
         </div>
         <div className="p-5">
-          {imageSrc ? (
-            <img src={imageSrc} alt="Factura" className="mx-auto rounded-lg border border-porcelain-200" />
-          ) : (
-            <p className="py-8 text-center text-sm text-muted">
-              La factura se esta generando o no se pudo renderizar. Puedes reintentar el envio.
-            </p>
-          )}
+          <FacturaImagen pngUrl={png} className="mx-auto max-h-[60vh]" />
           <div className="receipt-edge mt-0" />
         </div>
 

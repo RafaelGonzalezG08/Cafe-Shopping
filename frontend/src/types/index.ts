@@ -221,6 +221,7 @@ export interface Transaccion {
   referencia: string | null;
   estado: EstadoFactura | null;
   saleId: string | null;
+  facturaPngUrl: string | null;
 }
 
 export interface TransaccionesResponse {

@@ -6,6 +6,7 @@ import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
+import { FacturaImagen } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { Client, EstadoFactura, Sale } from '../../types';
 
@@ -243,6 +244,9 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
               <span>RD$ {formatMoney(sale.total)}</span>
             </div>
           </div>
+
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Factura</p>
+          <FacturaImagen pngUrl={sale.invoice?.pngUrl} className="mx-auto max-h-96" />
         </div>
       </Card>
     </div>

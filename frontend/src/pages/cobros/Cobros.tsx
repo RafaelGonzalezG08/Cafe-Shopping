@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { X, Banknote, ImageOff, MessageCircle, Loader2, Trash2 } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { X, Banknote, MessageCircle, Loader2, Trash2 } from 'lucide-react';
+import { api } from '../../lib/api';
 import { formatMoney, formatDate, formatDateTime, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { FacturaImagen } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { ClientDebt, EstadoDeuda, MetodoPago, Payment, Sale } from '../../types';
 
@@ -231,13 +232,6 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
     registerPayment.mutate();
   }
 
-  const pngUrlBase = sale?.invoice?.pngUrl
-    ? sale.invoice.pngUrl.startsWith('http')
-      ? sale.invoice.pngUrl
-      : apiUrl(sale.invoice.pngUrl)
-    : null;
-  const pngUrl = pngUrlBase ? `${pngUrlBase}?v=${imgRefreshKey}` : null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
       <Card className="grid max-h-[85vh] w-full max-w-3xl grid-cols-1 overflow-hidden md:grid-cols-2">
@@ -363,14 +357,11 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
           </div>
           {sale?.fecha && <p className="mb-2 text-xs text-muted">{formatDateTime(sale.fecha)}</p>}
           <div className="flex flex-1 items-center justify-center">
-            {pngUrl ? (
-              <img src={pngUrl} alt="Factura" className="max-h-[70vh] rounded-lg border border-porcelain-300 shadow-ticket" />
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted">
-                <ImageOff size={28} />
-                <p className="text-xs">Factura aun no generada.</p>
-              </div>
-            )}
+            <FacturaImagen
+              pngUrl={sale?.invoice?.pngUrl}
+              refreshKey={imgRefreshKey}
+              className="max-h-[70vh] shadow-ticket"
+            />
           </div>
           {saldo > 0.01 && <ReminderButton debt={debt} className="mt-3" />}
         </div>

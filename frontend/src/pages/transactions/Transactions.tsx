@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2 } from 'lucide-react';
+import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileText } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { FacturaLightbox } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { MetodoPago, Transaccion, TipoTransaccion, TransaccionesResponse } from '../../types';
 
@@ -81,6 +82,7 @@ export default function Transactions() {
   const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago | ''>('transacciones:metodo', '');
   const [q, setQ] = useState('');
   const [aEliminar, setAEliminar] = useState<Transaccion | null>(null);
+  const [facturaVista, setFacturaVista] = useState<string | null>(null);
 
   // Eliminar una venta solo lo puede hacer ADMIN (misma regla que en
   // Ventas); abonos y gastos los puede corregir tambien Contabilidad.
@@ -313,7 +315,17 @@ export default function Transactions() {
                     <td className="px-4 py-2.5">
                       <p className="text-ink">{t.descripcion}</p>
                       <p className="text-xs text-muted">
-                        {t.referencia ?? '-'}
+                        {t.facturaPngUrl ? (
+                          <button
+                            onClick={() => setFacturaVista(t.facturaPngUrl)}
+                            className="inline-flex items-center gap-1 font-semibold text-copper-600 hover:text-copper-700 hover:underline"
+                            title="Ver factura"
+                          >
+                            <FileText size={12} /> {t.referencia}
+                          </button>
+                        ) : (
+                          (t.referencia ?? '-')
+                        )}
                         {t.estado && ` · ${ESTADO_FACTURA_LABEL[t.estado]}`}
                       </p>
                     </td>
@@ -367,6 +379,10 @@ export default function Transactions() {
           onConfirm={(password) => eliminar.mutate(password)}
           onClose={() => setAEliminar(null)}
         />
+      )}
+
+      {facturaVista && (
+        <FacturaLightbox pngUrl={facturaVista} onClose={() => setFacturaVista(null)} />
       )}
     </div>
   );

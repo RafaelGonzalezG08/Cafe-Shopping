@@ -28,6 +28,8 @@ export interface Transaccion {
   /** Estado de la factura (solo VENTA). */
   estado: string | null;
   saleId: string | null;
+  /** Imagen de la factura (venta/abono), para verla desde Transacciones. */
+  facturaPngUrl: string | null;
 }
 
 interface PeriodBucket {
@@ -287,7 +289,7 @@ export class ReportsService {
             include: {
               client: { select: { nombre: true } },
               user: { select: { nombre: true } },
-              invoice: { select: { numero: true, estado: true } },
+              invoice: { select: { numero: true, estado: true, pngUrl: true } },
             },
           })
         : Promise.resolve([]),
@@ -298,7 +300,7 @@ export class ReportsService {
               sale: {
                 include: {
                   client: { select: { nombre: true } },
-                  invoice: { select: { numero: true } },
+                  invoice: { select: { numero: true, pngUrl: true } },
                 },
               },
             },
@@ -326,6 +328,7 @@ export class ReportsService {
         referencia: s.invoice?.numero ?? null,
         estado: s.invoice?.estado ?? null,
         saleId: s.id,
+        facturaPngUrl: s.invoice?.pngUrl ?? null,
       })),
       ...abonos.map((p): Transaccion => ({
         id: `abono-${p.id}`,
@@ -340,6 +343,7 @@ export class ReportsService {
         referencia: p.sale?.invoice?.numero ?? null,
         estado: null,
         saleId: p.saleId,
+        facturaPngUrl: p.sale?.invoice?.pngUrl ?? null,
       })),
       ...gastos.map((g): Transaccion => ({
         id: `gasto-${g.id}`,
@@ -354,6 +358,7 @@ export class ReportsService {
         referencia: g.categoria,
         estado: null,
         saleId: null,
+        facturaPngUrl: null,
       })),
     ];
 
