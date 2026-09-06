@@ -5,10 +5,7 @@ import { Check, ChevronDown, Loader2, Trash2, X } from 'lucide-react';
 
 export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={`rounded-xl2 border border-porcelain-300 bg-white shadow-ticket ${className}`}
-      {...props}
-    />
+    <div className={`rounded-xl2 bg-porcelain-100 shadow-neu ${className}`} {...props} />
   );
 }
 
@@ -46,16 +43,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_STYLES: Record<string, string> = {
-  primary: 'bg-copper-500 text-white hover:bg-copper-600 disabled:bg-copper-400/60',
-  secondary: 'bg-porcelain-200 text-ink hover:bg-porcelain-300',
-  ghost: 'text-muted hover:bg-porcelain-200',
-  danger: 'bg-brick-500 text-white hover:bg-brick-600',
+  primary:
+    'bg-gradient-to-br from-copper-400 to-copper-600 text-white shadow-neu-sm hover:brightness-105 active:shadow-neu-pressed active:translate-y-px disabled:from-copper-300 disabled:to-copper-400',
+  secondary: 'neu-btn hover:text-copper-600',
+  ghost: 'text-muted hover:text-copper-600',
+  danger:
+    'bg-brick-500 text-white shadow-neu-sm hover:bg-brick-600 active:shadow-neu-pressed active:translate-y-px',
 };
 
 export function Button({ variant = 'primary', size = 'md', className = '', ...props }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
         size === 'sm' ? 'px-3 py-1.5 text-sm' : 'px-4 py-2.5 text-sm'
       } ${VARIANT_STYLES[variant]} ${className}`}
       {...props}
@@ -137,9 +136,9 @@ export function Select({
         ref={boton}
         type="button"
         onClick={() => setAbierto((a) => !a)}
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-white text-left text-sm outline-none transition-colors ${
+        className={`flex w-full items-center justify-between gap-2 rounded-lg bg-porcelain-100 text-left text-sm outline-none transition-all ${
           size === 'sm' ? 'px-2.5 py-1.5' : 'px-3 py-2'
-        } ${abierto ? 'border-copper-500' : 'border-porcelain-300 hover:border-copper-400'}`}
+        } ${abierto ? 'shadow-neu-pressed ring-2 ring-copper-500/40' : 'shadow-neu-inset hover:ring-1 hover:ring-copper-400/40'}`}
       >
         <span className="truncate text-ink">{actual?.label ?? ''}</span>
         <ChevronDown
@@ -154,7 +153,7 @@ export function Select({
           <div
             ref={panel}
             style={{ top: posicion.top, left: posicion.left, minWidth: posicion.width }}
-            className="fixed z-50 max-h-64 w-max max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-porcelain-300 bg-white py-1 shadow-ticket"
+            className="fixed z-50 max-h-64 w-max max-w-[calc(100vw-16px)] overflow-y-auto rounded-xl bg-porcelain-100 py-1 shadow-neu"
           >
             {options.map((o) => (
               <button
@@ -165,7 +164,7 @@ export function Select({
                   setAbierto(false);
                 }}
                 className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                  o.value === value ? 'bg-copper-50 font-semibold text-copper-700' : 'text-ink hover:bg-porcelain-100'
+                  o.value === value ? 'bg-copper-100 font-semibold text-copper-700' : 'text-ink hover:bg-porcelain-200'
                 }`}
               >
                 {o.label}
@@ -181,7 +180,7 @@ export function Select({
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl2 border border-dashed border-porcelain-300 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl2 bg-porcelain-100 py-14 text-center shadow-neu-inset">
       <p className="font-display font-semibold text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>}
     </div>
@@ -223,7 +222,7 @@ export function ConfirmPasswordModal({
           </button>
         </div>
 
-        {mensaje && <div className="mb-4 rounded-lg bg-brick-100 p-3 text-sm text-brick-700">{mensaje}</div>}
+        {mensaje && <div className="mb-4 rounded-lg bg-brick-100 p-3 text-sm text-brick-700 shadow-neu-inset">{mensaje}</div>}
 
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
           {etiquetaClave}
@@ -234,7 +233,7 @@ export function ConfirmPasswordModal({
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Confirma tu clave"
           autoFocus
-          className="mb-4 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+          className="mb-4 w-full rounded-lg px-3 py-2 text-sm outline-none"
         />
 
         <div className="flex gap-2">

@@ -25,9 +25,48 @@ select {
   @apply select-text;
 }
 
+/*
+ * Neumorfismo: los campos van "hundidos" en el fondo (sombra interior) en vez
+ * de llevar borde. Se aplica de forma global aqui para no tocar cada pantalla;
+ * las clases "border border-porcelain-300 / focus:border-copper-500" que ya
+ * traian los inputs quedan como un filo suave encima, sin estorbar.
+ */
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  textarea {
+    @apply rounded-lg bg-porcelain-100 text-ink;
+    box-shadow: inset 2px 2px 5px #D8C4CB, inset -2px -2px 5px #ffffff;
+  }
+  input:focus,
+  textarea:focus {
+    outline: none;
+    box-shadow: inset 2px 2px 5px #D8C4CB, inset -2px -2px 5px #ffffff,
+      0 0 0 2px rgba(229, 125, 144, 0.45);
+  }
+}
+
+@layer components {
+  /* Superficie elevada (tarjetas, paneles). Mismo tono que el fondo. */
+  .neu {
+    @apply rounded-xl2 bg-porcelain-100 shadow-neu;
+  }
+  /* Superficie hundida (campos, resaltados internos, nav activo). */
+  .neu-inset {
+    @apply rounded-lg bg-porcelain-100 shadow-neu-inset;
+  }
+  /* Boton neumorfico: relieve en reposo, se hunde al presionar. */
+  .neu-btn {
+    @apply bg-porcelain-100 text-ink shadow-neu-sm transition-all;
+  }
+  .neu-btn:active {
+    @apply shadow-neu-pressed;
+    transform: translateY(1px);
+  }
+}
+
 /* Motivo de recibo: borde perforado usado en previews de factura dentro del POS */
 .receipt-edge {
-  background-image: radial-gradient(circle at 6px 6px, #FBF2F1 6px, transparent 6.5px);
+  background-image: radial-gradient(circle at 6px 6px, #F3E8EB 6px, transparent 6.5px);
   background-size: 16px 12px;
   background-repeat: repeat-x;
   background-position: top;
@@ -39,10 +78,10 @@ select {
 }
 
 ::selection {
-  background: #F3E0E1;
+  background: #FDB4BF;
 }
 
 *:focus-visible {
-  outline: 2px solid #B75D66;
+  outline: 2px solid #C85F74;
   outline-offset: 2px;
 }

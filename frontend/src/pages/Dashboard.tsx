@@ -39,10 +39,10 @@ function KpiCard({
 
   return (
     <Card className="p-5">
-      <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg ${toneStyles}`}>
+      <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-neu-sm ${toneStyles}`}>
         <Icon size={18} />
       </div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
       <p className="mt-1 font-display text-2xl font-bold tabular-nums text-ink">{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </Card>
@@ -71,7 +71,7 @@ function PedidosDestacados() {
   const hayAtrasados = data.atrasados > 0;
 
   return (
-    <Card className={`mb-6 p-5 ${hayAtrasados ? 'border-brick-500 bg-brick-100/40' : ''}`}>
+    <Card className={`mb-6 p-5 ${hayAtrasados ? 'bg-brick-100/50 ring-1 ring-brick-500/25' : ''}`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
           {hayAtrasados ? (

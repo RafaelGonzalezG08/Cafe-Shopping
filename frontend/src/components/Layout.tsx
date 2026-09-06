@@ -66,20 +66,20 @@ export function Layout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
-      <aside className="flex w-72 shrink-0 flex-col bg-espresso-900 text-porcelain-100">
+      <aside className="z-10 flex w-72 shrink-0 flex-col bg-porcelain-100 text-ink shadow-[8px_0_24px_-16px_rgba(51,35,42,0.35)]">
         <div className="flex items-center gap-2.5 px-5 py-6">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-copper-500">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
             {logoSrc ? (
               <img src={logoSrc} alt="Logo" className="h-full w-full object-cover" />
             ) : (
-              <Gem size={18} strokeWidth={2.25} className="text-porcelain-50" />
+              <Gem size={18} strokeWidth={2.25} className="text-white" />
             )}
           </div>
           <div>
-            <p className="font-display text-[15px] font-bold leading-none tracking-tight">
+            <p className="font-display text-[15px] font-bold leading-none tracking-tight text-ink">
               {profile?.nombre || 'Cafe Shopping'}
             </p>
-            <p className="mt-1 text-[11px] text-porcelain-300/60">Punto de venta</p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted">Punto de venta</p>
           </div>
         </div>
 
@@ -90,10 +90,10 @@ export function Layout() {
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-copper-500/15 text-copper-100'
-                    : 'text-porcelain-300/70 hover:bg-espresso-800 hover:text-porcelain-100'
+                    ? 'bg-porcelain-100 text-copper-700 shadow-neu-inset'
+                    : 'text-muted hover:text-ink'
                 }`
               }
             >
@@ -103,20 +103,20 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="border-t border-espresso-700 px-3 py-4">
-          <div className="mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-copper-500/20 font-display text-xs font-bold text-copper-100">
+        <div className="mx-3 my-4 border-t border-porcelain-200 px-0 pt-4">
+          <div className="mb-2 flex items-center gap-2.5 rounded-xl px-3 py-2 shadow-neu-inset">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-copper-400 to-copper-600 font-display text-xs font-bold text-white">
               {user?.nombre?.slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-porcelain-100">{user?.nombre}</p>
-              <p className="truncate text-[11px] text-porcelain-300/60">{user?.role}</p>
+              <p className="truncate text-sm font-medium text-ink">{user?.nombre}</p>
+              <p className="truncate text-[11px] uppercase tracking-wide text-muted">{user?.role}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setConfirmandoSalir(true)}
-              className="flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-porcelain-300/70 transition-colors hover:bg-espresso-800 hover:text-porcelain-100"
+              className="flex flex-1 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-all hover:text-brick-600 active:shadow-neu-pressed"
             >
               <LogOut size={17} strokeWidth={2} />
               Cerrar sesion
@@ -126,10 +126,10 @@ export function Layout() {
                 to="/configuracion"
                 title="Configuracion"
                 className={({ isActive }) =>
-                  `flex shrink-0 items-center justify-center rounded-lg p-2.5 transition-colors ${
+                  `flex shrink-0 items-center justify-center rounded-xl p-2.5 transition-all ${
                     isActive
-                      ? 'bg-copper-500/15 text-copper-100'
-                      : 'text-porcelain-300/70 hover:bg-espresso-800 hover:text-porcelain-100'
+                      ? 'text-copper-700 shadow-neu-inset'
+                      : 'text-muted hover:text-ink shadow-neu-sm active:shadow-neu-pressed'
                   }`
                 }
               >

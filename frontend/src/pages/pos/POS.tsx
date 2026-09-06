@@ -209,7 +209,7 @@ export default function POS() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
       {/* Catalogo */}
       <div>
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-porcelain-300 bg-white px-3 py-2.5">
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-porcelain-100 px-3 py-2.5 shadow-neu-inset">
           <Search size={16} className="text-muted" />
           <input
             value={search}
@@ -231,10 +231,10 @@ export default function POS() {
             <button
               key={product.id}
               onClick={() => addProduct(product)}
-              className={`relative flex flex-col items-start overflow-hidden rounded-xl2 border text-left transition-colors ${
+              className={`relative flex flex-col items-start overflow-hidden rounded-xl2 text-left transition-all ${
                 enCarrito
-                  ? 'border-sage-500 bg-sage-100 hover:bg-sage-100'
-                  : 'border-porcelain-300 bg-white hover:border-copper-400 hover:bg-copper-50'
+                  ? 'bg-sage-100 shadow-neu-inset ring-1 ring-sage-500/40'
+                  : 'bg-porcelain-100 shadow-neu-sm hover:-translate-y-0.5 active:shadow-neu-pressed'
               }`}
             >
               {enCarrito && (
