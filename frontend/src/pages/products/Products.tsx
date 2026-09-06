@@ -267,7 +267,7 @@ export default function Products() {
     const url = URL.createObjectURL(response.data as Blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'inventario.csv';
+    link.download = 'inventario.xlsx';
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -424,7 +424,7 @@ export default function Products() {
                   type="button"
                   onClick={() => (modoSeleccion ? toggleSeleccion(product.id) : setEditing(product))}
                   className="absolute inset-0 flex items-center justify-center"
-                  title={modoSeleccion ? 'Seleccionar' : 'Editar producto'}
+                  title={modoSeleccion ? 'Marcar / desmarcar' : 'Editar producto'}
                 >
                   {imageSrc(product) ? (
                     <img src={imageSrc(product)!} alt={product.nombre} className="h-full w-full object-cover" />
@@ -432,7 +432,11 @@ export default function Products() {
                     <Gem size={28} className="text-muted" />
                   )}
                   <span className="absolute inset-0 flex items-center justify-center bg-espresso-950/0 opacity-0 transition-opacity group-hover:bg-espresso-950/40 group-hover:opacity-100">
-                    <Pencil size={20} className="text-white" />
+                    {modoSeleccion ? (
+                      <Check size={20} className="text-white" />
+                    ) : (
+                      <Pencil size={20} className="text-white" />
+                    )}
                   </span>
                 </button>
                 {/* Insignia de material en la esquina: para confirmar de un
@@ -443,29 +447,19 @@ export default function Products() {
                 >
                   {MATERIAL_LABEL[product.material]}
                 </span>
-                {/* Boton "+" para agregar a la seleccion sin tener que
-                    activar primero "Seleccionar varios": solo en piezas
-                    activas, nunca en las dadas de baja (ahi solo aparece si
-                    ya se activo "Seleccionar varios", que sigue haciendo
-                    falta para elegir cuales reactivar o eliminar). Es un
-                    boton aparte (no anidado en el de editar) para que se
-                    pueda pulsar sin abrir la pieza. */}
-                {(pestana === 'ACTIVOS' || modoSeleccion) && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSeleccion(product.id);
-                    }}
-                    title={seleccionados.has(product.id) ? 'Quitar de la seleccion' : 'Agregar a la seleccion'}
-                    className={`absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors ${
+                {/* En modo "Seleccionar varios": indicador de marcada (no es un
+                    boton aparte — toda la tarjeta marca/desmarca al pulsarla,
+                    asi no hay dos zonas de clic encimadas). */}
+                {modoSeleccion && (
+                  <span
+                    className={`pointer-events-none absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
                       seleccionados.has(product.id)
                         ? 'border-copper-600 bg-copper-600 text-white'
-                        : 'border-white bg-black/20 text-white hover:bg-black/40'
+                        : 'border-white bg-black/25 text-white'
                     }`}
                   >
-                    {seleccionados.has(product.id) ? <Check size={13} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
-                  </button>
+                    {seleccionados.has(product.id) && <Check size={13} strokeWidth={3} />}
+                  </span>
                 )}
               </div>
               <div className="p-3">
