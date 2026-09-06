@@ -60,206 +60,273 @@ export function generarHtml(datos: DatosCatalogo): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(datos.negocio)}</title>
 <meta name="description" content="${esc(datos.descripcion || datos.negocio)}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Instrument+Sans:wght@400;500;600&display=swap">
+<!-- GSAP + ScrollTrigger para el revelado de las piezas al hacer scroll. Si el
+     CDN no responde (hosting sin internet, bloqueo), todo el JS de abajo lo
+     comprueba con "if (window.gsap)" y la pagina funciona igual, sin animacion. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <style>
+  /* ============================================================
+     Catalogo web — vidrio esmerilado sobre ciruela oscura, con oro
+     y tipografia editorial (Fraunces). Mismo diseno que el mockup
+     aprobado. Un solo mundo visual, sin modo claro: el glassmorfismo
+     necesita color detras del vidrio.
+     ============================================================ */
   :root{
-    --tinta:#241019; --suave:#93767C; --linea:#E6C7C9;
-    --fondo:#FBF2F1; --papel:#FFFFFF; --acento:#B75D66; --acento-osc:#96434C;
-    /* Rosa pastel del encabezado y el pie. Es mas claro que el fondo de la
-       pagina para que las dos franjas se distingan sin usar bordes. */
-    --pastel:#F7DEE1;
+    --tinta:#F7EDE9; --suave:#C9B0AC; --linea:rgba(255,255,255,.16);
+    --fondo:#1B1315; --acento:#E57D90; --acento-osc:#F0A7B5;
+    --rose-soft:#F99AAA; --gold:#E6B25E; --gold-osc:#C9902F;
+    --glass-a:rgba(255,255,255,.10); --glass-b:rgba(255,255,255,.035);
+    --verde:#1FA971;
+    color-scheme:dark;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
   /* Nada de la pagina se puede seleccionar/copiar salvo los nombres de las
      piezas (mas abajo se re-habilita en .nombre). Disuade la copia casual del
      catalogo; no frena devtools ni capturas de pantalla. */
-  body{background:var(--fondo);color:var(--tinta);
-    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.5;
-    -webkit-user-select:none;user-select:none}
+  body{
+    background:
+      radial-gradient(58% 48% at 14% 8%, rgba(229,125,144,.36), transparent 62%),
+      radial-gradient(48% 42% at 88% 12%, rgba(230,178,94,.28), transparent 60%),
+      radial-gradient(62% 55% at 80% 90%, rgba(125,90,104,.42), transparent 62%),
+      radial-gradient(46% 40% at 10% 94%, rgba(229,125,144,.20), transparent 60%),
+      var(--fondo);
+    background-attachment:fixed;
+    color:var(--tinta);
+    font-family:'Instrument Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased;
+    -webkit-user-select:none;user-select:none;overflow-x:hidden}
   .pieza .nombre,.visor .info .nombre{-webkit-user-select:text;user-select:text}
   img{max-width:100%;display:block}
+  h1,h2,.pieza .nombre,.pieza .precio,.visor .info .nombre,.visor .info .precio,
+  .modal h2,.pedido .total{font-family:'Fraunces','Georgia',serif}
+  :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
 
-  header{background:var(--pastel);color:var(--tinta);padding:2.5rem 1.25rem;text-align:center}
-  header img{width:72px;height:72px;border-radius:16px;object-fit:cover;margin:0 auto 1rem}
-  header h1{font-size:1.9rem;letter-spacing:-.02em}
-  /* La frase del negocio va en cursiva, con una pila de tipografias que
-     existen en Windows, Mac y Android; si ninguna esta, "cursive" deja al
-     sistema elegir la suya en vez de caer en una fuente recta. */
-  header .frase{font-family:'Brush Script MT','Segoe Script','Snell Roundhand',cursive;
-    font-style:italic;font-size:1.5rem;color:var(--acento-osc);margin-top:.5rem;line-height:1.2}
-  header p{color:var(--suave);margin-top:.4rem;font-size:.95rem}
+  /* Orbes de fondo: GSAP los hace flotar (si no carga, quedan como halos fijos). */
+  .orbs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+  .orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.5}
+  .orb.a{width:min(60vw,420px);height:min(60vw,420px);background:var(--acento);top:-90px;left:-70px}
+  .orb.b{width:min(55vw,360px);height:min(55vw,360px);background:var(--gold);bottom:-120px;right:-90px}
+  header,.barra,.panel-filtros,main,footer{position:relative;z-index:1}
 
-  .barra{position:sticky;top:0;z-index:20;background:var(--papel);
+  header{background:transparent;color:var(--tinta);padding:3.25rem 1.25rem 2rem;text-align:center}
+  header img{width:74px;height:74px;border-radius:18px;object-fit:cover;margin:0 auto 1.1rem;
+    box-shadow:0 16px 40px -14px rgba(0,0,0,.6)}
+  header h1{font-size:clamp(2rem,5.5vw,3rem);font-weight:300;letter-spacing:-.015em;text-wrap:balance}
+  /* La frase del negocio, en cursiva serif dorada: el toque editorial del mockup. */
+  header .frase{font-family:'Fraunces','Georgia',serif;font-style:italic;font-weight:300;
+    font-size:clamp(1.15rem,2.6vw,1.5rem);color:var(--gold);margin-top:.65rem;line-height:1.3}
+  header p:not(.frase){color:var(--suave);margin-top:.5rem;font-size:.86rem;letter-spacing:.02em}
+
+  .barra{position:sticky;top:0;z-index:20;
+    background:linear-gradient(150deg,rgba(255,255,255,.10),rgba(255,255,255,.04));
+    -webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);
     border-bottom:1px solid var(--linea);padding:.75rem 1.25rem;
-    box-shadow:0 2px 8px rgba(36,16,25,.05);
     display:flex;gap:.6rem;align-items:center}
-  .barra input{flex:1;min-width:0;padding:.6rem .9rem;border:1px solid var(--linea);
-    border-radius:10px;font-size:1rem;outline:none;background:var(--fondo)}
+  .barra input{flex:1;min-width:0;padding:.62rem .95rem;border:1px solid var(--linea);
+    border-radius:999px;font:inherit;font-size:.95rem;outline:none;color:var(--tinta);
+    background:rgba(255,255,255,.06)}
+  .barra input::placeholder{color:var(--suave)}
   .barra input:focus{border-color:var(--acento)}
   .btn-filtros{position:relative;display:flex;align-items:center;gap:.4rem;
-    padding:.6rem .9rem;border:1px solid var(--linea);border-radius:10px;
-    background:var(--papel);color:var(--tinta);font-size:.85rem;font-weight:600;
-    cursor:pointer;white-space:nowrap}
+    padding:.62rem 1rem;border:1px solid var(--linea);border-radius:999px;
+    background:rgba(255,255,255,.06);color:var(--tinta);font:inherit;font-size:.78rem;
+    font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap;
+    -webkit-user-select:none;user-select:none}
   .btn-filtros.activo{border-color:var(--acento);color:var(--acento-osc)}
-  .btn-filtros .punto{position:absolute;top:-5px;right:-5px;width:9px;height:9px;
+  .btn-filtros .punto{position:absolute;top:-4px;right:-4px;width:9px;height:9px;
     border-radius:50%;background:var(--acento)}
 
-  /* Panel de filtros: material (chips que solo muestran lo que existe en el
-     inventario) y rango de precio. Con inputs de numero en vez de un slider:
-     funciona igual con el dedo en el celular y con el mouse, sin depender de
-     ninguna libreria externa. */
-  .panel-filtros{max-width:1100px;margin:0 auto;padding:0 1.25rem;overflow:hidden;
-    max-height:0;transition:max-height .2s ease}
-  .panel-filtros.abierto{max-height:480px}
-  .panel-filtros .contenido{padding:1rem 0;border-bottom:1px solid var(--linea)}
-  .panel-filtros h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
-    color:var(--suave);margin-bottom:.5rem}
-  .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
-  .chip{padding:.4rem .85rem;border-radius:999px;border:1px solid var(--linea);
-    background:var(--papel);font-size:.82rem;font-weight:600;color:var(--tinta);
-    cursor:pointer;transition:background .15s,color .15s,border-color .15s}
-  .chip.activo{background:var(--acento);border-color:var(--acento);color:#fff}
-  .rango-precio{display:flex;align-items:center;gap:.6rem;margin-bottom:.85rem}
-  .rango-precio input{width:100%;padding:.55rem .7rem;border:1px solid var(--linea);
-    border-radius:9px;font-size:.9rem;outline:none;background:var(--fondo)}
+  /* Panel de filtros: material y categoria (chips que solo muestran lo que existe
+     en el inventario) y rango de precio con inputs de numero. */
+  .panel-filtros{max-width:1120px;margin:0 auto;padding:0 1.25rem;overflow:hidden;
+    max-height:0;transition:max-height .25s ease}
+  .panel-filtros.abierto{max-height:520px}
+  .panel-filtros .contenido{padding:1.1rem 0;border-bottom:1px solid var(--linea)}
+  .panel-filtros h3{font-size:.64rem;text-transform:uppercase;letter-spacing:.18em;
+    color:var(--suave);font-weight:600;margin-bottom:.6rem}
+  .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
+  .chip{padding:.42rem .9rem;border-radius:999px;border:1px solid var(--linea);
+    background:rgba(255,255,255,.06);font:inherit;font-size:.8rem;font-weight:500;
+    color:var(--suave);cursor:pointer;transition:background .16s,color .16s,border-color .16s}
+  .chip:hover{color:var(--tinta)}
+  .chip.activo{background:linear-gradient(135deg,var(--rose-soft),var(--acento));
+    border-color:transparent;color:#1B1315;font-weight:600}
+  .rango-precio{display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem}
+  .rango-precio input{width:100%;padding:.55rem .8rem;border:1px solid var(--linea);
+    border-radius:999px;font:inherit;font-size:.9rem;outline:none;color:var(--tinta);
+    background:rgba(255,255,255,.06)}
+  .rango-precio input::placeholder{color:var(--suave)}
   .rango-precio input:focus{border-color:var(--acento)}
   .rango-precio span{color:var(--suave);font-size:.85rem}
-  .limpiar-filtros{background:none;border:0;color:var(--acento-osc);font-size:.8rem;
-    font-weight:700;cursor:pointer;padding:0}
+  .limpiar-filtros{background:none;border:0;color:var(--gold);font:inherit;font-size:.78rem;
+    font-weight:600;letter-spacing:.04em;cursor:pointer;padding:0}
 
-  main{max-width:1100px;margin:0 auto;padding:1.5rem 1.25rem 7rem}
-  .contador{color:var(--suave);font-size:.8rem;margin-bottom:.85rem}
-  .rejilla{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  main{max-width:1120px;margin:0 auto;padding:1.75rem 1.25rem 7rem}
+  .contador{color:var(--suave);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+    margin-bottom:1rem}
+  .rejilla{display:grid;gap:1.1rem;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 
-  .pieza{background:var(--papel);border:1px solid var(--linea);border-radius:14px;
-    overflow:hidden;display:flex;flex-direction:column;
-    box-shadow:0 1px 2px rgba(36,16,25,.04);
-    transition:transform .18s ease,box-shadow .18s ease}
-  .pieza:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(36,16,25,.12)}
-  .pieza .foto{position:relative;aspect-ratio:1;background:#F3E0E1;display:flex;
-    align-items:center;justify-content:center;color:var(--suave);font-size:.8rem;
-    overflow:hidden}
-  .pieza .foto img{width:100%;height:100%;object-fit:cover;transition:transform .3s ease}
+  .pieza{border-radius:20px;overflow:hidden;display:flex;flex-direction:column;
+    background:linear-gradient(150deg,var(--glass-a),var(--glass-b));
+    -webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);
+    border:1px solid var(--linea);
+    box-shadow:0 20px 46px -26px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.16);
+    transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .28s ease}
+  .pieza:hover{transform:translateY(-6px);
+    box-shadow:0 34px 66px -28px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.28)}
+  .pieza .foto{position:relative;aspect-ratio:1;
+    background:radial-gradient(circle at 50% 35%,rgba(255,255,255,.14),rgba(255,255,255,.03));
+    display:flex;align-items:center;justify-content:center;color:var(--suave);overflow:hidden}
+  .pieza .foto img{width:100%;height:100%;object-fit:cover;transition:transform .4s cubic-bezier(.2,.7,.2,1)}
   .pieza .foto.clicable{cursor:zoom-in}
-  .pieza .foto.clicable:hover img{transform:scale(1.06)}
+  .pieza .foto.clicable:hover img{transform:scale(1.08)}
   /* Lupa que aparece al pasar el mouse, para que se note que la foto se
-     puede ampliar antes de hacerle clic (en el celular no aparece, ahi ya
-     es sabido que las fotos se tocan). */
-  .pieza .foto .lupa{position:absolute;right:.5rem;bottom:.5rem;width:28px;height:28px;
-    border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;
-    justify-content:center;opacity:0;transition:opacity .18s ease;color:var(--acento-osc)}
+     puede ampliar antes de hacerle clic. */
+  .pieza .foto .lupa{position:absolute;right:.55rem;bottom:.55rem;width:30px;height:30px;
+    border-radius:50%;background:rgba(20,12,14,.55);border:1px solid var(--linea);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;opacity:0;
+    transition:opacity .18s ease;color:var(--tinta)}
   .pieza .foto.clicable:hover .lupa{opacity:1}
-  .pieza .foto .sinfoto{display:flex;flex-direction:column;align-items:center;gap:.35rem;
-    color:var(--suave)}
-  .pieza .foto .sinfoto span{font-size:.68rem}
-  /* Insignia de material: misma idea que en Productos dentro de la app, para
-     que un vistazo baste sin tener que leer el nombre completo de la pieza. */
-  .pieza .material{position:absolute;top:.45rem;left:.45rem;padding:.2rem .55rem;
-    border-radius:999px;background:rgba(36,16,25,.72);color:#fff;
-    font-size:.62rem;font-weight:700;letter-spacing:.02em;backdrop-filter:blur(2px)}
-  .pieza .cuerpo{padding:.75rem;display:flex;flex-direction:column;gap:.35rem;flex:1}
-  .pieza .sku{font-size:.65rem;color:var(--acento);font-weight:700;letter-spacing:.04em}
-  .pieza .nombre{font-size:.85rem;font-weight:600;line-height:1.3}
-  .pieza .precio{font-size:1.05rem;font-weight:800;color:var(--acento-osc);margin-top:auto}
-  .pieza button{margin-top:.5rem;width:100%;padding:.5rem;border:0;border-radius:9px;
-    background:var(--acento);color:#fff;font-weight:700;font-size:.8rem;cursor:pointer;
-    transition:background .15s ease}
-  .pieza button:hover{background:var(--acento-osc)}
-  .pieza button.puesto{background:#0E8A5F}
+  .pieza .foto .sinfoto{display:flex;flex-direction:column;align-items:center;gap:.4rem;color:var(--suave)}
+  .pieza .foto .sinfoto span{font-size:.64rem;letter-spacing:.12em;text-transform:uppercase}
+  /* Insignia de material: un vistazo basta sin leer el nombre completo. */
+  .pieza .material{position:absolute;top:.5rem;left:.5rem;padding:.2rem .6rem;border-radius:999px;
+    background:rgba(20,12,14,.6);border:1px solid var(--linea);color:var(--tinta);
+    font-size:.56rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+  .pieza .cuerpo{padding:.9rem;display:flex;flex-direction:column;gap:.4rem;flex:1}
+  .pieza .sku{font-size:.58rem;color:var(--gold);font-weight:600;letter-spacing:.16em}
+  .pieza .nombre{font-size:1rem;font-weight:400;line-height:1.3}
+  .pieza .precio{font-size:1.15rem;font-weight:500;color:var(--gold);margin-top:auto;
+    font-variant-numeric:tabular-nums}
+  .pieza button{margin-top:.6rem;width:100%;padding:.55rem;border:0;border-radius:999px;
+    background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315;
+    font:inherit;font-weight:600;font-size:.8rem;cursor:pointer;transition:filter .15s ease}
+  .pieza button:hover{filter:brightness(1.06)}
+  .pieza button.puesto{background:var(--verde);color:#fff}
 
   /* Visor de foto ampliada: se abre al hacer clic en la imagen de una pieza. */
-  .visor{position:fixed;inset:0;z-index:50;background:rgba(20,8,12,.82);
+  .visor{position:fixed;inset:0;z-index:50;background:rgba(15,8,11,.7);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
     display:none;align-items:center;justify-content:center;padding:1.5rem;
     opacity:0;transition:opacity .2s ease}
   .visor.abierto{display:flex}
   .visor.visible{opacity:1}
   .visor .marco{position:relative;max-width:min(600px,92vw);max-height:88vh;
-    display:flex;flex-direction:column;align-items:center;gap:.75rem}
-  .visor img{max-width:100%;max-height:72vh;border-radius:14px;object-fit:contain;
-    background:var(--papel);box-shadow:0 20px 50px rgba(0,0,0,.35)}
-  .visor .info{color:#fff;text-align:center}
-  .visor .info .nombre{font-weight:700;font-size:1rem}
-  .visor .info .precio{color:#F7DEE1;font-weight:800;margin-top:.15rem}
-  .visor .cerrar{position:absolute;top:-.75rem;right:-.75rem;width:36px;height:36px;
-    border-radius:50%;border:0;background:#fff;color:var(--tinta);cursor:pointer;
-    display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.25)}
+    display:flex;flex-direction:column;align-items:center;gap:.9rem}
+  .visor img{max-width:100%;max-height:70vh;border-radius:16px;object-fit:contain;
+    background:rgba(255,255,255,.06);border:1px solid var(--linea);
+    box-shadow:0 30px 70px rgba(0,0,0,.55)}
+  .visor .info{color:var(--tinta);text-align:center}
+  .visor .info .nombre{font-weight:400;font-size:1.35rem}
+  .visor .info .precio{color:var(--gold);font-weight:500;font-size:1.2rem;margin-top:.2rem}
+  .visor .cerrar{position:absolute;top:-.85rem;right:-.85rem;width:38px;height:38px;
+    border-radius:50%;border:1px solid var(--linea);background:rgba(20,12,14,.8);color:var(--tinta);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 
-  .vacio{text-align:center;color:var(--suave);padding:3rem 1rem}
-  .vacio button{margin-top:.75rem;padding:.5rem 1rem;border:1px solid var(--linea);
-    border-radius:9px;background:var(--papel);color:var(--acento-osc);font-weight:700;
-    font-size:.82rem;cursor:pointer}
+  .vacio{text-align:center;color:var(--suave);padding:3.5rem 1rem}
+  .vacio button{margin-top:.85rem;padding:.55rem 1.1rem;border:1px solid var(--linea);
+    border-radius:999px;background:rgba(255,255,255,.06);color:var(--tinta);font:inherit;
+    font-weight:600;font-size:.82rem;cursor:pointer}
 
   /* Barra del pedido: fija abajo para que en el celular siempre este a mano */
-  .pedido{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--papel);
+  .pedido{position:fixed;left:0;right:0;bottom:0;z-index:30;
+    background:linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
+    -webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
     border-top:1px solid var(--linea);padding:.85rem 1.25rem;
-    box-shadow:0 -4px 20px rgba(36,16,25,.10);display:none}
+    box-shadow:0 -16px 40px -12px rgba(0,0,0,.55);display:none}
   .pedido.visible{display:block}
-  .pedido .fila{max-width:1100px;margin:0 auto;display:flex;gap:.75rem;
+  .pedido .fila{max-width:1120px;margin:0 auto;display:flex;gap:.75rem;
     align-items:center;justify-content:space-between;flex-wrap:wrap}
-  .pedido .total{font-weight:800;font-size:1.1rem}
-  .pedido .total span{display:block;font-size:.72rem;color:var(--suave);font-weight:600}
+  .pedido .total{font-weight:500;font-size:1.2rem;font-variant-numeric:tabular-nums}
+  .pedido .total #total{color:var(--gold)}
+  .pedido .total #resumen{display:block;font-family:'Instrument Sans',sans-serif;font-size:.66rem;
+    color:var(--suave);font-weight:500;letter-spacing:.12em;text-transform:uppercase}
   .pedido .acciones{display:flex;gap:.5rem}
-  .pedido button{padding:.65rem 1.1rem;border-radius:10px;border:0;font-weight:700;
-    cursor:pointer;font-size:.9rem}
-  .pedido .enviar{background:#0E8A5F;color:#fff}
+  .pedido button{padding:.65rem 1.15rem;border-radius:999px;border:0;font:inherit;font-weight:600;
+    cursor:pointer;font-size:.88rem}
+  .pedido .enviar{background:var(--verde);color:#fff}
   .pedido .vaciar{background:transparent;color:var(--suave);border:1px solid var(--linea)}
 
-  footer{background:var(--pastel);color:var(--tinta);padding:2rem 1.25rem;text-align:center;
+  footer{background:transparent;color:var(--suave);padding:2.5rem 1.25rem 3rem;text-align:center;
     font-size:.85rem}
+  footer p:first-child{color:var(--tinta);letter-spacing:.03em}
 
   /* ---- Punto de venta oculto ----
      Se abre manteniendo pulsado "Filtros" 2s y metiendo una clave que valida
-     el relevo en la nube (nunca viaja en este HTML). */
-  .modal{position:fixed;inset:0;z-index:60;background:rgba(20,8,12,.82);
+     el relevo en la nube (nunca viaja en este HTML). Caja de vidrio. */
+  .modal{position:fixed;inset:0;z-index:60;background:rgba(15,8,11,.7);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
     display:none;align-items:center;justify-content:center;padding:1.25rem}
   .modal.abierto{display:flex}
-  .modal .caja{background:var(--papel);border-radius:16px;padding:1.5rem;
-    width:100%;max-width:380px;max-height:88vh;overflow-y:auto;
-    box-shadow:0 20px 50px rgba(0,0,0,.35)}
-  .modal h2{font-size:1.1rem;margin-bottom:.35rem}
+  .modal .caja{background:linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:1px solid var(--linea);border-radius:20px;padding:1.6rem;
+    width:100%;max-width:390px;max-height:88vh;overflow-y:auto;
+    box-shadow:0 30px 70px rgba(0,0,0,.55)}
+  .modal h2{font-size:1.3rem;font-weight:400;margin-bottom:.35rem}
   .modal p.sub{color:var(--suave);font-size:.85rem;margin-bottom:1rem}
-  .modal label{display:block;font-size:.72rem;text-transform:uppercase;
-    letter-spacing:.04em;color:var(--suave);font-weight:700;margin:.85rem 0 .35rem}
+  .modal label{display:block;font-size:.64rem;text-transform:uppercase;
+    letter-spacing:.16em;color:var(--suave);font-weight:600;margin:.9rem 0 .4rem}
   .modal input[type=password],.modal input[type=text],.modal input[type=tel],
-  .modal input[type=number]{width:100%;padding:.65rem .8rem;border:1px solid var(--linea);
-    border-radius:10px;font-size:1rem;outline:none;background:var(--fondo)}
+  .modal input[type=number]{width:100%;padding:.68rem .85rem;border:1px solid var(--linea);
+    border-radius:12px;font:inherit;font-size:1rem;outline:none;color:var(--tinta);
+    background:rgba(255,255,255,.06)}
+  .modal input::placeholder{color:var(--suave)}
   .modal input:focus{border-color:var(--acento)}
   .modal .metodos{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.15rem}
-  .modal .metodos button{flex:1;min-width:calc(50% - .2rem);padding:.55rem;border-radius:9px;
-    border:1px solid var(--linea);background:var(--papel);font-size:.82rem;font-weight:700;
-    color:var(--tinta);cursor:pointer}
-  .modal .metodos button.activo{background:var(--acento);border-color:var(--acento);color:#fff}
-  .modal .acciones{display:flex;gap:.5rem;margin-top:1.25rem}
-  .modal .acciones button{flex:1;padding:.7rem;border-radius:10px;border:0;
-    font-weight:700;font-size:.9rem;cursor:pointer}
-  .modal .acciones .ok{background:#0E8A5F;color:#fff}
-  .modal .acciones .cancelar{background:var(--fondo);color:var(--suave);border:1px solid var(--linea)}
-  .modal .error{color:var(--acento-osc);font-size:.82rem;font-weight:700;margin-top:.75rem;min-height:1rem}
-  .modal .contactos{margin-top:.4rem;background:none;border:0;color:var(--acento-osc);
-    font-size:.8rem;font-weight:700;cursor:pointer;padding:0}
-  .modal .resumen-venta{background:var(--fondo);border-radius:10px;padding:.7rem .85rem;
-    font-size:.85rem;margin-bottom:.25rem}
-  .modal .resumen-venta b{font-size:1rem}
+  .modal .metodos button{flex:1;min-width:calc(50% - .2rem);padding:.55rem;border-radius:10px;
+    border:1px solid var(--linea);background:rgba(255,255,255,.06);font:inherit;font-size:.82rem;
+    font-weight:600;color:var(--tinta);cursor:pointer}
+  .modal .metodos button.activo{background:linear-gradient(135deg,var(--rose-soft),var(--acento));
+    border-color:transparent;color:#1B1315}
+  .modal .acciones{display:flex;gap:.5rem;margin-top:1.35rem}
+  .modal .acciones button{flex:1;padding:.72rem;border-radius:12px;border:0;
+    font:inherit;font-weight:600;font-size:.9rem;cursor:pointer}
+  .modal .acciones .ok{background:var(--verde);color:#fff}
+  .modal .acciones .cancelar{background:rgba(255,255,255,.06);color:var(--suave);border:1px solid var(--linea)}
+  .modal .error{color:var(--acento-osc);font-size:.82rem;font-weight:600;margin-top:.8rem;min-height:1rem}
+  .modal .contactos{margin-top:.5rem;background:none;border:0;color:var(--gold);
+    font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;padding:0}
+  .modal .resumen-venta{background:rgba(255,255,255,.06);border:1px solid var(--linea);border-radius:12px;
+    padding:.75rem .9rem;font-size:.85rem;margin-bottom:.25rem}
+  .modal .resumen-venta b{font-family:'Fraunces','Georgia',serif;font-size:1.05rem;color:var(--gold)}
 
   /* Franja "modo venta activo": bloque normal al tope de la pagina (se va con
      el scroll, es solo un indicador). */
-  .modo-venta{background:var(--acento-osc);color:#fff;font-size:.8rem;font-weight:700;
+  .modo-venta{background:linear-gradient(135deg,var(--acento-osc),var(--acento));color:#1B1315;
+    font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
     padding:.5rem 1rem;text-align:center;display:none;align-items:center;
-    justify-content:center;gap:.6rem}
+    justify-content:center;gap:.6rem;position:relative;z-index:2}
   .modo-venta.visible{display:flex}
-  .modo-venta button{background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;
-    padding:.15rem .5rem;font-size:.72rem;font-weight:700;cursor:pointer}
+  .modo-venta button{background:rgba(27,19,21,.25);border:0;color:#1B1315;border-radius:6px;
+    padding:.15rem .55rem;font:inherit;font-size:.7rem;font-weight:700;cursor:pointer}
 
-  .pedido .cobrar{background:var(--acento);color:#fff;display:none}
+  .pedido .cobrar{background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315;display:none}
   .pedido.modo-venta-activo .cobrar{display:inline-block}
 
-  @media(max-width:420px){
-    .rejilla{grid-template-columns:repeat(2,1fr);gap:.7rem}
-    header{padding:1.75rem 1rem}
-    header h1{font-size:1.45rem}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  @media(max-width:520px){
+    .rejilla{grid-template-columns:repeat(2,1fr);gap:.75rem}
+    header{padding:2.25rem 1rem 1.5rem}
+    .pieza .nombre{font-size:.92rem}
   }
 </style>
 </head>
 <body>
+
+<div class="orbs" aria-hidden="true">
+  <span class="orb a" id="orbA"></span>
+  <span class="orb b" id="orbB"></span>
+</div>
 
 <div class="modo-venta" id="modoVenta">
   <span>&#128274; Modo venta activo</span>
@@ -413,7 +480,41 @@ function coincide(p) {
   return true;
 }
 
-function pintar() {
+// Revelado de las piezas al hacer scroll (GSAP + ScrollTrigger). Solo se
+// anima cuando "animar" es true: al cargar y al cambiar los filtros. Al
+// escribir en el buscador o al agregar al carrito se re-pinta sin animar,
+// para que no parpadee la rejilla. Sin GSAP no hace nada: las piezas ya
+// estan visibles.
+const _reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let _triggersPiezas = [];
+function revelarPiezas(animar) {
+  if (window.gsap) {
+    _triggersPiezas.forEach(t => { if (t && t.kill) t.kill(); });
+    _triggersPiezas = [];
+    gsap.killTweensOf('#rejilla .pieza');
+    gsap.set('#rejilla .pieza', { clearProps: 'opacity,transform' });
+  }
+  if (!animar || !window.gsap || _reduce) return;
+  const cards = Array.prototype.slice.call(document.querySelectorAll('#rejilla .pieza'));
+  if (!cards.length) return;
+  const limite = window.innerHeight * 0.9;
+  const enVista = [], fuera = [];
+  cards.forEach(c => { (c.getBoundingClientRect().top < limite ? enVista : fuera).push(c); });
+  if (enVista.length) {
+    gsap.from(enVista, { opacity: 0, y: 22, duration: 0.5, stagger: 0.05, ease: 'power2.out' });
+  }
+  if (fuera.length && window.ScrollTrigger) {
+    gsap.set(fuera, { opacity: 0, y: 26 });
+    _triggersPiezas = ScrollTrigger.batch(fuera, {
+      start: 'top 92%',
+      onEnter: b => gsap.to(b, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: 'power2.out', overwrite: true }),
+    });
+  } else if (fuera.length) {
+    gsap.from(fuera, { opacity: 0, y: 26, duration: 0.5, stagger: 0.04, ease: 'power2.out' });
+  }
+}
+
+function pintar(animar) {
   const rejilla = document.getElementById('rejilla');
   const lista = DATOS.productos.filter(coincide);
 
@@ -452,6 +553,8 @@ function pintar() {
   rejilla.querySelectorAll('[data-visor]').forEach(el => {
     el.onclick = () => abrirVisor(el.dataset.visor);
   });
+
+  revelarPiezas(animar);
 }
 
 // ---- Visor de foto ampliada ----
@@ -490,7 +593,7 @@ function agregar(sku) {
     return;
   }
   carrito.set(sku, (carrito.get(sku) || 0) + 1);
-  pintar();
+  pintar(false);
   actualizarPedido();
 }
 
@@ -537,7 +640,7 @@ function aplicarFiltros() {
   const n = contarFiltrosActivos();
   document.getElementById('btnFiltros').classList.toggle('activo', n > 0);
   document.getElementById('puntoFiltros').hidden = n === 0;
-  pintar();
+  pintar(true);
 }
 
 // El boton "Filtros": un toque normal abre/cierra el panel; mantenerlo
@@ -585,7 +688,7 @@ document.getElementById('vaciarDesdeVacio').onclick = () => {
   limpiarFiltros();
   document.getElementById('buscar').value = '';
   filtros.texto = '';
-  pintar();
+  pintar(true);
 };
 
 function actualizarPedido() {
@@ -604,7 +707,7 @@ function actualizarPedido() {
 
 document.getElementById('vaciar').onclick = () => {
   carrito.clear();
-  pintar(document.getElementById('buscar').value);
+  pintar(false);
   actualizarPedido();
 };
 
@@ -654,7 +757,7 @@ document.getElementById('enviar').onclick = () => {
 
 document.getElementById('buscar').oninput = (e) => {
   filtros.texto = e.target.value.trim().toLowerCase();
-  pintar();
+  pintar(false);
 };
 
 // ---- No copiar (todo salvo los nombres de las piezas) ----
@@ -811,7 +914,7 @@ document.getElementById('cobrarConfirmar').onclick = async () => {
     });
     if (r.ok) {
       carrito.clear();
-      pintar();
+      pintar(false);
       actualizarPedido();
       document.getElementById('modalCobrar').classList.remove('abierto');
       document.getElementById('descuentoInput').value = '';
@@ -829,9 +932,19 @@ document.getElementById('cobrarConfirmar').onclick = async () => {
   } catch { err.textContent = 'No se pudo enviar (sin conexion?).'; }
 };
 
+// GSAP: registrar el plugin y poner a flotar los orbes del fondo. Todo
+// dentro de "if (window.gsap)" para que sin CDN la pagina siga igual.
+if (window.gsap) {
+  if (window.ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
+  if (!_reduce) {
+    gsap.to('#orbA', { xPercent: 14, yPercent: 12, duration: 9, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+    gsap.to('#orbB', { xPercent: -12, yPercent: -14, duration: 12, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+  }
+}
+
 pintarChipsMaterial();
 pintarChipsCategoria();
-pintar();
+pintar(true);
 actualizarPedido();
 </script>
 </body>

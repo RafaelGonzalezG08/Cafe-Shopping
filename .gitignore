@@ -27,6 +27,8 @@ backend/backups/
 # Archivos de registros y temporales
 *.log
 desktop/dist/
+# Vista previa local del catalogo (se regenera con scripts/preview-catalogo.js)
+backend/.preview-catalogo/
 # Base de datos local de la version nativa (SQLite) y su copia de restauracion
 backend/prisma/*.db
 backend/prisma/*.db-journal

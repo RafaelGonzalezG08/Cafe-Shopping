@@ -16,6 +16,14 @@
       "autoPort": false
     },
     {
+      "name": "catalogo-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/preview-server.js"],
+      "cwd": "${workspaceFolder}/backend",
+      "port": 4180,
+      "autoPort": false
+    },
+    {
       "name": "PersonalFinance.WebHost",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "C:/Users/ykaru/source/PersonalFinance/src/PersonalFinance.WebHost", "--urls", "http://localhost:5201"],
