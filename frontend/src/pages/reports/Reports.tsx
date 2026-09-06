@@ -3,6 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGri
 import { Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
+import { useTheme } from '../../lib/useTheme';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { ClientDebt } from '../../types';
@@ -36,6 +37,13 @@ export default function Reports() {
   const [group, setGroup] = usePersistedState<'day' | 'week' | 'month' | 'year'>('reportes:agrupar', 'day');
   const [from, setFrom] = usePersistedState('reportes:desde', '');
   const [to, setTo] = usePersistedState('reportes:hasta', '');
+
+  // Recharts pinta con atributos SVG, no con clases: los colores del grafico
+  // se pasan a mano segun el tema.
+  const { esOscuro } = useTheme();
+  const chart = esOscuro
+    ? { grid: '#514040', eje: '#C6989A', barra: '#E57D90', tipBg: '#3A2B2D', tipBorde: '#514040', tipTexto: '#F3E7E8' }
+    : { grid: '#E3CED4', eje: '#9A828A', barra: '#E57D90', tipBg: '#FFFFFF', tipBorde: '#E3CED4', tipTexto: '#33232A' };
 
   const params = { from: from || undefined, to: to || undefined };
 
@@ -156,14 +164,21 @@ export default function Reports() {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesReport}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6C7C9" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#93767C' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#93767C' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: chart.eje }} />
+                <YAxis tick={{ fontSize: 11, fill: chart.eje }} />
                 <Tooltip
                   formatter={(value: number) => `RD$ ${formatMoney(value)}`}
-                  contentStyle={{ borderRadius: 8, borderColor: '#E6C7C9', fontSize: 13 }}
+                  cursor={{ fill: chart.grid, opacity: 0.3 }}
+                  contentStyle={{
+                    borderRadius: 8,
+                    background: chart.tipBg,
+                    borderColor: chart.tipBorde,
+                    color: chart.tipTexto,
+                    fontSize: 13,
+                  }}
                 />
-                <Bar dataKey="total" fill="#B75D66" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" fill={chart.barra} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

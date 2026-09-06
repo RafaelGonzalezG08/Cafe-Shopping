@@ -15,10 +15,13 @@ import {
   Settings,
   LogOut,
   HandCoins,
+  Moon,
+  Sun,
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api, apiUrl } from '../lib/api';
+import { useTheme } from '../lib/useTheme';
 import { Button, Card } from './ui';
 import type { BusinessProfile, Role } from '../types';
 
@@ -48,6 +51,7 @@ const ROLES_CONFIGURACION: Role[] = ['ADMIN'];
 
 export function Layout() {
   const { user, logout } = useAuthStore();
+  const { esOscuro, alternar } = useTheme();
   const [confirmandoSalir, setConfirmandoSalir] = useState(false);
 
   const { data: profile } = useQuery<BusinessProfile>({
@@ -66,7 +70,7 @@ export function Layout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
-      <aside className="z-10 flex w-72 shrink-0 flex-col bg-porcelain-100 text-ink shadow-[8px_0_24px_-16px_rgba(51,35,42,0.35)]">
+      <aside className="z-10 flex w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)]">
         <div className="flex items-center gap-2.5 px-5 py-6">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
             {logoSrc ? (
@@ -92,7 +96,7 @@ export function Layout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-porcelain-100 text-copper-700 shadow-neu-inset'
+                    ? 'bg-porcelain-side text-copper-700 shadow-neu-inset'
                     : 'text-muted hover:text-ink'
                 }`
               }
@@ -103,8 +107,8 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mx-3 my-4 border-t border-porcelain-200 px-0 pt-4">
-          <div className="mb-2 flex items-center gap-2.5 rounded-xl px-3 py-2 shadow-neu-inset">
+        <div className="mx-3 my-4 border-t border-porcelain-300 px-0 pt-4">
+          <div className="mb-2 flex items-center gap-2.5 rounded-xl bg-porcelain-side px-3 py-2 shadow-neu-inset">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-copper-400 to-copper-600 font-display text-xs font-bold text-white">
               {user?.nombre?.slice(0, 2).toUpperCase()}
             </div>
@@ -120,6 +124,14 @@ export function Layout() {
             >
               <LogOut size={17} strokeWidth={2} />
               Cerrar sesion
+            </button>
+            <button
+              onClick={alternar}
+              title={esOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              aria-label={esOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              className="flex shrink-0 items-center justify-center rounded-xl p-2.5 text-muted shadow-neu-sm transition-all hover:text-ink active:shadow-neu-pressed"
+            >
+              {esOscuro ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
             </button>
             {puedeVerConfiguracion && (
               <NavLink

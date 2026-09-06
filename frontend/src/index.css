@@ -2,6 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Paleta como variables CSS (tripletes R G B para poder usar opacidad de
+ * Tailwind: bg-copper-500/20, etc.). El tema claro vive en :root; el oscuro
+ * solo redefine lo que cambia bajo .dark (que pone/quita useTheme.ts).
+ *
+ * El modo oscuro es un ROSA PROFUNDO, no un negro: fondo ciruela-rosado
+ * calido (#3A2B2D) con el rosa #ba7b7c de fondo en el texto secundario. La
+ * barra lateral usa un tono aparte (--c-porcelain-side) para separarse del
+ * area principal sin bordes.
+ */
+:root {
+  --c-espresso-950: 23 11 18;
+  --c-espresso-900: 34 16 26;
+  --c-espresso-800: 52 23 42;
+  --c-espresso-700: 74 36 56;
+
+  --c-porcelain-50: 255 255 255;
+  --c-porcelain-100: 243 232 235;
+  --c-porcelain-200: 235 219 223;
+  --c-porcelain-300: 227 206 212;
+  --c-porcelain-side: 238 224 227;
+
+  --c-copper-50: 255 236 239;
+  --c-copper-100: 255 205 212;
+  --c-copper-200: 253 180 191;
+  --c-copper-300: 249 154 170;
+  --c-copper-400: 241 136 155;
+  --c-copper-500: 229 125 144;
+  --c-copper-600: 200 95 116;
+  --c-copper-700: 166 72 92;
+
+  --c-sage-100: 210 236 221;
+  --c-sage-500: 14 138 95;
+  --c-sage-600: 10 107 73;
+  --c-sage-700: 7 81 54;
+
+  --c-brick-100: 243 216 220;
+  --c-brick-500: 163 35 71;
+  --c-brick-600: 132 28 58;
+  --c-brick-700: 99 21 44;
+
+  --c-rose-100: 248 220 230;
+  --c-rose-400: 222 132 164;
+  --c-rose-500: 193 92 132;
+  --c-rose-600: 156 68 104;
+
+  --c-ink: 51 35 42;
+  --c-muted: 154 130 138;
+
+  /* Relieve neumorfico: sombra (abajo-derecha) y luz (arriba-izquierda). */
+  --neu-lo: 216 196 203;
+  --neu-hi: 255 255 255;
+
+  color-scheme: light;
+}
+
+.dark {
+  --c-porcelain-50: 255 255 255; /* "papel" real (facturas) sigue blanco */
+  --c-porcelain-100: 58 43 45;
+  --c-porcelain-200: 70 53 55;
+  --c-porcelain-300: 84 65 66;
+  --c-porcelain-side: 49 36 38;
+
+  --c-copper-50: 74 51 54;
+  --c-copper-100: 87 58 62;
+  --c-copper-600: 238 159 173;
+  --c-copper-700: 242 179 190;
+
+  --c-sage-100: 34 58 49;
+  --c-sage-500: 23 164 114;
+  --c-sage-600: 95 191 151;
+
+  --c-brick-100: 62 38 48;
+  --c-brick-500: 199 74 100;
+  --c-brick-600: 232 144 159;
+  --c-brick-700: 239 169 180;
+
+  --c-rose-100: 62 42 52;
+  --c-rose-600: 222 156 182;
+
+  --c-ink: 243 231 232;
+  --c-muted: 198 152 154; /* familia #ba7b7c, un poco mas claro para contraste */
+
+  --neu-lo: 44 33 34;
+  --neu-hi: 71 54 56;
+
+  color-scheme: dark;
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -35,13 +124,13 @@ select {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
   textarea {
     @apply rounded-lg bg-porcelain-100 text-ink;
-    box-shadow: inset 2px 2px 5px #D8C4CB, inset -2px -2px 5px #ffffff;
+    box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi));
   }
   input:focus,
   textarea:focus {
     outline: none;
-    box-shadow: inset 2px 2px 5px #D8C4CB, inset -2px -2px 5px #ffffff,
-      0 0 0 2px rgba(229, 125, 144, 0.45);
+    box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi)),
+      0 0 0 2px rgb(var(--c-copper-500) / 0.5);
   }
 }
 
@@ -66,7 +155,7 @@ select {
 
 /* Motivo de recibo: borde perforado usado en previews de factura dentro del POS */
 .receipt-edge {
-  background-image: radial-gradient(circle at 6px 6px, #F3E8EB 6px, transparent 6.5px);
+  background-image: radial-gradient(circle at 6px 6px, rgb(var(--c-porcelain-100)) 6px, transparent 6.5px);
   background-size: 16px 12px;
   background-repeat: repeat-x;
   background-position: top;
@@ -77,11 +166,17 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* Mientras se cambia de tema (ver useTheme.ts): sin transiciones, para que el
+   cambio sea instantaneo en vez de un cross-fade de toda la pantalla. */
+.cambiando-tema * {
+  transition: none !important;
+}
+
 ::selection {
-  background: #FDB4BF;
+  background: rgb(var(--c-copper-200));
 }
 
 *:focus-visible {
-  outline: 2px solid #C85F74;
+  outline: 2px solid rgb(var(--c-copper-600));
   outline-offset: 2px;
 }

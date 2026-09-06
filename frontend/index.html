@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Cafe Shopping · POS</title>
+    <script>
+      // Aplica el tema ANTES de pintar, para que no haya un parpadeo claro
+      // al abrir en modo oscuro. La misma clave que usa src/lib/useTheme.ts.
+      (function () {
+        try {
+          var t = localStorage.getItem('cafe-shopping-tema');
+          var oscuro =
+            t === 'oscuro' ||
+            (t !== 'claro' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (oscuro) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
