@@ -22,14 +22,25 @@ const nombres = [
   'Anillo sello ovalado', 'Arete largo gota', 'Pulsera rigida martillada',
 ];
 
-const productos = nombres.map((nombre, i) => ({
-  sku: cats[i % cats.length].slice(0, 2).toUpperCase() + '-' + String(1001 + i),
-  nombre,
-  precio: [1850, 8900, 22400, 2400, 14700, 1200, 6300, 3600, 2150, 2900, 4600, 3100, 9800, 5400, 7200][i],
-  imagen: null,
-  material: materiales[i % materiales.length],
-  categoria: cats[i % cats.length],
-}));
+// Algunas piezas con tallas para probar el selector del catalogo.
+const tallasPorTipo = {
+  Anillo: ['5', '6', '7', '8', '9'],
+  Cadena: ['40 cm', '45 cm', '50 cm', '55 cm'],
+  Pulsera: ['S', 'M', 'L'],
+};
+
+const productos = nombres.map((nombre, i) => {
+  const categoria = cats[i % cats.length];
+  return {
+    sku: categoria.slice(0, 2).toUpperCase() + '-' + String(1001 + i),
+    nombre,
+    precio: [1850, 8900, 22400, 2400, 14700, 1200, 6300, 3600, 2150, 2900, 4600, 3100, 9800, 5400, 7200][i],
+    imagen: null,
+    material: materiales[i % materiales.length],
+    categoria,
+    tallas: i % 2 === 0 ? (tallasPorTipo[categoria] ?? []) : [],
+  };
+});
 
 const datos = {
   negocio: 'Cafe Shopping',

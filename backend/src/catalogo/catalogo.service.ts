@@ -6,6 +6,17 @@ import { UPLOADS_DIR } from '../common/paths';
 import { generarHtml, DatosCatalogo, ProductoCatalogo } from './plantilla';
 import { MATERIAL_LABEL, Material } from '../common/enums';
 
+/** products.tallas se guarda como texto JSON (SQLite no tiene tipo Json). */
+function parsearTallas(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface ResultadoGenerar {
   ok: boolean;
   carpeta?: string;
@@ -121,6 +132,7 @@ export class CatalogoService {
         imageUrl: true,
         material: true,
         categoriaId: true,
+        tallas: true,
       },
     });
 
@@ -165,6 +177,7 @@ export class CatalogoService {
         // conoce las constantes del backend, solo lo que va a mostrar.
         material: MATERIAL_LABEL[(p.material as Material) ?? 'OTRO'] ?? MATERIAL_LABEL.OTRO,
         categoria: p.categoriaId ? (nombreCategoria.get(p.categoriaId) ?? null) : null,
+        tallas: parsearTallas(p.tallas),
       });
     }
 

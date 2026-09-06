@@ -12,6 +12,8 @@ interface ItemVentaRelevo {
   sku: string;
   cantidad: number;
   precio: number;
+  /** Talla / medida elegida por el cliente en el catalogo (opcional). */
+  talla?: string;
 }
 
 interface VentaRelevo {
@@ -221,7 +223,8 @@ export class WebSalesRelayService {
         !Number.isInteger(cantidad) ||
         cantidad < 1 ||
         cantidad > 999 ||
-        !(precio > 0)
+        !(precio > 0) ||
+        (it.talla != null && (typeof it.talla !== 'string' || it.talla.length > 20))
       ) {
         throw new BadRequestException('Un producto de la venta web tiene datos invalidos.');
       }
@@ -253,9 +256,11 @@ export class WebSalesRelayService {
     const saleItems: SaleItemDto[] = items.map((it) => {
       const p = porSku.get(it.sku.toUpperCase());
       if (!p) faltantes.push(it.sku);
+      const base = p?.nombre ?? `${it.sku} (no encontrado)`;
+      const talla = it.talla?.trim();
       return {
         productId: p?.id,
-        descripcion: p?.nombre ?? `${it.sku} (no encontrado)`,
+        descripcion: talla ? `${base} (Talla ${talla})` : base,
         cantidad: it.cantidad,
         precioUnitario: Math.round(Number(it.precio) * 100) / 100,
       };
@@ -302,9 +307,11 @@ export class WebSalesRelayService {
     const items = (v.venta?.items ?? []).map((it) => {
       const cantidad = Number(it?.cantidad) || 1;
       const precio = Number(it?.precio) || 0;
+      const talla = typeof it?.talla === 'string' ? it.talla.trim() : '';
+      const base = String(it?.sku ?? 'articulo');
       return {
         cantidad,
-        nombre: String(it?.sku ?? 'articulo'),
+        nombre: talla ? `${base} (Talla ${talla})` : base,
         sku: it?.sku ?? null,
         total: Math.round(precio * cantidad * 100) / 100,
       };

@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -8,6 +10,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Length,
   Min,
   MinLength,
 } from 'class-validator';
@@ -56,6 +59,36 @@ export class CreateProductDto {
   @IsOptional()
   @IsIn(MATERIALES, { message: 'Material invalido.' })
   material?: Material;
+
+  /**
+   * Tallas / medidas que ofrece la pieza. En el catalogo web el cliente elige
+   * una antes de agregarla al pedido. Lista vacia = la pieza no maneja tallas.
+   *
+   * El formulario viaja como multipart (lleva la foto), donde todo llega como
+   * texto: el frontend manda esto como un string JSON y aqui se reconstruye.
+   */
+  @ApiPropertyOptional({ type: [String], example: ['6', '7', '8'] })
+  @IsOptional()
+  @Transform(({ value }) => {
+    // Sin enviar (edicion que no toca las tallas) -> undefined, para que
+    // @IsOptional lo salte y el update no las borre.
+    if (value === undefined || value === null) return undefined;
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })
+  @IsArray()
+  @ArrayMaxSize(40, { message: 'Demasiadas tallas (maximo 40).' })
+  @IsString({ each: true })
+  @Length(1, 20, { each: true, message: 'Cada talla debe tener entre 1 y 20 caracteres.' })
+  tallas?: string[];
 
   /**
    * Pieza dada de baja (`false`) o vigente (`true`). Eliminar un producto es

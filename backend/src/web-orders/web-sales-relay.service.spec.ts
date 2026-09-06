@@ -99,6 +99,26 @@ describe('WebSalesRelayService.revisar', () => {
     expect(del).toEqual(['VNT-AAAA']);
   });
 
+  it('la talla elegida en el catalogo va en la descripcion del item', async () => {
+    const { service, deps } = crearService();
+    mockFetch([ventaBase({ items: [{ sku: 'AN-001', cantidad: 1, precio: 3000, talla: '7' }] })]);
+
+    await service.revisar();
+
+    const items = deps.salesCreate.mock.calls[0][0].items;
+    expect(items[0].descripcion).toBe('Anillo (Talla 7)');
+  });
+
+  it('rechaza una talla no-string o muy larga (cae como pedido pendiente)', async () => {
+    const { service, deps } = crearService();
+    mockFetch([ventaBase({ items: [{ sku: 'AN-001', cantidad: 1, precio: 3000, talla: 'x'.repeat(30) }] })]);
+
+    await service.revisar();
+
+    expect(deps.salesCreate).not.toHaveBeenCalled();
+    expect(deps.crearDesdePendiente).toHaveBeenCalledTimes(1);
+  });
+
   it('venta a credito sin cliente -> pedido pendiente y se borra del relevo', async () => {
     const { service, deps } = crearService();
     const del = mockFetch([ventaBase({ metodoPago: 'CREDITO', cliente: null })]);

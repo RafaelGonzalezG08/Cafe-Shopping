@@ -17,6 +17,8 @@ type ProductFormValues = {
   costoUnitario: string;
   material: Material;
   stock: string;
+  /** Tallas / medidas que el negocio ofrece de esta pieza (el cliente elige en el catalogo). */
+  tallas: string[];
   file: File | null;
 };
 
@@ -61,6 +63,7 @@ function buildFormData(values: ProductFormValues) {
   formData.append('costoUnitario', String(Number(values.costoUnitario) || 0));
   formData.append('material', values.material);
   formData.append('stock', String(Number(values.stock) || 0));
+  formData.append('tallas', JSON.stringify(values.tallas ?? []));
   if (values.file) formData.append('file', values.file);
   return formData;
 }
@@ -476,6 +479,11 @@ export default function Products() {
                   </span>
                   <span className="text-xs text-muted">Stock: {product.stock}</span>
                 </div>
+                {product.tallas.length > 0 && (
+                  <p className="mt-1 truncate text-[11px] text-muted" title={product.tallas.join(', ')}>
+                    Tallas: {product.tallas.join(', ')}
+                  </p>
+                )}
                 {margenPct(product) !== null && (
                   <div className="mt-1.5">
                     <Badge tone={margenPct(product)! < 20 ? 'brick' : margenPct(product)! < 40 ? 'copper' : 'sage'}>
@@ -511,6 +519,7 @@ export default function Products() {
             costoUnitario: String(editing.costoUnitario ?? ''),
             material: editing.material ?? 'OTRO',
             stock: String(editing.stock),
+            tallas: editing.tallas ?? [],
             file: null,
           }}
           currentImage={imageSrc(editing)}
@@ -910,6 +919,7 @@ function ProductModal({
   // Pide confirmar dentro del mismo modal en vez de un window.confirm: el
   // primer clic solo arma el boton, el segundo es el que da de baja.
   const [confirmandoBaja, setConfirmandoBaja] = useState(false);
+  const [nuevaTalla, setNuevaTalla] = useState('');
   // Solo los campos de texto se guardan como borrador: un File no se puede
   // serializar, y aunque se pudiera, "recordar" un archivo que el usuario ya
   // no ve seleccionado seria mas confuso que util. La foto se vuelve a elegir.
@@ -919,6 +929,7 @@ function ProductModal({
     costoUnitario: '',
     material: 'OTRO' as Material,
     stock: '',
+    tallas: [] as string[],
     file: null,
   };
   // El borrador persistido solo tiene sentido al CREAR: no hay "version del
@@ -952,6 +963,21 @@ function ProductModal({
   function handleFile(nuevo: File | null) {
     setFile(nuevo);
     setPreview(nuevo ? URL.createObjectURL(nuevo) : null);
+  }
+
+  function agregarTalla() {
+    const v = nuevaTalla.trim();
+    setNuevaTalla('');
+    if (!v) return;
+    if (form.tallas.some((t) => t.toLowerCase() === v.toLowerCase())) return;
+    if (form.tallas.length >= 40) {
+      toast.error('Maximo 40 tallas por pieza.');
+      return;
+    }
+    setForm((f) => ({ ...f, tallas: [...f.tallas, v] }));
+  }
+  function quitarTalla(talla: string) {
+    setForm((f) => ({ ...f, tallas: f.tallas.filter((t) => t !== talla) }));
   }
 
   const photoToShow = preview ?? currentImage ?? null;
@@ -1062,6 +1088,55 @@ function ProductModal({
               Se usa para el filtro del catalogo web y la insignia sobre la foto.
             </p>
           </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+              Tallas / medidas
+            </label>
+            {form.tallas.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {form.tallas.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 rounded-full bg-copper-100 px-2.5 py-1 text-xs font-semibold text-copper-700"
+                  >
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => quitarTalla(t)}
+                      className="rounded-full p-0.5 hover:bg-copper-200"
+                      aria-label={`Quitar talla ${t}`}
+                    >
+                      <X size={11} strokeWidth={3} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                value={nuevaTalla}
+                onChange={(e) => setNuevaTalla(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    agregarTalla();
+                  }
+                }}
+                placeholder='Ej. 6, 7, 8  o  45 cm'
+                maxLength={20}
+                className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
+              />
+              <Button type="button" variant="secondary" size="sm" onClick={agregarTalla}>
+                <Plus size={14} />
+                Agregar
+              </Button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              Si la pieza tiene tallas, el cliente elige una en el catalogo web antes de pedirla. Dejalo vacio si no aplica.
+            </p>
+          </div>
+
           <Button type="submit" className="w-full" disabled={isPending}>
             {isPending ? 'Guardando...' : submitLabel}
           </Button>

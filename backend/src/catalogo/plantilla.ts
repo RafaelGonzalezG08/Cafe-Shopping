@@ -20,6 +20,8 @@ export interface ProductoCatalogo {
   material: string;
   /** Nombre de la categoria (Anillo, Collar...), o null si la pieza no tiene una asignada. */
   categoria: string | null;
+  /** Tallas / medidas que ofrece la pieza. Vacio = la pieza no maneja tallas. */
+  tallas: string[];
 }
 
 export interface DatosCatalogo {
@@ -205,6 +207,16 @@ export function generarHtml(datos: DatosCatalogo): string {
   .pieza .nombre{font-size:1rem;font-weight:400;line-height:1.3}
   .pieza .precio{font-size:1.15rem;font-weight:500;color:var(--gold);margin-top:auto;
     font-variant-numeric:tabular-nums}
+  /* Tallas / medidas: el cliente elige una antes de agregar la pieza. */
+  .pieza .tallas{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.1rem}
+  .pieza .tallas .lbl{width:100%;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--suave)}
+  .pieza .tchip{font:inherit;font-size:.72rem;font-weight:500;padding:.2rem .55rem;border-radius:8px;
+    cursor:pointer;color:var(--suave);background:rgba(255,255,255,.06);border:1px solid var(--linea);
+    transition:all .15s ease}
+  .pieza .tchip:hover{color:var(--tinta)}
+  .pieza .tchip.activo{background:linear-gradient(135deg,var(--rose-soft),var(--acento));
+    border-color:transparent;color:#1B1315;font-weight:600}
   .pieza button{margin-top:.6rem;width:100%;padding:.55rem;border:0;border-radius:999px;
     background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315;
     font:inherit;font-weight:600;font-size:.8rem;cursor:pointer;transition:filter .15s ease}
@@ -447,7 +459,13 @@ export function generarHtml(datos: DatosCatalogo): string {
 
 <script>
 const DATOS = ${json};
+// carrito: clave -> { sku, talla, cantidad }. Una pieza con tallas ocupa una
+// linea por talla elegida; una sin tallas usa el sku como clave.
 const carrito = new Map();
+// talla marcada en cada tarjeta (sku -> talla), antes de agregar al pedido.
+const tallaElegida = new Map();
+const claveCarrito = (sku, talla) => (talla ? sku + '\\u0001' + talla : sku);
+const tieneTallas = (p) => Array.isArray(p.tallas) && p.tallas.length > 0;
 
 // Que filtros de material mostrar: solo los que de verdad tiene el inventario
 // (si el negocio no vende acero, no tiene sentido ofrecer ese chip).
@@ -487,31 +505,52 @@ function coincide(p) {
 // estan visibles.
 const _reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let _triggersPiezas = [];
+let _safetyReveal = null;
 function revelarPiezas(animar) {
   if (window.gsap) {
     _triggersPiezas.forEach(t => { if (t && t.kill) t.kill(); });
     _triggersPiezas = [];
+    clearTimeout(_safetyReveal);
     gsap.killTweensOf('#rejilla .pieza');
     gsap.set('#rejilla .pieza', { clearProps: 'opacity,transform' });
   }
   if (!animar || !window.gsap || _reduce) return;
   const cards = Array.prototype.slice.call(document.querySelectorAll('#rejilla .pieza'));
   if (!cards.length) return;
-  const limite = window.innerHeight * 0.9;
-  const enVista = [], fuera = [];
-  cards.forEach(c => { (c.getBoundingClientRect().top < limite ? enVista : fuera).push(c); });
+
+  // Sin ScrollTrigger: una sola entrada suave y listo.
+  if (!window.ScrollTrigger) {
+    gsap.from(cards, { opacity: 0, y: 22, duration: 0.5, stagger: 0.03, ease: 'power2.out' });
+    return;
+  }
+
+  // Las piezas ya visibles: entran de una, en cascada. Las de mas abajo: cada
+  // una con su ScrollTrigger "once" (corre al llegar a ella y no se vuelve a
+  // esconder al subir el scroll).
+  const limite = window.innerHeight * 0.88;
+  const enVista = [], abajo = [];
+  cards.forEach(c => { (c.getBoundingClientRect().top < limite ? enVista : abajo).push(c); });
+
   if (enVista.length) {
     gsap.from(enVista, { opacity: 0, y: 22, duration: 0.5, stagger: 0.05, ease: 'power2.out' });
   }
-  if (fuera.length && window.ScrollTrigger) {
-    gsap.set(fuera, { opacity: 0, y: 26 });
-    _triggersPiezas = ScrollTrigger.batch(fuera, {
-      start: 'top 92%',
-      onEnter: b => gsap.to(b, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: 'power2.out', overwrite: true }),
+  abajo.forEach(c => {
+    const tw = gsap.from(c, {
+      opacity: 0,
+      y: 24,
+      duration: 0.5,
+      ease: 'power2.out',
+      scrollTrigger: { trigger: c, start: 'top 88%', once: true },
     });
-  } else if (fuera.length) {
-    gsap.from(fuera, { opacity: 0, y: 26, duration: 0.5, stagger: 0.04, ease: 'power2.out' });
-  }
+    if (tw.scrollTrigger) _triggersPiezas.push(tw.scrollTrigger);
+  });
+
+  // Red de seguridad: si por lo que sea el motor de animacion se congela
+  // (rAF detenido, pestana en segundo plano mucho rato), nada se queda a
+  // medias — a los 4s todo visible sin importar el scroll.
+  _safetyReveal = setTimeout(() => {
+    gsap.set('#rejilla .pieza', { opacity: 1, y: 0, clearProps: 'opacity,transform' });
+  }, 4000);
 }
 
 function pintar(animar) {
@@ -528,7 +567,20 @@ function pintar(animar) {
   const iconoGema = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 12L2 9z"></path><path d="M2 9h20M8 3l4 18M16 3l-4 18"></path></svg>';
 
   rejilla.innerHTML = lista.map(p => {
-    const puesto = carrito.has(p.sku);
+    const enCarrito = [...carrito.values()].filter(e => e.sku === p.sku);
+    const cantidad = enCarrito.reduce((s, e) => s + e.cantidad, 0);
+    const puesto = cantidad > 0;
+
+    let bloqueTallas = '';
+    if (tieneTallas(p)) {
+      if (!tallaElegida.has(p.sku)) tallaElegida.set(p.sku, p.tallas[0]);
+      const sel = tallaElegida.get(p.sku);
+      bloqueTallas = \`<div class="tallas"><span class="lbl">Talla</span>\` +
+        p.tallas.map(t =>
+          \`<button type="button" class="tchip\${t === sel ? ' activo' : ''}" data-talla-sku="\${p.sku}" data-talla="\${t}">\${t}</button>\`
+        ).join('') + \`</div>\`;
+    }
+
     return \`<article class="pieza">
       <div class="foto\${p.imagen ? ' clicable' : ''}" \${p.imagen ? \`data-visor="\${p.sku}"\` : ''}>
         \${p.imagen
@@ -540,13 +592,17 @@ function pintar(animar) {
         <span class="sku">\${p.sku}</span>
         <span class="nombre">\${p.nombre}</span>
         <span class="precio">RD$ \${dinero(p.precio)}</span>
+        \${bloqueTallas}
         <button data-sku="\${p.sku}" class="\${puesto ? 'puesto' : ''}">
-          \${puesto ? '✓ Agregado (' + carrito.get(p.sku) + ')' : 'Agregar'}
+          \${puesto ? '✓ Agregado (' + cantidad + ')' : 'Agregar'}
         </button>
       </div>
     </article>\`;
   }).join('');
 
+  rejilla.querySelectorAll('[data-talla-sku]').forEach(b => {
+    b.onclick = () => { tallaElegida.set(b.dataset.tallaSku, b.dataset.talla); pintar(false); };
+  });
   rejilla.querySelectorAll('button[data-sku]').forEach(b => {
     b.onclick = () => { agregar(b.dataset.sku); };
   });
@@ -586,13 +642,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 function agregar(sku) {
-  // En modo venta el carrito no puede pasar de 30 productos distintos: es el
+  const p = DATOS.productos.find(x => x.sku === sku);
+  if (!p) return;
+  const talla = tieneTallas(p) ? (tallaElegida.get(sku) || p.tallas[0]) : null;
+  const clave = claveCarrito(sku, talla);
+  // En modo venta el carrito no puede pasar de 30 lineas distintas: es el
   // tope que acepta el relevo (evita que alguien intente saturar la app).
-  if (pos.activo && !carrito.has(sku) && carrito.size >= 30) {
+  if (pos.activo && !carrito.has(clave) && carrito.size >= 30) {
     alert('Maximo 30 productos distintos por venta.');
     return;
   }
-  carrito.set(sku, (carrito.get(sku) || 0) + 1);
+  const actual = carrito.get(clave);
+  carrito.set(clave, { sku, talla, cantidad: (actual ? actual.cantidad : 0) + 1 });
   pintar(false);
   actualizarPedido();
 }
@@ -694,11 +755,11 @@ document.getElementById('vaciarDesdeVacio').onclick = () => {
 function actualizarPedido() {
   const barra = document.getElementById('pedido');
   let piezas = 0, total = 0;
-  for (const [sku, cant] of carrito) {
-    const p = DATOS.productos.find(x => x.sku === sku);
+  for (const it of carrito.values()) {
+    const p = DATOS.productos.find(x => x.sku === it.sku);
     if (!p) continue;
-    piezas += cant;
-    total += p.precio * cant;
+    piezas += it.cantidad;
+    total += p.precio * it.cantidad;
   }
   barra.classList.toggle('visible', piezas > 0);
   document.getElementById('resumen').textContent = piezas === 1 ? '1 pieza' : piezas + ' piezas';
@@ -728,11 +789,12 @@ document.getElementById('enviar').onclick = () => {
   const codigo = generarCodigoPedido();
   const lineas = [];
   let total = 0;
-  for (const [sku, cant] of carrito) {
-    const p = DATOS.productos.find(x => x.sku === sku);
+  for (const it of carrito.values()) {
+    const p = DATOS.productos.find(x => x.sku === it.sku);
     if (!p) continue;
-    total += p.precio * cant;
-    lineas.push(cant + ' x ' + p.nombre + ' (' + sku + ') - RD$ ' + dinero(p.precio * cant));
+    total += p.precio * it.cantidad;
+    const et = it.talla ? ' [Talla ' + it.talla + ']' : '';
+    lineas.push(it.cantidad + ' x ' + p.nombre + et + ' (' + it.sku + ') - RD$ ' + dinero(p.precio * it.cantidad));
   }
   const texto = 'Hola! Quiero hacer este pedido *#' + codigo + '*:\\n\\n' + lineas.join('\\n') +
     '\\n\\nTotal: RD$ ' + dinero(total);
@@ -863,9 +925,9 @@ function abrirCobrar() {
   if (!sesionPosValida()) { salirModoVenta(); abrirModalClave(); return; }
   if (carrito.size === 0) { alert('Agrega al menos un producto.'); return; }
   let piezas = 0, total = 0;
-  for (const [sku, cant] of carrito) {
-    const p = DATOS.productos.find(x => x.sku === sku);
-    if (p) { piezas += cant; total += p.precio * cant; }
+  for (const it of carrito.values()) {
+    const p = DATOS.productos.find(x => x.sku === it.sku);
+    if (p) { piezas += it.cantidad; total += p.precio * it.cantidad; }
   }
   document.getElementById('resumenVenta').innerHTML =
     piezas + (piezas === 1 ? ' pieza' : ' piezas') + ' &middot; <b>RD$ ' + dinero(total) + '</b>';
@@ -893,9 +955,9 @@ document.getElementById('cobrarConfirmar').onclick = async () => {
     return;
   }
   const items = [];
-  for (const [sku, cant] of carrito) {
-    const p = DATOS.productos.find(x => x.sku === sku);
-    if (p) items.push({ sku, cantidad: cant, precio: p.precio });
+  for (const it of carrito.values()) {
+    const p = DATOS.productos.find(x => x.sku === it.sku);
+    if (p) items.push({ sku: it.sku, cantidad: it.cantidad, precio: p.precio, talla: it.talla || undefined });
   }
   if (items.length === 0) { err.textContent = 'El carrito esta vacio.'; return; }
   const venta = {

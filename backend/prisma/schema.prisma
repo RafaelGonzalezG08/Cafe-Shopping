@@ -74,6 +74,10 @@ model Product {
   material       String   @default("OTRO")
   stock          Int      @default(0)
   imageUrl       String?  @map("image_url")
+  // Tallas / medidas que ofrece la pieza (anillos: "5", "6"...; cadenas:
+  // "45 cm"...). JSON serializado como texto (SQLite no tiene tipo Json).
+  // NULL o "[]" = la pieza no maneja tallas.
+  tallas         String?
   activo         Boolean  @default(true)
   // Categoria de joya (Anillo, Collar, etc.), asignada SOLA cuando la primera
   // palabra del nombre coincide exactamente con una categoria existente (ver

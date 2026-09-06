@@ -45,6 +45,8 @@ export interface Product {
   costoUnitario?: number;
   material: Material;
   stock: number;
+  /** Tallas / medidas que ofrece la pieza. Vacio = no maneja tallas. */
+  tallas: string[];
   imageUrl?: string | null;
   activo: boolean;
   categoriaId?: string | null;

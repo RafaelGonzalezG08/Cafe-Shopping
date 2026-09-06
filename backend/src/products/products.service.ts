@@ -86,21 +86,66 @@ export class ProductsService {
       Precio: Number(p.precioUnitario),
       ...(incluirCosto ? { Costo: Number(p.costoUnitario) } : {}),
       Stock: p.stock,
+      Tallas: this.tallasDeTexto(p.tallas).join(', '),
       Estado: p.activo ? 'Activo' : 'Dado de baja',
     }));
   }
 
-  findAll(onlyActive = true) {
-    return this.prisma.product.findMany({
+  /**
+   * Deja las tallas listas para guardar: recorta espacios, quita repetidas
+   * (sin importar mayusculas), respeta el orden en que las escribio el negocio
+   * y corta en 40. Se guarda como texto JSON (SQLite no tiene tipo Json).
+   */
+  private normalizarTallas(tallas: string[]): string[] {
+    const vistas = new Set<string>();
+    const limpias: string[] = [];
+    for (const t of tallas) {
+      const v = String(t ?? '').trim();
+      const clave = v.toLowerCase();
+      if (v && !vistas.has(clave)) {
+        vistas.add(clave);
+        limpias.push(v);
+      }
+    }
+    return limpias.slice(0, 40);
+  }
+
+  private tallasDeTexto(raw: string | null): string[] {
+    if (!raw) return [];
+    try {
+      const v = JSON.parse(raw);
+      return Array.isArray(v) ? v.map((x) => String(x)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Producto tal como lo espera el frontend: `tallas` como arreglo, no texto. */
+  private conTallas<P extends { tallas: string | null }>(p: P): Omit<P, 'tallas'> & { tallas: string[] } {
+    return { ...p, tallas: this.tallasDeTexto(p.tallas) };
+  }
+
+  /** Datos para Prisma: si el dto trae `tallas`, se serializa a texto JSON. */
+  private datosConTallas<T extends { tallas?: string[] }>(dto: T): Omit<T, 'tallas'> & { tallas?: string } {
+    const { tallas, ...resto } = dto;
+    if (tallas === undefined) return resto as Omit<T, 'tallas'> & { tallas?: string };
+    return { ...resto, tallas: JSON.stringify(this.normalizarTallas(tallas)) } as Omit<T, 'tallas'> & {
+      tallas?: string;
+    };
+  }
+
+  async findAll(onlyActive = true) {
+    const productos = await this.prisma.product.findMany({
       where: onlyActive ? { activo: true } : undefined,
       orderBy: { nombre: 'asc' },
     });
+    return productos.map((p) => this.conTallas(p));
   }
 
   async findOne(id: string) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product) throw new NotFoundException('Producto no encontrado.');
-    return product;
+    return this.conTallas(product);
   }
 
   async create(dto: CreateProductDto, userId?: string) {
@@ -110,10 +155,12 @@ export class ProductsService {
     if (existing) throw new ConflictException('Ya existe un producto con ese SKU.');
 
     const categoriaId = await this.clasificarCategoria(dto.nombre);
-    const product = await this.prisma.product.create({ data: { ...dto, sku, categoriaId } });
+    const product = await this.prisma.product.create({
+      data: { ...this.datosConTallas(dto), sku, categoriaId },
+    });
     await this.audit.log('Product', product.id, 'CREATE', userId, { ...dto, sku } as any);
     void this.regenerarCatalogo();
-    return product;
+    return this.conTallas(product);
   }
 
   /**
@@ -195,13 +242,14 @@ export class ProductsService {
     // pieza sola por casualidad (si alguien creo una categoria nueva
     // despues), sin que quien edito el stock lo haya pedido ni lo espere.
     const categoriaId = dto.nombre ? await this.clasificarCategoria(dto.nombre) : undefined;
+    const datos = this.datosConTallas(dto);
     const product = await this.prisma.product.update({
       where: { id },
-      data: categoriaId !== undefined ? { ...dto, categoriaId } : dto,
+      data: categoriaId !== undefined ? { ...datos, categoriaId } : datos,
     });
     await this.audit.log('Product', id, 'UPDATE', userId, dto as any);
     void this.regenerarCatalogo();
-    return product;
+    return this.conTallas(product);
   }
 
   async remove(id: string, userId?: string) {
@@ -214,7 +262,7 @@ export class ProductsService {
     await this.audit.log('Product', id, 'DELETE', userId);
     // La pieza dada de baja tiene que desaparecer del sitio publico tambien.
     void this.regenerarCatalogo();
-    return product;
+    return this.conTallas(product);
   }
 
   /** Dar de baja varias piezas de una vez (seleccion multiple en Productos). */
@@ -283,7 +331,7 @@ export class ProductsService {
     const product = await this.prisma.product.update({ where: { id }, data: { imageUrl } });
     await this.audit.log('Product', id, 'UPDATE', userId, { imageUrl });
     void this.regenerarCatalogo();
-    return product;
+    return this.conTallas(product);
   }
 
   /** Ruta en disco de la foto de un producto, a partir de su imageUrl (relativo o con host). */

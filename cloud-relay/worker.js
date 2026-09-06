@@ -165,6 +165,9 @@ export default {
         if (!Number.isInteger(c) || c < 1 || c > 999) {
           return new Response('Cantidad invalida', { status: 400, headers: cors });
         }
+        if (it && it.talla != null && (typeof it.talla !== 'string' || it.talla.length > 20)) {
+          return new Response('Talla invalida', { status: 400, headers: cors });
+        }
       }
 
       // Limites de saturacion: 10 ventas por IP cada 10 min, y un techo global
