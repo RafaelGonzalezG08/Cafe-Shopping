@@ -99,17 +99,17 @@ describe('WebSalesRelayService.revisar', () => {
     expect(del).toEqual(['VNT-AAAA']);
   });
 
-  it('la talla elegida en el catalogo va en la descripcion del item', async () => {
+  it('el size elegido en el catalogo va en la descripcion del item', async () => {
     const { service, deps } = crearService();
     mockFetch([ventaBase({ items: [{ sku: 'AN-001', cantidad: 1, precio: 3000, talla: '7' }] })]);
 
     await service.revisar();
 
     const items = deps.salesCreate.mock.calls[0][0].items;
-    expect(items[0].descripcion).toBe('Anillo (Talla 7)');
+    expect(items[0].descripcion).toBe('Anillo (Size 7)');
   });
 
-  it('rechaza una talla no-string o muy larga (cae como pedido pendiente)', async () => {
+  it('rechaza un size no-string o muy largo (cae como pedido pendiente)', async () => {
     const { service, deps } = crearService();
     mockFetch([ventaBase({ items: [{ sku: 'AN-001', cantidad: 1, precio: 3000, talla: 'x'.repeat(30) }] })]);
 

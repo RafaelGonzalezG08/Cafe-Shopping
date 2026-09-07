@@ -480,7 +480,7 @@ export default function Products() {
                 </div>
                 {product.tallas.length > 0 && (
                   <p className="mt-1 truncate text-[11px] text-muted" title={product.tallas.join(', ')}>
-                    Tallas: {product.tallas.join(', ')}
+                    Sizes: {product.tallas.join(', ')}
                   </p>
                 )}
                 {margenPct(product) !== null && (
@@ -970,7 +970,7 @@ function ProductModal({
     if (!v) return;
     if (form.tallas.some((t) => t.toLowerCase() === v.toLowerCase())) return;
     if (form.tallas.length >= 40) {
-      toast.error('Maximo 40 tallas por pieza.');
+      toast.error('Maximo 40 sizes por pieza.');
       return;
     }
     setForm((f) => ({ ...f, tallas: [...f.tallas, v] }));
@@ -1090,7 +1090,7 @@ function ProductModal({
 
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-              Tallas / medidas
+              Sizes / medidas
             </label>
             {form.tallas.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
@@ -1104,7 +1104,7 @@ function ProductModal({
                       type="button"
                       onClick={() => quitarTalla(t)}
                       className="rounded-full p-0.5 hover:bg-copper-200"
-                      aria-label={`Quitar talla ${t}`}
+                      aria-label={`Quitar size ${t}`}
                     >
                       <X size={11} strokeWidth={3} />
                     </button>
@@ -1132,7 +1132,7 @@ function ProductModal({
               </Button>
             </div>
             <p className="mt-1 text-[11px] text-muted">
-              Si la pieza tiene tallas, el cliente elige una en el catalogo web antes de pedirla. Dejalo vacio si no aplica.
+              Si la pieza tiene sizes, el cliente elige uno en el catalogo web antes de pedirla. Dejalo vacio si no aplica.
             </p>
           </div>
 

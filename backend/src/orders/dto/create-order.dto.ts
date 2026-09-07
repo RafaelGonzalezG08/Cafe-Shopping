@@ -12,7 +12,7 @@ export class CreateOrderDto {
   @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
   fechaEntrega?: string;
 
-  @ApiPropertyOptional({ description: 'Nota interna (ej. "grabar iniciales", "ajustar talla").' })
+  @ApiPropertyOptional({ description: 'Nota interna (ej. "grabar iniciales", "ajustar size").' })
   @IsOptional()
   @IsString()
   notas?: string;

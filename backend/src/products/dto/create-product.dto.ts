@@ -85,9 +85,9 @@ export class CreateProductDto {
     return [];
   })
   @IsArray()
-  @ArrayMaxSize(40, { message: 'Demasiadas tallas (maximo 40).' })
+  @ArrayMaxSize(40, { message: 'Demasiados sizes (maximo 40).' })
   @IsString({ each: true })
-  @Length(1, 20, { each: true, message: 'Cada talla debe tener entre 1 y 20 caracteres.' })
+  @Length(1, 20, { each: true, message: 'Cada size debe tener entre 1 y 20 caracteres.' })
   tallas?: string[];
 
   /**

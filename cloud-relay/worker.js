@@ -166,7 +166,7 @@ export default {
           return new Response('Cantidad invalida', { status: 400, headers: cors });
         }
         if (it && it.talla != null && (typeof it.talla !== 'string' || it.talla.length > 20)) {
-          return new Response('Talla invalida', { status: 400, headers: cors });
+          return new Response('Size invalido', { status: 400, headers: cors });
         }
       }
 

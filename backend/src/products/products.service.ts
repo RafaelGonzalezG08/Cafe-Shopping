@@ -86,7 +86,7 @@ export class ProductsService {
       Precio: Number(p.precioUnitario),
       ...(incluirCosto ? { Costo: Number(p.costoUnitario) } : {}),
       Stock: p.stock,
-      Tallas: this.tallasDeTexto(p.tallas).join(', '),
+      Sizes: this.tallasDeTexto(p.tallas).join(', '),
       Estado: p.activo ? 'Activo' : 'Dado de baja',
     }));
   }

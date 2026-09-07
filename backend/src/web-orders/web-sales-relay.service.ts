@@ -260,7 +260,7 @@ export class WebSalesRelayService {
       const talla = it.talla?.trim();
       return {
         productId: p?.id,
-        descripcion: talla ? `${base} (Talla ${talla})` : base,
+        descripcion: talla ? `${base} (Size ${talla})` : base,
         cantidad: it.cantidad,
         precioUnitario: Math.round(Number(it.precio) * 100) / 100,
       };
@@ -311,7 +311,7 @@ export class WebSalesRelayService {
       const base = String(it?.sku ?? 'articulo');
       return {
         cantidad,
-        nombre: talla ? `${base} (Talla ${talla})` : base,
+        nombre: talla ? `${base} (Size ${talla})` : base,
         sku: it?.sku ?? null,
         total: Math.round(precio * cantidad * 100) / 100,
       };

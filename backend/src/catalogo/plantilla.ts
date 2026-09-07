@@ -627,10 +627,10 @@ function pintar(animar) {
       <div class="cuerpo">
         <span class="sku">\${p.sku}</span>
         <span class="nombre">\${p.nombre}</span>
-        \${conTallas ? \`<span class="tag-tallas">Tallas: \${p.tallas.join(', ')}</span>\` : ''}
+        \${conTallas ? \`<span class="tag-tallas">Sizes: \${p.tallas.join(', ')}</span>\` : ''}
         <span class="precio">RD$ \${dinero(p.precio)}</span>
         <button data-sku="\${p.sku}" data-tallas="\${conTallas ? '1' : ''}" class="\${puesto ? 'puesto' : ''}">
-          \${puesto ? '✓ Agregado (' + cantidad + ')' : (conTallas ? 'Elegir talla' : 'Agregar')}
+          \${puesto ? '✓ Agregado (' + cantidad + ')' : (conTallas ? 'Elegir size' : 'Agregar')}
         </button>
       </div>
     </article>\`;
@@ -674,7 +674,7 @@ function abrirModalProducto(sku) {
   const cont = document.getElementById('mpTallas');
   if (tieneTallas(p)) {
     cont.hidden = false;
-    cont.innerHTML = '<span class="lbl">Elige tu talla</span>' + p.tallas.map(t =>
+    cont.innerHTML = '<span class="lbl">Elige tu size</span>' + p.tallas.map(t =>
       '<button type="button" class="tchip' + (t === mpTalla ? ' activo' : '') + '" data-t="' + t + '">' + t + '</button>'
     ).join('');
     cont.querySelectorAll('.tchip').forEach(b => {
@@ -724,7 +724,7 @@ document.getElementById('mpAgregar').onclick = () => {
   const p = DATOS.productos.find(x => x.sku === mpSku);
   if (!p) return;
   if (tieneTallas(p) && !mpTalla) {
-    document.getElementById('mpError').textContent = 'Elige una talla.';
+    document.getElementById('mpError').textContent = 'Elige un size.';
     return;
   }
   agregar(mpSku, mpCant);
@@ -884,7 +884,7 @@ document.getElementById('enviar').onclick = () => {
     const p = DATOS.productos.find(x => x.sku === it.sku);
     if (!p) continue;
     total += p.precio * it.cantidad;
-    const et = it.talla ? ' [Talla ' + it.talla + ']' : '';
+    const et = it.talla ? ' [Size ' + it.talla + ']' : '';
     lineas.push(it.cantidad + ' x ' + p.nombre + et + ' (' + it.sku + ') - RD$ ' + dinero(p.precio * it.cantidad));
   }
   const texto = 'Hola! Quiero hacer este pedido *#' + codigo + '*:\\n\\n' + lineas.join('\\n') +
