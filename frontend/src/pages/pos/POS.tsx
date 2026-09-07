@@ -209,7 +209,7 @@ export default function POS() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
       {/* Catalogo */}
       <div>
-        <div className="mb-4 flex items-center gap-2 rounded-lg bg-porcelain-100 px-3 py-2.5 shadow-neu-inset">
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-porcelain-100 px-3 py-2.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40">
           <Search size={16} className="text-muted" />
           <input
             value={search}

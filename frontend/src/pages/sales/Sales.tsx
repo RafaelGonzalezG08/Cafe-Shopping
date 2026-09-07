@@ -472,7 +472,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
           {buscandoCliente && (
             <div className="rounded-lg border border-porcelain-200 p-2.5">
-              <div className="mb-2 flex items-center gap-2 rounded-lg border border-porcelain-300 px-2.5 py-1.5">
+              <div className="mb-2 flex items-center gap-2 rounded-lg bg-porcelain-100 px-2.5 py-1.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40">
                 <Search size={14} className="text-muted" />
                 <input
                   autoFocus

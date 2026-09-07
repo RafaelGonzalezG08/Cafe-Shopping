@@ -13,6 +13,8 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Sora', 'Inter', 'system-ui', 'sans-serif'],
+        // Serif con cursiva de verdad, para el lema bajo la marca.
+        lema: ['Fraunces', 'Georgia', 'serif'],
       },
       colors: {
         espresso: {

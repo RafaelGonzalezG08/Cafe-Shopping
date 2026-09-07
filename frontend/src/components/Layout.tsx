@@ -83,7 +83,9 @@ export function Layout() {
             <p className="font-display text-[15px] font-bold leading-none tracking-tight text-ink">
               {profile?.nombre || 'Cafe Shopping'}
             </p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted">Punto de venta</p>
+            <p className="mt-1 font-lema text-[13px] italic leading-none text-copper-600">
+              un placer al comprar
+            </p>
           </div>
         </div>
 

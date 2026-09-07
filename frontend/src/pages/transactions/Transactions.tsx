@@ -270,7 +270,7 @@ export default function Transactions() {
             ]}
           />
 
-          <div className="ml-auto flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-porcelain-300 px-2.5 py-1.5 sm:max-w-xs">
+          <div className="ml-auto flex min-w-[200px] flex-1 items-center gap-2 rounded-lg bg-porcelain-100 px-2.5 py-1.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40 sm:max-w-xs">
             <Search size={14} className="shrink-0 text-muted" />
             <input
               value={q}

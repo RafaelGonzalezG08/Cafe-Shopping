@@ -116,9 +116,7 @@ select {
 
 /*
  * Neumorfismo: los campos van "hundidos" en el fondo (sombra interior) en vez
- * de llevar borde. Se aplica de forma global aqui para no tocar cada pantalla;
- * las clases "border border-porcelain-300 / focus:border-copper-500" que ya
- * traian los inputs quedan como un filo suave encima, sin estorbar.
+ * de llevar borde. Se aplica de forma global aqui para no tocar cada pantalla.
  */
 @layer base {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
@@ -132,6 +130,29 @@ select {
     box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi)),
       0 0 0 2px rgb(var(--c-copper-500) / 0.5);
   }
+}
+
+/*
+ * Reglas SIN @layer: ganan a cualquier utilidad de Tailwind sin usar
+ * !important. Varias pantallas todavia traen "border border-porcelain-300" en
+ * sus inputs; con el relieve interior de arriba eso creaba un doble marco. Y
+ * un input dentro de un contenedor que ya lleva sombra hundida (barras de
+ * busqueda) tampoco debe repetir la suya.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+textarea {
+  border-width: 0;
+}
+.shadow-neu-inset input,
+.shadow-neu-inset textarea,
+.neu-inset input,
+.neu-inset textarea {
+  background: transparent;
+  box-shadow: none;
+}
+.shadow-neu-inset input:focus,
+.neu-inset input:focus {
+  box-shadow: none;
 }
 
 @layer components {
