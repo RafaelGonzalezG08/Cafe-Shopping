@@ -102,9 +102,9 @@ export function generarHtml(datos: DatosCatalogo): string {
     font-family:'Instrument Sans','Segoe UI',system-ui,-apple-system,sans-serif;
     line-height:1.6;-webkit-font-smoothing:antialiased;
     -webkit-user-select:none;user-select:none;overflow-x:hidden}
-  .pieza .nombre,.visor .info .nombre{-webkit-user-select:text;user-select:text}
+  .pieza .nombre,.mp-info h3{-webkit-user-select:text;user-select:text}
   img{max-width:100%;display:block}
-  h1,h2,.pieza .nombre,.pieza .precio,.visor .info .nombre,.visor .info .precio,
+  h1,h2,.pieza .nombre,.pieza .precio,.mp-info h3,.mp-info .mp-precio,
   .modal h2,.pedido .total{font-family:'Fraunces','Georgia',serif}
   :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
 
@@ -115,14 +115,17 @@ export function generarHtml(datos: DatosCatalogo): string {
   .orb.b{width:min(55vw,360px);height:min(55vw,360px);background:var(--gold);bottom:-120px;right:-90px}
   header,.barra,.panel-filtros,main,footer{position:relative;z-index:1}
 
-  header{background:transparent;color:var(--tinta);padding:3.25rem 1.25rem 2rem;text-align:center}
-  header img{width:74px;height:74px;border-radius:18px;object-fit:cover;margin:0 auto 1.1rem;
-    box-shadow:0 16px 40px -14px rgba(0,0,0,.6)}
-  header h1{font-size:clamp(2rem,5.5vw,3rem);font-weight:300;letter-spacing:-.015em;text-wrap:balance}
-  /* La frase del negocio, en cursiva serif dorada: el toque editorial del mockup. */
-  header .frase{font-family:'Fraunces','Georgia',serif;font-style:italic;font-weight:300;
-    font-size:clamp(1.15rem,2.6vw,1.5rem);color:var(--gold);margin-top:.65rem;line-height:1.3}
-  header p:not(.frase){color:var(--suave);margin-top:.5rem;font-size:.86rem;letter-spacing:.02em}
+  header{background:transparent;color:var(--tinta);padding:2.75rem 1.25rem 1.75rem}
+  header .marca{display:flex;align-items:center;gap:1rem;max-width:1120px;margin:0 auto}
+  header .marca > img,header .marca .logo-ph{width:58px;height:58px;flex:none;border-radius:15px;
+    object-fit:cover;box-shadow:0 14px 34px -14px rgba(0,0,0,.6)}
+  header .marca .logo-ph{display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315}
+  header h1{font-size:clamp(1.6rem,4.5vw,2.4rem);font-weight:300;letter-spacing:-.015em;
+    line-height:1.05;text-wrap:balance}
+  /* La frase va DEBAJO de la marca, en cursiva serif dorada y mas chica. */
+  header .frase{font-family:'Fraunces','Georgia',serif;font-style:italic;font-weight:400;
+    font-size:clamp(.95rem,2vw,1.15rem);color:var(--gold);margin-top:.15rem;line-height:1.2}
 
   .barra{position:sticky;top:0;z-index:20;
     background:linear-gradient(150deg,rgba(255,255,255,.10),rgba(255,255,255,.04));
@@ -173,7 +176,7 @@ export function generarHtml(datos: DatosCatalogo): string {
     margin-bottom:1rem}
   .rejilla{display:grid;gap:1.1rem;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 
-  .pieza{border-radius:20px;overflow:hidden;display:flex;flex-direction:column;
+  .pieza{border-radius:20px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
     background:linear-gradient(150deg,var(--glass-a),var(--glass-b));
     -webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);
     border:1px solid var(--linea);
@@ -207,41 +210,62 @@ export function generarHtml(datos: DatosCatalogo): string {
   .pieza .nombre{font-size:1rem;font-weight:400;line-height:1.3}
   .pieza .precio{font-size:1.15rem;font-weight:500;color:var(--gold);margin-top:auto;
     font-variant-numeric:tabular-nums}
-  /* Tallas / medidas: el cliente elige una antes de agregar la pieza. */
-  .pieza .tallas{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.1rem}
-  .pieza .tallas .lbl{width:100%;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;
+  .pieza .cuerpo .tag-tallas{font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;
     color:var(--suave)}
-  .pieza .tchip{font:inherit;font-size:.72rem;font-weight:500;padding:.2rem .55rem;border-radius:8px;
-    cursor:pointer;color:var(--suave);background:rgba(255,255,255,.06);border:1px solid var(--linea);
-    transition:all .15s ease}
-  .pieza .tchip:hover{color:var(--tinta)}
-  .pieza .tchip.activo{background:linear-gradient(135deg,var(--rose-soft),var(--acento));
-    border-color:transparent;color:#1B1315;font-weight:600}
   .pieza button{margin-top:.6rem;width:100%;padding:.55rem;border:0;border-radius:999px;
     background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315;
     font:inherit;font-weight:600;font-size:.8rem;cursor:pointer;transition:filter .15s ease}
   .pieza button:hover{filter:brightness(1.06)}
   .pieza button.puesto{background:var(--verde);color:#fff}
 
-  /* Visor de foto ampliada: se abre al hacer clic en la imagen de una pieza. */
-  .visor{position:fixed;inset:0;z-index:50;background:rgba(15,8,11,.7);
+  /* ---- Ventana de detalle de la pieza (se abre al hacer clic en ella) ---- */
+  .modal-prod{position:fixed;inset:0;z-index:55;background:rgba(15,8,11,.72);
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-    display:none;align-items:center;justify-content:center;padding:1.5rem;
+    display:none;align-items:center;justify-content:center;padding:1.25rem;
     opacity:0;transition:opacity .2s ease}
-  .visor.abierto{display:flex}
-  .visor.visible{opacity:1}
-  .visor .marco{position:relative;max-width:min(600px,92vw);max-height:88vh;
-    display:flex;flex-direction:column;align-items:center;gap:.9rem}
-  .visor img{max-width:100%;max-height:70vh;border-radius:16px;object-fit:contain;
-    background:rgba(255,255,255,.06);border:1px solid var(--linea);
-    box-shadow:0 30px 70px rgba(0,0,0,.55)}
-  .visor .info{color:var(--tinta);text-align:center}
-  .visor .info .nombre{font-weight:400;font-size:1.35rem}
-  .visor .info .precio{color:var(--gold);font-weight:500;font-size:1.2rem;margin-top:.2rem}
-  .visor .cerrar{position:absolute;top:-.85rem;right:-.85rem;width:38px;height:38px;
-    border-radius:50%;border:1px solid var(--linea);background:rgba(20,12,14,.8);color:var(--tinta);
-    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;
+  .modal-prod.abierto{display:flex}
+  .modal-prod.visible{opacity:1}
+  .mp-caja{position:relative;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;
+    display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:22px;
+    background:linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.05));
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:1px solid var(--linea);box-shadow:0 40px 90px -30px rgba(0,0,0,.7)}
+  .mp-foto{aspect-ratio:1;background:radial-gradient(circle at 50% 35%,rgba(255,255,255,.14),rgba(255,255,255,.03));
+    display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .mp-foto img{width:100%;height:100%;object-fit:cover}
+  .mp-foto .sinfoto{color:var(--suave)}
+  .mp-info{padding:1.6rem 1.5rem;display:flex;flex-direction:column;gap:.55rem}
+  .mp-info .mp-sku{font-size:.6rem;letter-spacing:.18em;color:var(--gold);font-weight:600}
+  .mp-info h3{font-family:'Fraunces','Georgia',serif;font-weight:400;font-size:1.5rem;line-height:1.15}
+  .mp-info .mp-material{align-self:flex-start;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--suave);padding:.2rem .6rem;border-radius:999px;border:1px solid var(--linea)}
+  .mp-info .mp-precio{font-family:'Fraunces','Georgia',serif;font-size:1.5rem;color:var(--gold);
+    font-variant-numeric:tabular-nums;margin-top:.15rem}
+  .mp-tallas{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.35rem}
+  .mp-tallas .lbl{width:100%;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--suave)}
+  .tchip{font:inherit;font-size:.82rem;font-weight:500;padding:.4rem .8rem;border-radius:9px;cursor:pointer;
+    color:var(--suave);background:rgba(255,255,255,.06);border:1px solid var(--linea);transition:all .15s ease}
+  .tchip:hover{color:var(--tinta)}
+  .tchip.activo{background:linear-gradient(135deg,var(--rose-soft),var(--acento));
+    border-color:transparent;color:#1B1315;font-weight:600}
+  .mp-cant{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
+  .mp-cant .lbl{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--suave);margin-right:.35rem}
+  .mp-cant button{width:34px;height:34px;border-radius:9px;border:1px solid var(--linea);
+    background:rgba(255,255,255,.06);color:var(--tinta);font-size:1.1rem;cursor:pointer;line-height:1}
+  .mp-cant span{min-width:2ch;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+  .mp-error{color:var(--acento-osc);font-size:.8rem;font-weight:600;min-height:1rem}
+  .mp-agregar{margin-top:.35rem;width:100%;padding:.8rem;border:0;border-radius:999px;
+    background:linear-gradient(135deg,var(--rose-soft),var(--acento));color:#1B1315;
+    font:inherit;font-weight:700;font-size:.92rem;cursor:pointer;transition:filter .15s ease}
+  .mp-agregar:hover{filter:brightness(1.06)}
+  .mp-cerrar{position:absolute;top:.7rem;right:.7rem;z-index:2;width:36px;height:36px;border-radius:50%;
+    border:1px solid var(--linea);background:rgba(20,12,14,.8);color:var(--tinta);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:1.1rem;
     -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  @media(max-width:640px){
+    .mp-caja{grid-template-columns:1fr;max-width:420px}
+    .mp-foto{aspect-ratio:4/3}
+  }
 
   .vacio{text-align:center;color:var(--suave);padding:3.5rem 1rem}
   .vacio button{margin-top:.85rem;padding:.55rem 1.1rem;border:1px solid var(--linea);
@@ -305,8 +329,12 @@ export function generarHtml(datos: DatosCatalogo): string {
   .modal .acciones .ok{background:var(--verde);color:#fff}
   .modal .acciones .cancelar{background:rgba(255,255,255,.06);color:var(--suave);border:1px solid var(--linea)}
   .modal .error{color:var(--acento-osc);font-size:.82rem;font-weight:600;margin-top:.8rem;min-height:1rem}
-  .modal .contactos{margin-top:.5rem;background:none;border:0;color:var(--gold);
-    font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;padding:0}
+  .modal .contactos{margin-top:.55rem;width:100%;display:flex;align-items:center;justify-content:center;
+    gap:.45rem;background:rgba(255,255,255,.07);border:1px solid var(--linea);border-radius:10px;
+    color:var(--tinta);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;padding:.6rem .8rem;
+    transition:background .15s ease}
+  .modal .contactos:hover{background:rgba(255,255,255,.13)}
+  .modal .contactos svg{width:15px;height:15px;flex:none;color:var(--gold)}
   .modal .resumen-venta{background:rgba(255,255,255,.06);border:1px solid var(--linea);border-radius:12px;
     padding:.75rem .9rem;font-size:.85rem;margin-bottom:.25rem}
   .modal .resumen-venta b{font-family:'Fraunces','Georgia',serif;font-size:1.05rem;color:var(--gold)}
@@ -346,10 +374,13 @@ export function generarHtml(datos: DatosCatalogo): string {
 </div>
 
 <header>
-  ${datos.logo ? `<img src="${esc(datos.logo)}" alt="">` : ''}
-  <h1>${esc(datos.negocio)}</h1>
-  ${datos.descripcion ? `<p class="frase">${esc(datos.descripcion)}</p>` : ''}
-  ${datos.direccion ? `<p>${esc(datos.direccion)}</p>` : ''}
+  <div class="marca">
+    ${datos.logo ? `<img src="${esc(datos.logo)}" alt="">` : `<span class="logo-ph">&#128142;</span>`}
+    <div class="marca-txt">
+      <h1>${esc(datos.negocio)}</h1>
+      <p class="frase">Un placer al comprar</p>
+    </div>
+  </div>
 </header>
 
 <div class="barra">
@@ -432,7 +463,10 @@ export function generarHtml(datos: DatosCatalogo): string {
     <label for="clienteNombre">Cliente <span id="clienteObligatorio" style="color:var(--acento-osc)" hidden>(obligatorio a credito)</span></label>
     <input id="clienteNombre" type="text" autocomplete="off" placeholder="Nombre">
     <input id="clienteTelefono" type="tel" autocomplete="off" placeholder="Telefono" style="margin-top:.4rem">
-    <button type="button" class="contactos" id="elegirContacto" hidden>Elegir de mis contactos</button>
+    <button type="button" class="contactos" id="elegirContacto" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 15v-2M21 11V9M18 12h6"/></svg>
+      Elegir de mis contactos
+    </button>
     <div class="error" id="cobrarError"></div>
     <div class="acciones">
       <button type="button" class="cancelar" id="cobrarCancelar">Cancelar</button>
@@ -441,13 +475,24 @@ export function generarHtml(datos: DatosCatalogo): string {
   </div>
 </div>
 
-<div class="visor" id="visor">
-  <div class="marco">
-    <button class="cerrar" id="cerrarVisor" type="button" aria-label="Cerrar">&times;</button>
-    <img id="visorImg" src="" alt="">
-    <div class="info">
-      <div class="nombre" id="visorNombre"></div>
-      <div class="precio" id="visorPrecio"></div>
+<div class="modal-prod" id="modalProducto" aria-hidden="true">
+  <div class="mp-caja">
+    <button class="mp-cerrar" id="mpCerrar" type="button" aria-label="Cerrar">&times;</button>
+    <div class="mp-foto" id="mpFoto"></div>
+    <div class="mp-info">
+      <span class="mp-sku" id="mpSku"></span>
+      <h3 id="mpNombre"></h3>
+      <span class="mp-material" id="mpMaterial"></span>
+      <span class="mp-precio" id="mpPrecio"></span>
+      <div class="mp-tallas" id="mpTallas" hidden></div>
+      <div class="mp-cant">
+        <span class="lbl">Cantidad</span>
+        <button type="button" id="mpMenos" aria-label="Menos">&minus;</button>
+        <span id="mpCantidad">1</span>
+        <button type="button" id="mpMas" aria-label="Mas">+</button>
+      </div>
+      <div class="mp-error" id="mpError"></div>
+      <button type="button" class="mp-agregar" id="mpAgregar">Agregar al pedido</button>
     </div>
   </div>
 </div>
@@ -570,19 +615,10 @@ function pintar(animar) {
     const enCarrito = [...carrito.values()].filter(e => e.sku === p.sku);
     const cantidad = enCarrito.reduce((s, e) => s + e.cantidad, 0);
     const puesto = cantidad > 0;
+    const conTallas = tieneTallas(p);
 
-    let bloqueTallas = '';
-    if (tieneTallas(p)) {
-      if (!tallaElegida.has(p.sku)) tallaElegida.set(p.sku, p.tallas[0]);
-      const sel = tallaElegida.get(p.sku);
-      bloqueTallas = \`<div class="tallas"><span class="lbl">Talla</span>\` +
-        p.tallas.map(t =>
-          \`<button type="button" class="tchip\${t === sel ? ' activo' : ''}" data-talla-sku="\${p.sku}" data-talla="\${t}">\${t}</button>\`
-        ).join('') + \`</div>\`;
-    }
-
-    return \`<article class="pieza">
-      <div class="foto\${p.imagen ? ' clicable' : ''}" \${p.imagen ? \`data-visor="\${p.sku}"\` : ''}>
+    return \`<article class="pieza" data-abrir="\${p.sku}">
+      <div class="foto\${p.imagen ? ' clicable' : ''}">
         \${p.imagen
           ? \`<img src="\${p.imagen}" alt="\${p.nombre}" loading="lazy"><span class="lupa">\${iconoLupa}</span>\`
           : \`<span class="sinfoto">\${iconoGema}<span>Sin foto</span></span>\`}
@@ -591,57 +627,112 @@ function pintar(animar) {
       <div class="cuerpo">
         <span class="sku">\${p.sku}</span>
         <span class="nombre">\${p.nombre}</span>
+        \${conTallas ? \`<span class="tag-tallas">Tallas: \${p.tallas.join(', ')}</span>\` : ''}
         <span class="precio">RD$ \${dinero(p.precio)}</span>
-        \${bloqueTallas}
-        <button data-sku="\${p.sku}" class="\${puesto ? 'puesto' : ''}">
-          \${puesto ? '✓ Agregado (' + cantidad + ')' : 'Agregar'}
+        <button data-sku="\${p.sku}" data-tallas="\${conTallas ? '1' : ''}" class="\${puesto ? 'puesto' : ''}">
+          \${puesto ? '✓ Agregado (' + cantidad + ')' : (conTallas ? 'Elegir talla' : 'Agregar')}
         </button>
       </div>
     </article>\`;
   }).join('');
 
-  rejilla.querySelectorAll('[data-talla-sku]').forEach(b => {
-    b.onclick = () => { tallaElegida.set(b.dataset.tallaSku, b.dataset.talla); pintar(false); };
-  });
   rejilla.querySelectorAll('button[data-sku]').forEach(b => {
-    b.onclick = () => { agregar(b.dataset.sku); };
+    b.onclick = (e) => {
+      e.stopPropagation();
+      if (b.dataset.tallas) abrirModalProducto(b.dataset.sku);
+      else agregar(b.dataset.sku);
+    };
   });
-  rejilla.querySelectorAll('[data-visor]').forEach(el => {
-    el.onclick = () => abrirVisor(el.dataset.visor);
+  rejilla.querySelectorAll('[data-abrir]').forEach(el => {
+    el.onclick = () => abrirModalProducto(el.dataset.abrir);
   });
 
   revelarPiezas(animar);
 }
 
-// ---- Visor de foto ampliada ----
+// ---- Ventana de detalle de la pieza ----
+// Se abre al hacer clic en cualquier pieza: foto grande, datos, selector de
+// talla (si tiene) y cantidad. La talla NO se elige desde la tarjeta.
 
-function abrirVisor(sku) {
+let mpSku = null, mpTalla = null, mpCant = 1;
+
+function abrirModalProducto(sku) {
   const p = DATOS.productos.find(x => x.sku === sku);
-  if (!p || !p.imagen) return;
-  document.getElementById('visorImg').src = p.imagen;
-  document.getElementById('visorImg').alt = p.nombre;
-  document.getElementById('visorNombre').textContent = p.nombre;
-  document.getElementById('visorPrecio').textContent = 'RD$ ' + dinero(p.precio);
-  const visor = document.getElementById('visor');
-  visor.classList.add('abierto');
-  requestAnimationFrame(() => visor.classList.add('visible'));
+  if (!p) return;
+  mpSku = sku;
+  mpCant = 1;
+  mpTalla = tieneTallas(p) ? (tallaElegida.get(sku) || p.tallas[0]) : null;
+
+  document.getElementById('mpFoto').innerHTML = p.imagen
+    ? '<img src="' + p.imagen + '" alt="' + p.nombre + '">'
+    : '<span class="sinfoto"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 12L2 9z"></path><path d="M2 9h20M8 3l4 18M16 3l-4 18"></path></svg></span>';
+  document.getElementById('mpSku').textContent = p.sku;
+  document.getElementById('mpNombre').textContent = p.nombre;
+  document.getElementById('mpMaterial').textContent = p.material;
+  document.getElementById('mpPrecio').textContent = 'RD$ ' + dinero(p.precio);
+
+  const cont = document.getElementById('mpTallas');
+  if (tieneTallas(p)) {
+    cont.hidden = false;
+    cont.innerHTML = '<span class="lbl">Elige tu talla</span>' + p.tallas.map(t =>
+      '<button type="button" class="tchip' + (t === mpTalla ? ' activo' : '') + '" data-t="' + t + '">' + t + '</button>'
+    ).join('');
+    cont.querySelectorAll('.tchip').forEach(b => {
+      b.onclick = () => {
+        mpTalla = b.dataset.t;
+        tallaElegida.set(mpSku, mpTalla);
+        cont.querySelectorAll('.tchip').forEach(x => x.classList.toggle('activo', x.dataset.t === mpTalla));
+        document.getElementById('mpError').textContent = '';
+      };
+    });
+  } else {
+    cont.hidden = true;
+    cont.innerHTML = '';
+  }
+  document.getElementById('mpCantidad').textContent = mpCant;
+  document.getElementById('mpError').textContent = '';
+
+  const m = document.getElementById('modalProducto');
+  m.classList.add('abierto');
+  m.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => m.classList.add('visible'));
 }
 
-function cerrarVisor() {
-  const visor = document.getElementById('visor');
-  visor.classList.remove('visible');
-  setTimeout(() => visor.classList.remove('abierto'), 200);
+function cerrarModalProducto() {
+  const m = document.getElementById('modalProducto');
+  m.classList.remove('visible');
+  m.setAttribute('aria-hidden', 'true');
+  setTimeout(() => m.classList.remove('abierto'), 200);
 }
 
-document.getElementById('cerrarVisor').onclick = cerrarVisor;
-document.getElementById('visor').onclick = (e) => {
-  if (e.target.id === 'visor') cerrarVisor();
+document.getElementById('mpCerrar').onclick = cerrarModalProducto;
+document.getElementById('modalProducto').onclick = (e) => {
+  if (e.target.id === 'modalProducto') cerrarModalProducto();
 };
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') cerrarVisor();
+  if (e.key === 'Escape') cerrarModalProducto();
 });
+document.getElementById('mpMenos').onclick = () => {
+  mpCant = Math.max(1, mpCant - 1);
+  document.getElementById('mpCantidad').textContent = mpCant;
+};
+document.getElementById('mpMas').onclick = () => {
+  mpCant = Math.min(99, mpCant + 1);
+  document.getElementById('mpCantidad').textContent = mpCant;
+};
+document.getElementById('mpAgregar').onclick = () => {
+  const p = DATOS.productos.find(x => x.sku === mpSku);
+  if (!p) return;
+  if (tieneTallas(p) && !mpTalla) {
+    document.getElementById('mpError').textContent = 'Elige una talla.';
+    return;
+  }
+  agregar(mpSku, mpCant);
+  cerrarModalProducto();
+};
 
-function agregar(sku) {
+function agregar(sku, cuantos) {
+  const n = Math.max(1, cuantos || 1);
   const p = DATOS.productos.find(x => x.sku === sku);
   if (!p) return;
   const talla = tieneTallas(p) ? (tallaElegida.get(sku) || p.tallas[0]) : null;
@@ -653,7 +744,7 @@ function agregar(sku) {
     return;
   }
   const actual = carrito.get(clave);
-  carrito.set(clave, { sku, talla, cantidad: (actual ? actual.cantidad : 0) + 1 });
+  carrito.set(clave, { sku, talla, cantidad: (actual ? actual.cantidad : 0) + n });
   pintar(false);
   actualizarPedido();
 }
@@ -828,7 +919,7 @@ function seleccionEnNombre() {
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
   var nodo = sel.getRangeAt(0).commonAncestorContainer;
   if (nodo.nodeType === 3) nodo = nodo.parentElement;
-  return !!(nodo && nodo.closest && nodo.closest('.nombre'));
+  return !!(nodo && nodo.closest && nodo.closest('.nombre, .mp-info h3'));
 }
 document.addEventListener('copy', (e) => { if (!seleccionEnNombre()) e.preventDefault(); });
 
