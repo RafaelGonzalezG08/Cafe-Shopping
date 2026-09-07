@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileText } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
-import { formatMoney, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
+import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
 import { FacturaLightbox } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
@@ -270,13 +270,12 @@ export default function Transactions() {
             ]}
           />
 
-          <div className="ml-auto flex min-w-[200px] flex-1 items-center gap-2 rounded-lg bg-porcelain-100 px-2.5 py-1.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40 sm:max-w-xs">
+          <div className="buscador ml-auto min-w-[200px] flex-1 !py-1.5 sm:max-w-xs">
             <Search size={14} className="shrink-0 text-muted" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Cliente, factura, cajero..."
-              className="w-full min-w-0 text-sm outline-none"
             />
           </div>
         </div>
@@ -299,7 +298,6 @@ export default function Transactions() {
                   <th className="px-4 py-2.5">Tipo</th>
                   <th className="px-4 py-2.5">Detalle</th>
                   <th className="px-4 py-2.5">Cliente</th>
-                  <th className="px-4 py-2.5">Usuario</th>
                   <th className="px-4 py-2.5">Metodo</th>
                   <th className="px-4 py-2.5 text-right">Monto</th>
                   <th className="px-4 py-2.5" />
@@ -308,7 +306,10 @@ export default function Transactions() {
               <tbody className="divide-y divide-porcelain-200">
                 {items.map((t) => (
                   <tr key={t.id} className="hover:bg-porcelain-100">
-                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{formatDateTime(t.fecha)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 leading-tight text-muted">
+                      <span className="block text-ink">{formatDate(t.fecha)}</span>
+                      <span className="block text-xs">{formatTime(t.fecha)}</span>
+                    </td>
                     <td className="px-4 py-2.5">
                       <Badge tone={TONE_BY_TIPO[t.tipo]}>{TIPOS.find((x) => x.value === t.tipo)?.label}</Badge>
                     </td>
@@ -330,7 +331,6 @@ export default function Transactions() {
                       </p>
                     </td>
                     <td className="px-4 py-2.5 text-ink">{t.cliente ?? '-'}</td>
-                    <td className="px-4 py-2.5 text-muted">{t.usuario ?? '-'}</td>
                     <td className="px-4 py-2.5 text-muted">
                       {t.metodoPago ? METODO_PAGO_LABEL[t.metodoPago] : '-'}
                     </td>

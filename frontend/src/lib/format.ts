@@ -13,6 +13,11 @@ export function formatDateTime(value: string | Date): string {
   return new Date(value).toLocaleString('es-DO', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** Solo la hora ("11:22 p. m."), para mostrarla debajo de la fecha y ahorrar ancho. */
+export function formatTime(value: string | Date): string {
+  return new Date(value).toLocaleTimeString('es-DO', { hour: 'numeric', minute: '2-digit' });
+}
+
 export const ESTADO_DEUDA_LABEL: Record<string, string> = {
   PENDIENTE: 'Pendiente',
   PARCIAL: 'Abono parcial',

@@ -20,9 +20,9 @@
 
   --c-porcelain-50: 255 255 255;
   --c-porcelain-100: 243 232 235;
-  --c-porcelain-200: 235 219 223;
-  --c-porcelain-300: 227 206 212;
-  --c-porcelain-side: 238 224 227;
+  --c-porcelain-200: 234 220 224;
+  --c-porcelain-300: 224 205 211;
+  --c-porcelain-side: 229 213 218; /* barra lateral: un punto menos clara que las paginas */
 
   --c-copper-50: 255 236 239;
   --c-copper-100: 255 205 212;
@@ -60,33 +60,35 @@
 
 .dark {
   --c-porcelain-50: 255 255 255; /* "papel" real (facturas) sigue blanco */
-  --c-porcelain-100: 74 55 57; /* fondo: ciruela-rosado, mas claro que un negro */
-  --c-porcelain-200: 88 66 69;
-  --c-porcelain-300: 104 80 83;
-  --c-porcelain-side: 64 47 49;
+  /* Fondo de las paginas: ciruela-rosado bien claro (no un negro). La barra
+     lateral va varios tonos por debajo para separarse sin bordes. */
+  --c-porcelain-100: 99 80 87;
+  --c-porcelain-200: 114 93 100;
+  --c-porcelain-300: 132 110 117;
+  --c-porcelain-side: 80 63 69;
 
-  --c-copper-50: 88 62 66;
-  --c-copper-100: 100 70 75;
-  --c-copper-600: 240 165 178;
-  --c-copper-700: 244 185 196;
+  --c-copper-50: 118 88 96;
+  --c-copper-100: 130 98 107;
+  --c-copper-600: 240 168 180;
+  --c-copper-700: 244 188 198;
 
-  --c-sage-100: 40 66 56;
+  --c-sage-100: 52 82 71;
   --c-sage-500: 32 176 124;
-  --c-sage-600: 110 200 162;
+  --c-sage-600: 120 206 168;
 
-  --c-brick-100: 74 46 57;
-  --c-brick-500: 205 84 110;
-  --c-brick-600: 236 150 165;
-  --c-brick-700: 242 176 187;
+  --c-brick-100: 92 60 74;
+  --c-brick-500: 208 92 118;
+  --c-brick-600: 238 158 172;
+  --c-brick-700: 243 182 192;
 
-  --c-rose-100: 74 50 62;
-  --c-rose-600: 226 164 190;
+  --c-rose-100: 92 64 78;
+  --c-rose-600: 228 172 196;
 
-  --c-ink: 245 235 236;
-  --c-muted: 205 163 165; /* familia #ba7b7c */
+  --c-ink: 246 237 239;
+  --c-muted: 220 189 193; /* familia #ba7b7c, aclarado para el fondo mas claro */
 
-  --neu-lo: 58 43 45;
-  --neu-hi: 92 70 73;
+  --neu-lo: 76 60 66;
+  --neu-hi: 124 102 110;
 
   color-scheme: dark;
 }
@@ -135,14 +137,16 @@ select {
 /*
  * Reglas SIN @layer: ganan a cualquier utilidad de Tailwind sin usar
  * !important. Varias pantallas todavia traen "border border-porcelain-300" en
- * sus inputs; con el relieve interior de arriba eso creaba un doble marco. Y
- * un input dentro de un contenedor que ya lleva sombra hundida (barras de
- * busqueda) tampoco debe repetir la suya.
+ * sus inputs; con el relieve interior de arriba eso creaba un doble marco.
  */
 input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
 textarea {
   border-width: 0;
 }
+/* Un input dentro de un contenedor que ya se ve como "campo" (barra de
+   busqueda, .buscador, un contenedor con sombra hundida) NO repite su propio
+   relieve: queda plano y transparente. */
+.buscador input,
 .shadow-neu-inset input,
 .shadow-neu-inset textarea,
 .neu-inset input,
@@ -150,6 +154,7 @@ textarea {
   background: transparent;
   box-shadow: none;
 }
+.buscador input:focus,
 .shadow-neu-inset input:focus,
 .neu-inset input:focus {
   box-shadow: none;
@@ -163,6 +168,17 @@ textarea {
   /* Superficie hundida (campos, resaltados internos, nav activo). */
   .neu-inset {
     @apply rounded-lg bg-porcelain-100 shadow-neu-inset;
+  }
+  /* Barra de busqueda: un campo PLANO (sin borde, sin relieve doble), solo
+     un tono distinto del fondo. Al enfocar, un aro rosa muy tenue. */
+  .buscador {
+    @apply flex items-center gap-2 rounded-lg bg-porcelain-200 px-3 py-2.5 text-sm text-muted transition-shadow;
+  }
+  .buscador input {
+    @apply min-w-0 flex-1 text-ink outline-none placeholder:text-muted;
+  }
+  .buscador:focus-within {
+    box-shadow: 0 0 0 2px rgb(var(--c-copper-500) / 0.3);
   }
   /* Boton neumorfico: relieve en reposo, se hunde al presionar. */
   .neu-btn {

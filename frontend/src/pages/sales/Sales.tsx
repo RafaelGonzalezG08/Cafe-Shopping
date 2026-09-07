@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2, Search, UserRound } from 'lucide-react';
 import { api, apiUrl } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
-import { formatMoney, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
+import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
 import { FacturaImagen } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
@@ -75,7 +75,10 @@ export default function Sales() {
                   onClick={() => setSelectedSale(sale)}
                   className="cursor-pointer hover:bg-porcelain-100"
                 >
-                  <td className="px-4 py-2.5 text-ink">{formatDateTime(sale.fecha)}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 leading-tight text-ink">
+                    <span className="block">{formatDate(sale.fecha)}</span>
+                    <span className="block text-xs text-muted">{formatTime(sale.fecha)}</span>
+                  </td>
                   <td className="px-4 py-2.5 text-ink">{sale.client?.nombre ?? 'Consumidor final'}</td>
                   <td className="px-4 py-2.5">
                     <Badge tone={sale.metodoPago === 'CREDITO' ? 'brick' : 'sage'}>
@@ -472,14 +475,13 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
           {buscandoCliente && (
             <div className="rounded-lg border border-porcelain-200 p-2.5">
-              <div className="mb-2 flex items-center gap-2 rounded-lg bg-porcelain-100 px-2.5 py-1.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40">
-                <Search size={14} className="text-muted" />
+              <div className="buscador mb-2 !py-1.5">
+                <Search size={14} className="shrink-0 text-muted" />
                 <input
                   autoFocus
                   value={clientSearch}
                   onChange={(e) => setClientSearch(e.target.value)}
                   placeholder="Buscar por nombre, telefono o correo..."
-                  className="w-full text-sm outline-none"
                 />
               </div>
               <div className="max-h-40 divide-y divide-porcelain-200 overflow-y-auto">

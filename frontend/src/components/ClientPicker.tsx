@@ -56,9 +56,9 @@ export function ClientPicker({
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="mb-1.5 flex w-full items-center gap-2 rounded-lg border border-porcelain-300 px-3 py-2 text-left text-sm text-muted outline-none transition-colors hover:border-copper-400 focus:border-copper-500"
+          className="buscador mb-1.5 w-full !py-2 text-left hover:text-copper-600"
         >
-          <Search size={15} /> Buscar cliente...
+          <Search size={15} className="shrink-0" /> Buscar cliente...
         </button>
       )}
 

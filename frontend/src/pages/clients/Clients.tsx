@@ -111,13 +111,12 @@ export default function Clients() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div>
-          <div className="mb-4 flex items-center gap-2 rounded-lg bg-porcelain-100 px-3 py-2.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-copper-500/40">
-            <Search size={16} className="text-muted" />
+          <div className="buscador mb-4">
+            <Search size={16} className="shrink-0 text-muted" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nombre, telefono o correo..."
-              className="w-full text-sm outline-none"
             />
           </div>
 

@@ -380,13 +380,12 @@ export default function Products() {
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <div className="relative max-w-sm flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <div className="buscador max-w-sm flex-1 !py-2">
+          <Search size={16} className="shrink-0 text-muted" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o codigo..."
-            className="w-full rounded-lg border border-porcelain-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-copper-500"
           />
         </div>
         {categorias.length > 0 && (
