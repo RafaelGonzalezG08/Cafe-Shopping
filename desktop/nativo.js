@@ -294,18 +294,32 @@ async function renderizarParaBackend(mensaje, onLog) {
   let ventana = null;
 
   try {
+    // Se renderiza a "factor" aumentos REALES (zoom del motor), no capturando
+    // a 1x y estirando la imagen despues: estirar un PNG solo lo hace mas
+    // grande y borroso. Con el zoom, el texto y las lineas se dibujan a esa
+    // resolucion y la factura se ve nitida al ampliarla en WhatsApp.
+    const factor = Math.max(1, Math.round(scale || 3));
+    const anchoBase = Math.round(width || 420);
+
     ventana = new BrowserWindow({
       show: false,
-      width: Math.round(width || 420),
-      height: 900,
+      width: anchoBase * factor,
+      height: 1400,
       // JavaScript habilitado porque se necesita para medir el alto real del
       // ticket antes de capturar. El HTML lo genera el propio backend a partir
       // de su plantilla, con los valores escapados (ver invoice.template.ts),
       // asi que no se esta ejecutando codigo de terceros.
-      webPreferences: { contextIsolation: true, nodeIntegration: false },
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        zoomFactor: factor,
+      },
     });
 
     await ventana.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    // El zoomFactor de webPreferences no siempre pega en la primera carga:
+    // se re-aplica aqui por seguridad.
+    ventana.webContents.setZoomFactor(factor);
     // Espera a que las fuentes esten listas antes de medir/capturar, en vez de
     // un tiempo fijo a ojo: en una PC lenta 300 ms podian no alcanzar (texto
     // con la fuente de reemplazo en la imagen), y en una rapida sobraban.
@@ -318,23 +332,19 @@ async function renderizarParaBackend(mensaje, onLog) {
     if (formato === 'pdf') {
       datos = await ventana.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
     } else {
-      // Se mide el alto real del ticket para recortar exactamente, en vez de
-      // capturar una ventana fija con espacio sobrante debajo.
-      const alto = await ventana.webContents.executeJavaScript(
+      // getBoundingClientRect() devuelve px de layout (CSS), sin el zoom: se
+      // mide el alto "logico" del ticket y se multiplica por el factor para
+      // dar a la ventana el tamano fisico que ocupa ya ampliado.
+      const altoLogico = await ventana.webContents.executeJavaScript(
         `Math.ceil((document.querySelector('.ticket') || document.body).getBoundingClientRect().height)`,
       );
-      ventana.setContentSize(Math.round(width || 420), Math.max(1, Math.round(alto)));
-      await new Promise((r) => setTimeout(r, 120));
+      ventana.setContentSize(anchoBase * factor, Math.max(1, Math.round(altoLogico * factor)));
+      await new Promise((r) => setTimeout(r, 140));
 
+      // capturePage ya entrega la imagen a "factor" aumentos, nitida. No se
+      // reescala (eso solo la volveria borrosa).
       const imagen = await ventana.webContents.capturePage();
-      // El factor de escala replica el deviceScaleFactor de Puppeteer: la
-      // factura se ve nitida aunque el cliente le haga zoom en WhatsApp.
-      const factor = Math.max(1, scale || 1);
-      const ampliada = imagen.resize({
-        width: Math.round(imagen.getSize().width * factor),
-        quality: 'best',
-      });
-      datos = ampliada.toPNG();
+      datos = imagen.toPNG();
     }
 
     backendProcess?.send({ tipo: 'render-resultado', id, datosBase64: datos.toString('base64') });
