@@ -203,6 +203,21 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* Barra de scroll fina para el menu lateral (cuando la pantalla es baja y la
+   lista de secciones no cabe entera, para que el pie con "Cerrar sesion" /
+   Configuracion nunca quede fuera de alcance). */
+aside nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--c-porcelain-300)) transparent;
+}
+aside nav::-webkit-scrollbar {
+  width: 6px;
+}
+aside nav::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-porcelain-300));
+  border-radius: 999px;
+}
+
 /* Mientras se cambia de tema (ver useTheme.ts): sin transiciones, para que el
    cambio sea instantaneo en vez de un cross-fade de toda la pantalla. */
 .cambiando-tema * {

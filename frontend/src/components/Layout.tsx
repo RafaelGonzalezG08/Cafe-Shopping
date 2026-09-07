@@ -70,8 +70,8 @@ export function Layout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
-      <aside className="z-10 flex w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)]">
-        <div className="flex items-center gap-2.5 px-5 py-6">
+      <aside className="z-10 flex h-screen w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)]">
+        <div className="flex shrink-0 items-center gap-2.5 px-5 py-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
             {logoSrc ? (
               <img src={logoSrc} alt="Logo" className="h-full w-full object-cover" />
@@ -89,7 +89,7 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
           {visibleItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -109,7 +109,7 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mx-3 my-4 border-t border-porcelain-300 px-0 pt-4">
+        <div className="mx-3 mb-3 mt-2 shrink-0 border-t border-porcelain-300 px-0 pt-3">
           <div className="mb-2 flex items-center gap-2.5 rounded-xl bg-porcelain-side px-3 py-2 shadow-neu-inset">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-copper-400 to-copper-600 font-display text-xs font-bold text-white">
               {user?.nombre?.slice(0, 2).toUpperCase()}
