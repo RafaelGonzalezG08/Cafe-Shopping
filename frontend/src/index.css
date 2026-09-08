@@ -72,9 +72,14 @@
   --c-copper-600: 240 168 180;
   --c-copper-700: 244 188 198;
 
-  --c-sage-100: 52 82 71;
-  --c-sage-500: 32 176 124;
-  --c-sage-600: 120 206 168;
+  /* Verde "conectado / pagado" para el fondo oscuro: apagado (poco teal, no
+     choca con el ciruela) y con texto claro legible. sage-700 hay que
+     definirlo aqui SI o SI: sin esto quedaba verde-oscuro sobre verde-oscuro
+     y no se leia (chip "WhatsApp conectado", insignia "OneDrive"). */
+  --c-sage-100: 66 84 76;
+  --c-sage-500: 31 162 113;
+  --c-sage-600: 128 202 172;
+  --c-sage-700: 160 216 190;
 
   --c-brick-100: 92 60 74;
   --c-brick-500: 208 92 118;
@@ -121,12 +126,15 @@ select {
  * de llevar borde. Se aplica de forma global aqui para no tocar cada pantalla.
  */
 @layer base {
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  /* :where() mantiene la especificidad en 0,0,1 (solo "input"), para que
+     cualquier regla de componente (.buscador input, etc.) la gane sin
+     pelear con !important. */
+  input:where(:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])),
   textarea {
     @apply rounded-lg bg-porcelain-100 text-ink;
     box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi));
   }
-  input:focus,
+  input:where(:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])):focus,
   textarea:focus {
     outline: none;
     box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi)),
@@ -169,16 +177,20 @@ textarea {
   .neu-inset {
     @apply rounded-lg bg-porcelain-100 shadow-neu-inset;
   }
-  /* Barra de busqueda: un campo PLANO (sin borde, sin relieve doble), solo
-     un tono distinto del fondo. Al enfocar, un aro rosa muy tenue. */
+  /* Barra de busqueda: un solo campo HUNDIDO (mismo relieve que el Select
+     "Todas las categorias"). La lupa y el input van DENTRO del mismo hueco;
+     el input por si solo queda plano (ver regla ".buscador input" sin @layer)
+     para que no haya doble relieve. */
   .buscador {
-    @apply flex items-center gap-2 rounded-lg bg-porcelain-200 px-3 py-2.5 text-sm text-muted transition-shadow;
+    @apply flex items-center gap-2 rounded-lg bg-porcelain-100 px-3 py-2.5 text-sm text-muted transition-shadow;
+    box-shadow: inset 3px 3px 7px rgb(var(--neu-lo)), inset -3px -3px 7px rgb(var(--neu-hi));
   }
   .buscador input {
     @apply min-w-0 flex-1 text-ink outline-none placeholder:text-muted;
   }
   .buscador:focus-within {
-    box-shadow: 0 0 0 2px rgb(var(--c-copper-500) / 0.3);
+    box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi)),
+      0 0 0 2px rgb(var(--c-copper-500) / 0.4);
   }
   /* Boton neumorfico: relieve en reposo, se hunde al presionar. */
   .neu-btn {
