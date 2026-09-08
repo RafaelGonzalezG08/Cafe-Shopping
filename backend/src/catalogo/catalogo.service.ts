@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
+import { createHash } from 'crypto';
 import { join, basename } from 'path';
+import AdmZip from 'adm-zip';
 import { PrismaService } from '../prisma/prisma.service';
 import { UPLOADS_DIR } from '../common/paths';
 import { generarHtml, DatosCatalogo, ProductoCatalogo } from './plantilla';
@@ -25,6 +27,16 @@ export interface ResultadoGenerar {
   excluidasSinFoto?: number;
   excluidasSinPrecio?: number;
   error?: string;
+  /**
+   * Resultado de la publicacion automatica a Netlify:
+   *  - 'sin-configurar': no hay token/site de Netlify puestos (se sube a mano).
+   *  - 'sin-cambios': Netlify configurado pero el catalogo no cambio nada visible.
+   *  - 'publicado': se subio a Netlify y ya esta en linea.
+   *  - 'error': se intento subir y fallo (ver netlifyError).
+   */
+  netlify?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
+  netlifyUrl?: string;
+  netlifyError?: string;
 }
 
 /**
@@ -71,6 +83,13 @@ export class CatalogoService {
 
   private ejecucionActual: Promise<ResultadoGenerar> | null = null;
   private hayPendiente = false;
+  /**
+   * Hash del ultimo index.html publicado en Netlify. Si una regeneracion
+   * produce el mismo HTML (ej. una venta que baja el stock de 5 a 4 no cambia
+   * nada visible), no se vuelve a subir. Vive en memoria: tras reiniciar la
+   * app se hace una subida de mas, y ya.
+   */
+  private ultimoHashPublicado: string | null = null;
 
   /**
    * Punto de entrada publico: serializa las generaciones para que nunca
@@ -90,25 +109,27 @@ export class CatalogoService {
    * cambios que se cruzaron con la corrida en curso queden reflejados
    * igual, sin acumular trabajo de mas.
    */
-  async generar(): Promise<ResultadoGenerar> {
+  async generar(forzarPublicacion = false): Promise<ResultadoGenerar> {
     if (this.ejecucionActual) {
       this.hayPendiente = true;
       return this.ejecucionActual;
     }
 
-    this.ejecucionActual = this.generarInterno();
+    this.ejecucionActual = this.generarInterno(forzarPublicacion);
     try {
       return await this.ejecucionActual;
     } finally {
       this.ejecucionActual = null;
       if (this.hayPendiente) {
         this.hayPendiente = false;
-        void this.generar();
+        // La corrida que se acumulo mientras esta trabajaba es automatica
+        // (una venta, un cambio de producto): nunca fuerza publicacion.
+        void this.generar(false);
       }
     }
   }
 
-  private async generarInterno(): Promise<ResultadoGenerar> {
+  private async generarInterno(forzarPublicacion = false): Promise<ResultadoGenerar> {
     const perfil = await this.prisma.businessProfile.findFirst();
 
     if (!perfil?.telefonoWhatsapp?.trim()) {
@@ -198,19 +219,94 @@ export class CatalogoService {
       relevoUrl: perfil.relevoPedidosUrl?.trim() || undefined,
     };
 
-    await fs.writeFile(join(carpeta, 'index.html'), generarHtml(datos), 'utf8');
+    const html = generarHtml(datos);
+    await fs.writeFile(join(carpeta, 'index.html'), html, 'utf8');
 
     this.logger.log(
       `Catalogo generado con ${items.length} piezas en ${carpeta} ` +
         `(${sinFoto.length} sin foto y ${sinPrecio.length} sin precio quedaron fuera)`,
     );
-    return {
+
+    const resultado: ResultadoGenerar = {
       ok: true,
       carpeta,
       productos: items.length,
       excluidasSinFoto: sinFoto.length,
       excluidasSinPrecio: sinPrecio.length,
     };
+
+    // Publicacion automatica a Netlify (si esta configurada). Nunca tumba la
+    // generacion: si falla, el folder queda listo para subir a mano igual.
+    const token = perfil.netlifyToken?.trim();
+    const siteId = perfil.netlifySiteId?.trim();
+    if (!token || !siteId) {
+      resultado.netlify = 'sin-configurar';
+    } else {
+      const hash = createHash('sha1').update(html).digest('hex');
+      if (!forzarPublicacion && hash === this.ultimoHashPublicado) {
+        resultado.netlify = 'sin-cambios';
+      } else {
+        const pub = await this.publicarEnNetlify(carpeta, token, siteId);
+        if (pub.ok) {
+          this.ultimoHashPublicado = hash;
+          resultado.netlify = 'publicado';
+          resultado.netlifyUrl = pub.url;
+          this.logger.log(`Catalogo publicado en Netlify: ${pub.url ?? '(sin URL)'}`);
+        } else {
+          resultado.netlify = 'error';
+          resultado.netlifyError = pub.error;
+          this.logger.warn(`No se pudo publicar el catalogo en Netlify: ${pub.error}`);
+        }
+      }
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Sube el folder del catalogo a Netlify por su API (mismo mecanismo que
+   * arrastrar el folder a netlify.com/drop, pero automatico). El deploy se
+   * publica en produccion al instante.
+   */
+  private async publicarEnNetlify(
+    carpeta: string,
+    token: string,
+    siteId: string,
+  ): Promise<{ ok: boolean; url?: string; error?: string }> {
+    try {
+      const zip = new AdmZip();
+      // addLocalFolder deja index.html y fotos/ en la raiz del zip, que es lo
+      // que Netlify espera.
+      zip.addLocalFolder(carpeta);
+      const body = zip.toBuffer();
+
+      const respuesta = await fetch(
+        `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}/deploys`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/zip' },
+          body,
+          signal: AbortSignal.timeout(90_000),
+        },
+      );
+
+      if (!respuesta.ok) {
+        if (respuesta.status === 401) {
+          return { ok: false, error: 'El token de Netlify no es valido o expiro.' };
+        }
+        if (respuesta.status === 404) {
+          return { ok: false, error: 'El ID del sitio de Netlify no existe o el token no tiene acceso a el.' };
+        }
+        const detalle = await respuesta.text().catch(() => '');
+        return { ok: false, error: `Netlify respondio ${respuesta.status}. ${detalle}`.trim() };
+      }
+
+      const data = (await respuesta.json()) as { ssl_url?: string; deploy_ssl_url?: string };
+      return { ok: true, url: data.ssl_url || data.deploy_ssl_url };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: `No se pudo contactar a Netlify (${msg}).` };
+    }
   }
 
   /**

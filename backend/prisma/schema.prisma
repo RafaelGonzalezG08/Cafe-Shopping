@@ -336,6 +336,13 @@ model BusinessProfile {
   relevoPedidosUrl   String? @map("relevo_pedidos_url")
   relevoPedidosClave String? @map("relevo_pedidos_clave")
 
+  // Publicacion automatica del catalogo a Netlify (opcional). Con el token
+  // (personal access token de netlify.com) y el ID del sitio puestos, la app
+  // sube el sitio a Netlify por su API despues de cada regeneracion, asi no
+  // hay que volver a arrastrar el folder cuando algo se agota o cambia.
+  netlifyToken  String? @map("netlify_token")
+  netlifySiteId String? @map("netlify_site_id")
+
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("business_profile")

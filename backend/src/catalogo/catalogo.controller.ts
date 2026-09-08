@@ -18,6 +18,8 @@ export class CatalogoController {
 
   @Post('generar')
   generar() {
-    return this.catalogoService.generar();
+    // Boton manual: siempre re-publica en Netlify (aunque el contenido no
+    // haya cambiado), por si el dueno quiere forzar el despliegue.
+    return this.catalogoService.generar(true);
   }
 }

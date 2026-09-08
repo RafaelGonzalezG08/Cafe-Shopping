@@ -148,6 +148,8 @@ export default function Settings() {
     descripcionWeb: '',
     relevoPedidosUrl: '',
     relevoPedidosClave: '',
+    netlifyToken: '',
+    netlifySiteId: '',
   });
 
   useEffect(() => {
@@ -161,6 +163,8 @@ export default function Settings() {
         descripcionWeb: profile.descripcionWeb ?? '',
         relevoPedidosUrl: profile.relevoPedidosUrl ?? '',
         relevoPedidosClave: profile.relevoPedidosClave ?? '',
+        netlifyToken: profile.netlifyToken ?? '',
+        netlifySiteId: profile.netlifySiteId ?? '',
       });
     }
   }, [profile]);
@@ -371,6 +375,8 @@ export default function Settings() {
             descripcionWeb={form.descripcionWeb}
             relevoPedidosUrl={form.relevoPedidosUrl}
             relevoPedidosClave={form.relevoPedidosClave}
+            netlifyToken={form.netlifyToken}
+            netlifySiteId={form.netlifySiteId}
             onChange={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
             onGuardar={() => updateProfile.mutate()}
             guardando={updateProfile.isPending}
@@ -571,6 +577,8 @@ function CatalogoWeb({
   descripcionWeb,
   relevoPedidosUrl,
   relevoPedidosClave,
+  netlifyToken,
+  netlifySiteId,
   onChange,
   onGuardar,
   guardando,
@@ -579,8 +587,16 @@ function CatalogoWeb({
   descripcionWeb: string;
   relevoPedidosUrl: string;
   relevoPedidosClave: string;
+  netlifyToken: string;
+  netlifySiteId: string;
   onChange: (
-    campo: 'telefonoWhatsapp' | 'descripcionWeb' | 'relevoPedidosUrl' | 'relevoPedidosClave',
+    campo:
+      | 'telefonoWhatsapp'
+      | 'descripcionWeb'
+      | 'relevoPedidosUrl'
+      | 'relevoPedidosClave'
+      | 'netlifyToken'
+      | 'netlifySiteId',
     valor: string,
   ) => void;
   onGuardar: () => void;
@@ -591,6 +607,9 @@ function CatalogoWeb({
     productos: number;
     excluidasSinFoto: number;
     excluidasSinPrecio: number;
+    netlify?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
+    netlifyUrl?: string;
+    netlifyError?: string;
   } | null>(null);
 
   const generar = useMutation({
@@ -602,8 +621,17 @@ function CatalogoWeb({
           productos: data.productos,
           excluidasSinFoto: data.excluidasSinFoto ?? 0,
           excluidasSinPrecio: data.excluidasSinPrecio ?? 0,
+          netlify: data.netlify,
+          netlifyUrl: data.netlifyUrl,
+          netlifyError: data.netlifyError,
         });
-        toast.success(`Catalogo generado con ${data.productos} piezas.`);
+        if (data.netlify === 'publicado' || data.netlify === 'sin-cambios') {
+          toast.success('Catalogo generado y publicado en linea.');
+        } else if (data.netlify === 'error') {
+          toast.error(`Catalogo generado, pero no se pudo publicar: ${data.netlifyError ?? ''}`);
+        } else {
+          toast.success(`Catalogo generado con ${data.productos} piezas.`);
+        }
       } else {
         toast.error(data.error || 'No se pudo generar el catalogo.');
       }
@@ -682,6 +710,47 @@ function CatalogoWeb({
 
         <div className="border-t border-porcelain-200 pt-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Publicar el catalogo solo (opcional)
+          </p>
+          <p className="mb-2 text-xs leading-relaxed text-muted">
+            Con esto puesto, cada vez que algo cambia (una pieza se agota, cambia un precio,
+            entra una pieza nueva) la app <strong>sube el catalogo a Netlify sola</strong> — no
+            hay que volver a arrastrar el folder. En{' '}
+            <strong>netlify.com &rarr; User settings &rarr; Applications &rarr; Personal access tokens</strong>{' '}
+            creas un token; el <strong>Site ID</strong> esta en tu sitio, en{' '}
+            <strong>Site configuration &rarr; General</strong>.
+          </p>
+          <div className="space-y-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Token de Netlify
+              </label>
+              <input
+                type="password"
+                value={netlifyToken}
+                onChange={(e) => onChange('netlifyToken', e.target.value)}
+                placeholder="nfp_..."
+                autoComplete="off"
+                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Site ID de Netlify
+              </label>
+              <input
+                value={netlifySiteId}
+                onChange={(e) => onChange('netlifySiteId', e.target.value)}
+                placeholder="a1b2c3d4-... o el nombre del sitio"
+                autoComplete="off"
+                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-porcelain-200 pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
             Punto de venta desde el catalogo (opcional)
           </p>
           <p className="text-xs leading-relaxed text-muted">
@@ -709,15 +778,53 @@ function CatalogoWeb({
         </div>
 
         {resultado && (
-          <div className="rounded-lg bg-sage-100 p-3 text-xs text-sage-700">
+          <div
+            className={`rounded-lg p-3 text-xs ${
+              resultado.netlify === 'error'
+                ? 'bg-brick-100 text-brick-700'
+                : 'bg-sage-100 text-sage-700'
+            }`}
+          >
             <p className="font-semibold">Catalogo listo con {resultado.productos} piezas.</p>
-            <p className="mt-1 break-all">
-              Carpeta: <code>{resultado.carpeta}</code>
-            </p>
-            <p className="mt-2">
-              Para ponerlo en linea gratis: entra a <strong>app.netlify.com/drop</strong> y arrastra esa
-              carpeta completa a la pagina. Te dara una direccion al instante.
-            </p>
+
+            {(resultado.netlify === 'publicado' || resultado.netlify === 'sin-cambios') && (
+              <p className="mt-2">
+                Ya esta en linea.{' '}
+                {resultado.netlifyUrl && (
+                  <a
+                    href={resultado.netlifyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline"
+                  >
+                    Abrir el catalogo
+                  </a>
+                )}{' '}
+                Desde ahora se actualiza solo con cada venta o cambio.
+              </p>
+            )}
+
+            {resultado.netlify === 'error' && (
+              <p className="mt-2">
+                No se pudo publicar en Netlify: {resultado.netlifyError}. El catalogo quedo en la
+                carpeta <code className="break-all">{resultado.carpeta}</code> — puedes subirlo a
+                mano en <strong>app.netlify.com/drop</strong> mientras tanto.
+              </p>
+            )}
+
+            {(!resultado.netlify || resultado.netlify === 'sin-configurar') && (
+              <>
+                <p className="mt-1 break-all">
+                  Carpeta: <code>{resultado.carpeta}</code>
+                </p>
+                <p className="mt-2">
+                  Para ponerlo en linea gratis: entra a <strong>app.netlify.com/drop</strong> y
+                  arrastra esa carpeta completa a la pagina. Te dara una direccion al instante. (O
+                  llena arriba el token y el Site ID de Netlify para que se suba solo.)
+                </p>
+              </>
+            )}
+
             {(resultado.excluidasSinFoto > 0 || resultado.excluidasSinPrecio > 0) && (
               <p className="mt-2 border-t border-sage-600/20 pt-2 text-brick-600">
                 Quedaron fuera{' '}

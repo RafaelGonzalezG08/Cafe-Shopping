@@ -85,4 +85,20 @@ export class UpdateBusinessProfileDto {
   @IsOptional()
   @IsString()
   relevoPedidosClave?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Personal access token de Netlify (para publicar el catalogo solo).',
+  })
+  @IsOptional()
+  @IsString()
+  netlifyToken?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'ID del sitio de Netlify donde se publica el catalogo.',
+  })
+  @IsOptional()
+  @IsString()
+  netlifySiteId?: string;
 }
