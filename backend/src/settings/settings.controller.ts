@@ -57,4 +57,18 @@ export class SettingsController {
   integrationsStatus() {
     return this.settingsService.getIntegrationsStatus();
   }
+
+  /**
+   * Direccion para abrir la app desde el celular (misma WiFi). La calcula
+   * nativo.js al arrancar (ver obtenerIpLan) y se la pasa al backend por
+   * LAN_URL; aqui solo se expone para que Configuracion no obligue al dueño
+   * a correr "ipconfig". null si no se detecto ninguna red (ej. corriendo
+   * "npm run start:dev" suelto, sin Electron).
+   */
+  @Get('red-local')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  redLocal() {
+    return { url: process.env.LAN_URL || null };
+  }
 }

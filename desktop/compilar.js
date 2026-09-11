@@ -12,10 +12,12 @@
  *     empezar. El resultado es un dist/ a medias — llego a quedar sin
  *     main.js. Por eso se borra la cache antes.
  *
- *  2) El frontend guarda la direccion del backend EN EL MOMENTO DE
- *     COMPILAR. Si se compila sin VITE_API_URL apuntando al puerto 3010, la
- *     aplicacion instalada busca el 3000 (el de la version con Docker) y no
- *     responde nada.
+ *  2) (Historico) El frontend solia guardar la direccion del backend EN EL
+ *     MOMENTO DE COMPILAR (VITE_API_URL). Eso se rompia al abrir la app desde
+ *     el celular: "localhost" ahi es el celular, no la PC. Ahora
+ *     frontend/src/lib/api.ts la calcula en el navegador segun el host desde
+ *     donde se abrio la pagina, con el puerto 3010 fijo (build de produccion,
+ *     ver import.meta.env.DEV ahi) — no hace falta pasar VITE_API_URL aqui.
  *
  *  3) Si no se sube la version, electron-builder sobreescribe el instalador
  *     anterior y el actualizador automatico no ofrece el cambio, porque
@@ -29,7 +31,6 @@ const path = require('path');
 const RAIZ = path.join(__dirname, '..');
 const BACKEND = path.join(RAIZ, 'backend');
 const FRONTEND = path.join(RAIZ, 'frontend');
-const PUERTO_BACKEND = 3010; // debe coincidir con BACKEND_PORT de nativo.js
 
 function paso(titulo) {
   console.log(`\n=== ${titulo} ===`);
@@ -75,7 +76,7 @@ if (!fs.existsSync(path.join(BACKEND, 'dist', 'main.js'))) {
 }
 
 paso('2/4  Interfaz');
-correr('npm run build', FRONTEND, { VITE_API_URL: `http://localhost:${PUERTO_BACKEND}/api` });
+correr('npm run build', FRONTEND);
 const indice = path.join(FRONTEND, 'dist', 'index.html');
 if (!fs.existsSync(indice)) {
   console.error('\nERROR: no se genero frontend/dist. Revisa los errores de arriba.');

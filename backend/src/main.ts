@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as express from 'express';
@@ -9,6 +10,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { MigrationsService } from './prisma/migrations.service';
 import { BootstrapService } from './prisma/bootstrap.service';
 import { UPLOADS_DIR } from './common/paths';
+import { crearMiddlewareUploads } from './common/middleware/uploads-auth.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -46,11 +48,14 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Sirve las imagenes de facturas y fotos de productos. NO lleva auth (las
-  // carga el <img> del frontend, que no puede mandar el token), y los nombres
-  // de factura son predecibles (FAC-2026-00001.png). Por eso el backend solo
-  // escucha en 127.0.0.1 (ver app.listen abajo): nadie fuera de esta PC llega.
-  app.use('/uploads', express.static(UPLOADS_DIR));
+  // Sirve las imagenes de facturas y fotos de productos. Los nombres de
+  // factura son predecibles (FAC-2026-00001.png), y ahora que el backend
+  // tambien escucha en la red local (para usar la app desde el celular, ver
+  // app.listen abajo) cualquiera en esa WiFi podria pedirlas sin este
+  // candado. Un <img>/<a> del frontend no puede mandar el header
+  // Authorization, por eso el middleware tambien acepta el token por
+  // ?token= (ver urlConToken en frontend/src/lib/api.ts).
+  app.use('/uploads', crearMiddlewareUploads(app.get(JwtService)), express.static(UPLOADS_DIR));
 
   app.setGlobalPrefix('api');
 
@@ -66,10 +71,11 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  // Solo 127.0.0.1: la app es de una sola PC. Sin esto el backend escucha en
-  // todas las interfaces y cualquier equipo de la misma red podria pedir
-  // /uploads/invoices/FAC-... (datos de clientes) o pegarle a la API.
-  await app.listen(port, '127.0.0.1');
+  // 0.0.0.0: se escucha en toda la red local (no solo en esta PC) para poder
+  // usar la app tambien desde el celular en la misma WiFi. La API ya exige
+  // JWT en cada endpoint y /uploads ahora tambien lo exige (ver mas arriba),
+  // asi que abrir el puerto a la red no expone nada sin loguearse primero.
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`Cafe Shopping API escuchando en http://localhost:${port}/api`);
   // eslint-disable-next-line no-console

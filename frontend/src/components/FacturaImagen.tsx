@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { apiUrl } from '../lib/api';
+import { apiUrl, urlConToken } from '../lib/api';
 
 /** URL final de la imagen (absoluta o servida por el backend), con cache-buster opcional. */
 function resolverSrc(pngUrl: string, refreshKey?: number | string) {
   const base = pngUrl.startsWith('http') ? pngUrl : apiUrl(pngUrl);
-  if (refreshKey == null) return base;
-  return `${base}${base.includes('?') ? '&' : '?'}v=${refreshKey}`;
+  const conCacheBuster =
+    refreshKey == null ? base : `${base}${base.includes('?') ? '&' : '?'}v=${refreshKey}`;
+  return urlConToken(conCacheBuster);
 }
 
 /**

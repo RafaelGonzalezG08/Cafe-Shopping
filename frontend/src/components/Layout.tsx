@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
-import { api, apiUrl } from '../lib/api';
+import { api, apiUrl, urlConToken } from '../lib/api';
 import { useTheme } from '../lib/useTheme';
 import { Button, Card } from './ui';
 import type { BusinessProfile, Role } from '../types';
@@ -63,9 +63,7 @@ export function Layout() {
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
   const puedeVerConfiguracion = Boolean(user && ROLES_CONFIGURACION.includes(user.role));
   const logoSrc = profile?.logoUrl
-    ? profile.logoUrl.startsWith('http')
-      ? profile.logoUrl
-      : apiUrl(profile.logoUrl)
+    ? urlConToken(profile.logoUrl.startsWith('http') ? profile.logoUrl : apiUrl(profile.logoUrl))
     : null;
 
   return (

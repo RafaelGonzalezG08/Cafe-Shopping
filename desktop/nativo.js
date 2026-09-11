@@ -16,6 +16,7 @@ const { app } = require('electron');
 const { fork } = require('child_process');
 const http = require('http');
 const net = require('net');
+const os = require('os');
 const path = require('path');
 const fs = require('fs');
 
@@ -124,6 +125,30 @@ function projectDir() {
   return app.isPackaged ? path.join(process.resourcesPath, 'app-project') : path.join(__dirname, '..');
 }
 
+/**
+ * IP de esta PC en la red local (para usar la app desde el celular en la
+ * misma WiFi). Se queda con la primera IPv4 no interna en un rango privado
+ * comun -- si la PC tiene varias tarjetas de red (VPN, adaptadores
+ * virtuales de VirtualBox/Hyper-V, etc.) casi siempre es la que de verdad
+ * importa. Sin red (o sin nada que calce), null: la app sigue funcionando
+ * solo en esta PC, como hasta ahora.
+ */
+function obtenerIpLan() {
+  const interfaces = os.networkInterfaces();
+  for (const nombre of Object.keys(interfaces)) {
+    for (const iface of interfaces[nombre] || []) {
+      if (
+        iface.family === 'IPv4' &&
+        !iface.internal &&
+        /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(iface.address)
+      ) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
+
 function puertoAbierto(port) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
@@ -171,6 +196,8 @@ async function startBackend(onLog) {
   const uploads = path.join(datos, 'uploads');
   fs.mkdirSync(uploads, { recursive: true });
 
+  const ipLan = obtenerIpLan();
+
   backendEnv = {
     ...process.env,
     // ELECTRON_RUN_AS_NODE hace que el proceso hijo se comporte como Node puro
@@ -194,7 +221,16 @@ async function startBackend(onLog) {
     // nombre de usuario.
     BACKUP_MIRROR_DIR: resolveOneDriveBackupDirNativo() || '',
     PRISMA_MIGRATIONS_DIR: path.join(proyecto, 'backend', 'prisma', 'migrations'),
-    FRONTEND_URL: `http://localhost:${FRONTEND_PORT}`,
+    // Se suma la IP de la red local (si hay) para que el CORS del backend
+    // tambien acepte al celular abriendo la app por esa IP -- sin esto, la
+    // pagina cargaria pero cada llamada a la API se rechazaria por origen
+    // distinto. main.ts ya separa esta lista por comas.
+    FRONTEND_URL: [`http://localhost:${FRONTEND_PORT}`, ipLan && `http://${ipLan}:${FRONTEND_PORT}`]
+      .filter(Boolean)
+      .join(','),
+    // Para mostrarla en Configuracion y que el dueño no tenga que correr
+    // "ipconfig" para saber que direccion abrir en el celular.
+    LAN_URL: ipLan ? `http://${ipLan}:${FRONTEND_PORT}` : '',
     JWT_SECRET: obtenerJwtSecret(datos),
   };
   backendEntrada = entrada;
@@ -483,7 +519,10 @@ function startFrontend() {
         }
       };
       frontendServer.once('error', alFallar);
-      frontendServer.listen(puerto, '127.0.0.1', () => {
+      // 0.0.0.0: tambien se sirve en la red local, para abrir la app desde el
+      // celular en la misma WiFi (ver obtenerIpLan()). La ventana de Electron
+      // sigue cargando "localhost" igual que siempre.
+      frontendServer.listen(puerto, '0.0.0.0', () => {
         frontendServer.removeListener('error', alFallar);
         resolve(`http://localhost:${puerto}`);
       });

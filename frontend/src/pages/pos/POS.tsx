@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check, Package } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
@@ -245,7 +245,9 @@ export default function POS() {
               <div className="flex h-24 w-full items-center justify-center bg-porcelain-200">
                 {product.imageUrl ? (
                   <img
-                    src={product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl)}
+                    src={urlConToken(
+                      product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl),
+                    )}
                     alt={product.nombre}
                     className="h-full w-full object-cover"
                   />

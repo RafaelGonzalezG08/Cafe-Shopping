@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, ImagePlus, Gem, X, Pencil, Search, Trash2, RotateCcw, Loader2, Sparkles, ArrowRight, Tag, Check, Download } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
@@ -256,7 +256,8 @@ export default function Products() {
 
   function imageSrc(product: Product) {
     if (!product.imageUrl) return null;
-    return product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl);
+    const base = product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl);
+    return urlConToken(base);
   }
 
   async function exportarCsv() {

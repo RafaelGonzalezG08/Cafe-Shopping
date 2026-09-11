@@ -23,7 +23,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { api, apiUrl, urlConToken } from '../../lib/api';
 import { Button, Card, PageHeader, Select, Badge } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 import { useAuthStore } from '../../store/auth.store';
@@ -132,6 +132,11 @@ export default function Settings() {
   const { data: integrations } = useQuery<IntegrationsStatus>({
     queryKey: ['settings', 'integrations'],
     queryFn: async () => (await api.get('/settings/integrations-status')).data,
+  });
+
+  const { data: redLocal } = useQuery<{ url: string | null }>({
+    queryKey: ['settings', 'red-local'],
+    queryFn: async () => (await api.get('/settings/red-local')).data,
   });
 
   const { data: users = [] } = useQuery<AppUser[]>({
@@ -286,7 +291,9 @@ export default function Settings() {
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-porcelain-300 bg-porcelain-100">
                   {profile?.logoUrl ? (
                     <img
-                      src={profile.logoUrl.startsWith('http') ? profile.logoUrl : apiUrl(profile.logoUrl)}
+                      src={urlConToken(
+                        profile.logoUrl.startsWith('http') ? profile.logoUrl : apiUrl(profile.logoUrl),
+                      )}
                       alt="Icono actual"
                       className="h-full w-full object-cover"
                     />
@@ -330,6 +337,19 @@ export default function Settings() {
             <Button onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
               <Save size={16} /> Guardar cambios
             </Button>
+
+            {redLocal?.url && (
+              <div className="border-t border-porcelain-200 pt-3">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Accede desde el celular
+                </p>
+                <p className="text-xs leading-relaxed text-muted">
+                  Con el celular en la misma red WiFi que esta PC, abre{' '}
+                  <strong>{redLocal.url}</strong> en el navegador para usar la app (ventas,
+                  productos, fotos) igual que en la computadora.
+                </p>
+              </div>
+            )}
           </div>
         </Seccion>
 

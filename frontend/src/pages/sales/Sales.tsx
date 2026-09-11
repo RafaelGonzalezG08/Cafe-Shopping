@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2, Search, UserRound } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
@@ -104,7 +104,11 @@ export default function Sales() {
                       </button>
                       {sale.invoice?.pngUrl && (
                         <a
-                          href={sale.invoice.pngUrl.startsWith('http') ? sale.invoice.pngUrl : apiUrl(sale.invoice.pngUrl)}
+                          href={urlConToken(
+                            sale.invoice.pngUrl.startsWith('http')
+                              ? sale.invoice.pngUrl
+                              : apiUrl(sale.invoice.pngUrl),
+                          )}
                           target="_blank"
                           rel="noreferrer"
                           className="rounded-lg p-1.5 text-muted hover:bg-porcelain-200"
