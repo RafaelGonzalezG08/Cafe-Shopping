@@ -1,95 +1,43 @@
-# Cafe Shopping - App de escritorio
+# Cafe Shopping — app de escritorio
 
-Envuelve todo el proyecto (Docker + frontend + agente de WhatsApp) en una sola
-app de Windows con icono propio. Al abrirla: prende Docker Desktop si hace
-falta, levanta los contenedores, espera a que la app este lista, prende el
-agente de WhatsApp, y muestra Cafe Shopping en una ventana nativa — todo lo
-que hacia `iniciar_cafe_shopping.ahk`, pero como una app instalable de verdad.
+Empaqueta el backend + el frontend + el agente de WhatsApp en una sola app de
+Windows instalable, con icono propio. Al abrirla: levanta el backend como
+proceso hijo, sirve la interfaz, prende el agente de WhatsApp y muestra todo en
+una ventana nativa. **No necesita Docker.**
 
-## 0) Primero, si es la primera vez en esta PC
+- `main.js` — ciclo de vida de Electron: arranque, ventana, splash, actualizador,
+  copia de respaldos a OneDrive, agente de WhatsApp.
+- `nativo.js` — arranque "sin Docker": levanta el backend hijo, sirve el frontend
+  compilado y renderiza las facturas en una BrowserWindow oculta.
+- `compilar.js` — genera el instalador completo en orden (ver abajo).
 
-Antes de compilar la app de escritorio, la PC necesita tener el proyecto ya
-instalado y funcionando al menos una vez (Docker con las imagenes construidas,
-`.env` creado, base de datos con las migraciones aplicadas). Para eso corre
-**`instalar.bat`** (doble clic) en la raiz del proyecto — automatiza Docker,
-el `.env`, las migraciones y deja el agente de WhatsApp instalado. Ver los
-comentarios de `instalar.ps1` para el detalle de que hace.
+## Compilar el instalador
 
-Una vez que eso corrio sin errores, sigue con los pasos de abajo para
-compilar la app de escritorio (que es solo la forma "un clic" de abrir todo
-lo que `instalar.bat` ya dejó funcionando).
-
-## Requisitos para compilarla
-
-- **Windows** (recomendado compilar en la misma PC donde se va a usar; evita
-  problemas de compilar instaladores de Windows desde otro sistema operativo).
-- [Node.js 20+](https://nodejs.org) instalado.
-- El resto del proyecto tal cual esta (no hace falta tocar nada mas).
-
-## Pasos
-
-Abre una terminal (PowerShell) en la carpeta `desktop/` de este proyecto:
+Requiere **Windows** (electron-builder genera un instalador de Windows) y
+**Node.js 20+**.
 
 ```powershell
 cd desktop
 npm install
-npm run dist
+node compilar.js 2.0.24
 ```
 
-Eso descarga Electron (una sola vez) y genera el instalador en
-`desktop/dist/`, algo como:
+El número es la versión nueva — **súbelo en cada release** (electron-updater
+compara versiones para ofrecer la actualización). `compilar.js`:
 
-```
-desktop/dist/Cafe Shopping Setup 1.0.0.exe
-```
+1. Compila el backend con webpack (`npm run build:desktop` → un solo `dist/main.js`).
+2. Compila el frontend con `VITE_API_URL=http://localhost:3010/api`.
+3. Escribe la versión en `desktop/package.json`.
+4. Corre `electron-builder`.
 
-Ese `.exe` es el instalador final: doble clic, siguiente, siguiente, y crea
-un acceso directo "Cafe Shopping" en el Escritorio y el menu de Inicio, con
-icono propio. Se puede copiar y compartir ese instalador a cualquier otra PC
-del negocio.
+Resultado: `desktop/dist/Cafe Shopping Setup 2.0.24.exe`.
 
-## Que incluye el instalador
-
-`npm run dist` empaqueta **todo el proyecto** (backend, frontend,
-`docker-compose.yml`, `send_whatsapp_agent.ahk`/`.exe`, etc.) dentro de la
-app instalada, en una carpeta de recursos interna. No hace falta tener el
-proyecto descomprimido en otro lado aparte.
-
-**Antes de compilar, revisa:**
-
-- `docker-compose.yml`, `.env` y `backend/.env` en la raiz del proyecto
-  deben tener ya la configuracion final (puertos, tasa de impuesto, etc.):
-  eso queda "congelado" dentro del instalador.
-- Si quieres que el agente de WhatsApp arranque como `.exe` (mas prolijo, sin
-  depender de tener AutoHotkey instalado en la PC del negocio), compila
-  primero `send_whatsapp_agent.ahk` a `.exe` (click derecho > Compile Script,
-  con AutoHotkey v1.1 instalado) y deja el `.exe` junto al `.ahk` en la raiz
-  del proyecto antes de correr `npm run dist`. Si no existe el `.exe`, la app
-  intenta abrir el `.ahk` directamente (requiere AutoHotkey instalado en esa
-  PC).
-
-## Requisitos para *usar* la app instalada (en la PC del negocio)
-
-Estos siguen siendo necesarios — la app de escritorio solo automatiza
-prenderlos, no los reemplaza:
-
-- **Docker Desktop** instalado.
-- **WhatsApp Desktop** instalado y con sesion iniciada.
-- Si el agente se empaqueto como `.ahk` (no `.exe`): **AutoHotkey v1.1**
-  instalado en esa PC.
-
-## Icono de la app
-
-Ya viene con un icono generico (`build/icon.png`). Para poner tu propio logo:
-reemplaza `desktop/build/icon.png` por una imagen cuadrada (idealmente
-512x512px, fondo transparente) y vuelve a correr `npm run dist` —
-electron-builder genera el `.ico` de Windows automaticamente a partir de ese
-PNG.
+> La primera vez, electron-builder descarga Electron (~110 MB) y `winCodeSign`.
+> Ese último trae symlinks de macOS que Windows sólo deja crear con **Modo de
+> desarrollador** activado (`ms-settings:developers`) o en una terminal de
+> administrador. Si el build falla en "winCodeSign", esa es la causa.
 
 ## Probar sin compilar el instalador
-
-Para ver la app corriendo sin generar el `.exe` cada vez (util mientras
-ajustas algo):
 
 ```powershell
 cd desktop
@@ -97,12 +45,27 @@ npm install
 npm start
 ```
 
-## Notas
+> Usa la base de datos real de la app instalada
+> (`%APPDATA%\cafe-shopping-desktop\datos\`). Para una base aparte:
+> `set CAFE_SHOPPING_TEST_DATA_DIR=C:\ruta\temporal` antes de `npm start`.
 
-- Al cerrar la ventana, los contenedores de Docker **se quedan corriendo**
-  en segundo plano (asi la proxima vez que abras la app, carga al instante).
-  Si quieres apagarlos del todo, usa Docker Desktop o `docker compose down`
-  desde una terminal.
-- Esta app no reemplaza los `.env`/`docker-compose.yml` del proyecto — los
-  usa tal cual. Cualquier cambio ahi requiere volver a compilar (`npm run
-  dist`) para que quede reflejado en el instalador.
+## Requisitos para *usar* la app instalada
+
+- **WhatsApp Desktop** instalado y con sesión iniciada (para el envío de facturas).
+- Si el agente se empaquetó como `.ahk` en vez de `.exe`: **AutoHotkey v1.1**.
+  Si `send_whatsapp_agent.exe` existe en la raíz del repo al compilar, se empaqueta
+  ese y no hace falta AutoHotkey en la PC del negocio.
+
+## Icono
+
+`build/icon.png` (PNG cuadrado, idealmente 512×512, fondo transparente).
+electron-builder genera el `.ico` de Windows a partir de ese archivo.
+
+## Publicar releases automáticamente
+
+`.github/workflows/build.yml` compila y sube el instalador al empujar un tag:
+
+```bash
+git tag v2.0.24
+git push --tags
+```

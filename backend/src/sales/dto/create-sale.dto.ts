@@ -10,10 +10,11 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MetodoPago } from '@prisma/client';
+import { MetodoPago } from '../../common/enums';
 
 export class SaleItemDto {
   @ApiProperty({ required: false, description: 'ID del producto si viene del catalogo' })
@@ -39,7 +40,10 @@ export class SaleItemDto {
 }
 
 export class CreateSaleDto {
-  @ApiProperty({ required: false, description: 'Cliente asociado (requerido si metodoPago=CREDITO)' })
+  @ApiProperty({
+    required: false,
+    description: 'Cliente asociado (requerido si metodoPago=CREDITO)',
+  })
   @IsOptional()
   @IsString()
   clientId?: string;
@@ -55,18 +59,36 @@ export class CreateSaleDto {
   @Type(() => SaleItemDto)
   items: SaleItemDto[];
 
-  @ApiProperty({ required: false, description: 'Tasa de impuesto a aplicar (0.18 = 18%). Si se omite se usa la tasa del negocio.' })
+  @ApiProperty({
+    required: false,
+    description: 'Tasa de impuesto a aplicar (0.18 = 18%). Si se omite se usa la tasa del negocio.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   tasaImpuesto?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Descuento sobre el bruto de la venta, en porcentaje (0-100).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0, { message: 'El descuento no puede ser negativo.' })
+  @Max(100, { message: 'El descuento no puede ser mayor a 100%.' })
+  descuentoPct?: number;
 
   @ApiProperty({ required: false, description: 'Fecha limite de pago si metodoPago=CREDITO' })
   @IsOptional()
   @IsISO8601()
   fechaVencimiento?: string;
 
-  @ApiProperty({ required: false, default: true, description: 'Genera automaticamente el PNG de la factura al crear la venta' })
+  @ApiProperty({
+    required: false,
+    default: true,
+    description: 'Genera automaticamente el PNG de la factura al crear la venta',
+  })
   @IsOptional()
   generarFactura?: boolean;
 
@@ -82,4 +104,14 @@ export class CreateSaleDto {
   @IsOptional()
   @IsISO8601({}, { message: 'La fecha de entrega no es valida.' })
   fechaEntrega?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Codigo (VNT-XXXX) de la venta hecha desde el punto de venta del catalogo web. ' +
+      'Uso interno del relevo; unico, evita crear la misma venta dos veces.',
+  })
+  @IsOptional()
+  @IsString()
+  webCodigo?: string;
 }

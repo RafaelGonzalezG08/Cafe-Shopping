@@ -1,22 +1,57 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Search, Phone, Mail, X } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { useAuthStore } from '../../store/auth.store';
 import type { Client, MetodoPago } from '../../types';
 
 export default function Clients() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const esAdmin = user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  // Seleccion multiple: para borrar varios clientes sin historial de una
+  // vez, en lugar de entrar a cada uno por separado.
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+
+  function toggleSeleccion(id: string) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', 'all', search],
     queryFn: async () => (await api.get('/clients', { params: { search: search || undefined } })).data,
+  });
+
+  const bulkEliminar = useMutation({
+    mutationFn: async () =>
+      (await api.post('/clients/bulk/eliminar', { ids: [...seleccionados] })).data as {
+        eliminados: number;
+        omitidos: { id: string; nombre: string; motivo: string }[];
+      },
+    onSuccess: (data) => {
+      toast.success(
+        data.omitidos.length > 0
+          ? `${data.eliminados} eliminados. ${data.omitidos.length} no se pudieron (ya tienen historial).`
+          : `${data.eliminados} clientes eliminados.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setSeleccionados(new Set());
+      if (selectedId && seleccionados.has(selectedId)) setSelectedId(null);
+    },
+    onError: () => toast.error('No se pudo completar la eliminacion.'),
   });
 
   const { data: selectedClient } = useQuery<Client>({
@@ -36,29 +71,69 @@ export default function Clients() {
     },
   });
 
+  async function exportarCsv() {
+    const response = await api.get('/clients/export', { responseType: 'blob' });
+    const url = URL.createObjectURL(response.data as Blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'clientes.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <PageHeader
         title="Clientes"
         subtitle="Historial de compras y deudas por cliente"
         action={
-          <Button onClick={() => setShowForm(true)}>
-            <Plus size={16} /> Nuevo cliente
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={exportarCsv}>
+              <Download size={16} /> Exportar Excel
+            </Button>
+            {esAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setModoSeleccion((v) => !v);
+                  setSeleccionados(new Set());
+                }}
+              >
+                {modoSeleccion ? 'Cancelar seleccion' : 'Seleccionar varios'}
+              </Button>
+            )}
+            <Button onClick={() => setShowForm(true)}>
+              <Plus size={16} /> Nuevo cliente
+            </Button>
+          </div>
         }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div>
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-porcelain-300 bg-white px-3 py-2.5">
-            <Search size={16} className="text-muted" />
+          <div className="buscador mb-4">
+            <Search size={16} className="shrink-0 text-muted" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nombre, telefono o correo..."
-              className="w-full text-sm outline-none"
             />
           </div>
+
+          {modoSeleccion && seleccionados.size > 0 && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
+              <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionados</span>
+              <Button
+                size="sm"
+                className="ml-auto !bg-brick-600 hover:!bg-brick-700"
+                disabled={bulkEliminar.isPending}
+                onClick={() => bulkEliminar.mutate()}
+              >
+                {bulkEliminar.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Eliminar
+              </Button>
+            </div>
+          )}
 
           {isLoading ? (
             <Card className="h-40 animate-pulse" />
@@ -69,16 +144,29 @@ export default function Clients() {
               {clients.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => setSelectedId(c.id)}
+                  onClick={() => (modoSeleccion ? toggleSeleccion(c.id) : setSelectedId(c.id))}
                   className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-porcelain-100 ${
                     selectedId === c.id ? 'bg-copper-50' : ''
                   }`}
                 >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{c.nombre}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted">
-                      <Phone size={11} /> {c.telefono}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    {modoSeleccion && (
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                          seleccionados.has(c.id)
+                            ? 'border-copper-600 bg-copper-600 text-white'
+                            : 'border-porcelain-400'
+                        }`}
+                      >
+                        {seleccionados.has(c.id) && <Check size={13} strokeWidth={3} />}
+                      </span>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-ink">{c.nombre}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted">
+                        <Phone size={11} /> {c.telefono}
+                      </p>
+                    </div>
                   </div>
                   {Boolean(c.deudaPendiente) && (
                     <Badge tone="brick">Debe RD$ {formatMoney(c.deudaPendiente!)}</Badge>
@@ -91,7 +179,7 @@ export default function Clients() {
 
         <div>
           {selectedClient ? (
-            <ClientDetail client={selectedClient} />
+            <ClientDetail client={selectedClient} onDeleted={() => setSelectedId(null)} />
           ) : (
             <Card className="p-6 text-center text-sm text-muted">
               Selecciona un cliente para ver su historial y deudas.
@@ -107,9 +195,26 @@ export default function Clients() {
   );
 }
 
-function ClientDetail({ client }: { client: Client }) {
+function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => void }) {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const esAdmin = user?.role === 'ADMIN';
   const [abonoAmount, setAbonoAmount] = useState<Record<string, string>>({});
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+
+  // Borrar un cliente es solo de ADMIN (@Roles(Role.ADMIN) en
+  // clients.controller.ts). El backend ademas se niega si el cliente ya tiene
+  // ventas o deudas — ese mensaje es el que se muestra tal cual, porque
+  // explica exactamente por que no se puede.
+  const deleteClient = useMutation({
+    mutationFn: async () => (await api.delete(`/clients/${client.id}`)).data,
+    onSuccess: () => {
+      toast.success('Cliente eliminado.');
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      onDeleted();
+    },
+    onSettled: () => setConfirmandoBorrado(false),
+  });
 
   const registerPayment = useMutation({
     mutationFn: async ({ debtId, amount, metodo }: { debtId: string; amount: number; metodo: MetodoPago }) =>
@@ -155,7 +260,7 @@ function ClientDetail({ client }: { client: Client }) {
                   {d.dueDate && (
                     <p className="mt-1 text-xs text-muted">Vence: {formatDate(d.dueDate)}</p>
                   )}
-                  <div className="mt-2 flex gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     <input
                       type="number"
                       min="0"
@@ -202,6 +307,42 @@ function ClientDetail({ client }: { client: Client }) {
           </div>
         )}
       </Card>
+
+      {esAdmin && (
+        <Card className="p-4">
+          {confirmandoBorrado ? (
+            <>
+              <p className="mb-2 text-sm font-semibold text-ink">Eliminar a {client.nombre}?</p>
+              <p className="mb-3 text-xs text-muted">
+                Esto no se puede deshacer. Si el cliente ya tiene ventas o deudas registradas, el sistema no lo va a
+                dejar borrar (haria desaparecer el rastro de facturas a su nombre).
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoBorrado(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  disabled={deleteClient.isPending}
+                  onClick={() => deleteClient.mutate()}
+                >
+                  {deleteClient.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  Si, eliminar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmandoBorrado(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium text-brick-500 hover:bg-brick-100"
+            >
+              <Trash2 size={15} /> Eliminar cliente
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

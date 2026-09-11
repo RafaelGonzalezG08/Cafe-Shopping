@@ -1,6 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { EstadoPedido, Role } from '@prisma/client';
+import { EstadoPedido, Role } from '../common/enums';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -39,7 +49,11 @@ export class OrdersController {
 
   /** Cambia estado / fecha / notas. Con estado=ENTREGADO el pedido se borra. */
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateOrderDto, @CurrentUser() user: AuthenticatedUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.ordersService.update(id, dto, user.userId);
   }
 

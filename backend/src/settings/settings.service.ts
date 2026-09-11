@@ -38,7 +38,7 @@ export class SettingsService {
     // a cuadrado y respetando los SVG. Ver image.util.ts.
     const optimized = await optimizeLogo(buffer, mimetype);
     const key = `branding/logo-${Date.now()}.${optimized.ext}`;
-    const logoUrl = await this.storage.upload(optimized.buffer, key, optimized.contentType);
+    const logoUrl = await this.storage.upload(optimized.buffer, key);
     const updated = await this.prisma.businessProfile.update({
       where: { id: existing.id },
       data: { logoUrl },

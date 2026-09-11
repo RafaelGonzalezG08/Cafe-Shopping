@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check, Package } from 'lucide-react';
-import { api, apiUrl } from '../../lib/api';
+import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
+import { coincideBusqueda } from '../../lib/search';
 import { Button, Card } from '../../components/ui';
+import { FacturaImagen } from '../../components/FacturaImagen';
+import { ClientPicker } from '../../components/ClientPicker';
 import type { Client, MetodoPago, Product, Sale } from '../../types';
 
 interface CartLine {
@@ -27,11 +30,10 @@ export default function POS() {
   const [cart, setCart] = usePersistedState<CartLine[]>('pos:carrito', []);
   const [manualDesc, setManualDesc] = usePersistedState('pos:manual-desc', '');
   const [manualPrice, setManualPrice] = usePersistedState('pos:manual-precio', '');
-  const [clientSearch, setClientSearch] = useState('');
-  const [clientModalOpen, setClientModalOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = usePersistedState<string | undefined>('pos:cliente-id', undefined);
   const [selectedClient, setSelectedClient] = usePersistedState<Client | null>('pos:cliente', null);
   const [metodoPago, setMetodoPago] = usePersistedState<MetodoPago>('pos:metodo-pago', 'EFECTIVO');
+  const [descuentoPct, setDescuentoPct] = usePersistedState('pos:descuento', '');
   const [fechaVencimiento, setFechaVencimiento] = usePersistedState('pos:vencimiento', '');
   // Pedido por entregar: la pieza no sale hoy con el cliente, queda en el
   // registro de Pedidos hasta que se entregue.
@@ -42,10 +44,29 @@ export default function POS() {
   // haria pensar que la venta se acaba de hacer otra vez.
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
-  const { data: products = [] } = useQuery<Product[]>({
+  const { data: products = [], isSuccess: productsLoaded } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: async () => (await api.get('/products')).data,
   });
+
+  // El carrito se guarda en el navegador. Si un producto que quedo dentro se
+  // borro despues (limpieza de duplicados, importacion de inventario, etc.),
+  // su ID ya no vale y la venta se caia. Al cargar la lista real de productos
+  // se limpian esas lineas muertas y se avisa cuales.
+  useEffect(() => {
+    if (!productsLoaded) return;
+    const vivos = new Set(products.map((p) => p.id));
+    const muertas = cart.filter((l) => l.productId && !vivos.has(l.productId));
+    if (muertas.length === 0) return;
+    setCart((prev) => prev.filter((l) => !l.productId || vivos.has(l.productId)));
+    toast.error(
+      `Se quitaron del carrito piezas que ya no estan en el inventario: ${muertas
+        .map((l) => l.descripcion)
+        .join(', ')}.`,
+      { id: 'carrito-piezas-muertas', duration: 6000 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsLoaded, products]);
 
   const { data: businessProfile } = useQuery<{ tasaImpuesto: number }>({
     queryKey: ['settings', 'business-profile'],
@@ -54,27 +75,23 @@ export default function POS() {
   });
   const tasaImpuesto = businessProfile?.tasaImpuesto ?? 0;
 
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ['clients', clientSearch],
-    queryFn: async () => (await api.get('/clients', { params: { search: clientSearch || undefined } })).data,
-    enabled: metodoPago === 'CREDITO' || clientSearch.length > 0 || clientModalOpen,
-  });
-
   const filteredProducts = useMemo(
-    () =>
-      products.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-          p.sku.toLowerCase().includes(search.toLowerCase()),
-      ),
+    () => products.filter((p) => coincideBusqueda(`${p.nombre} ${p.sku}`, search)),
     [products, search],
   );
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
+    const bruto = cart.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
+    const descuento = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
+    const subtotal = Math.round(bruto * (1 - descuento / 100) * 100) / 100;
     const impuestos = Math.round(subtotal * tasaImpuesto * 100) / 100;
-    return { subtotal: Math.round(subtotal * 100) / 100, impuestos, total: Math.round((subtotal + impuestos) * 100) / 100 };
-  }, [cart, tasaImpuesto]);
+    return {
+      bruto: Math.round(bruto * 100) / 100,
+      subtotal,
+      impuestos,
+      total: Math.round((subtotal + impuestos) * 100) / 100,
+    };
+  }, [cart, tasaImpuesto, descuentoPct]);
 
   function addProduct(product: Product) {
     setCart((prev) => {
@@ -147,24 +164,27 @@ export default function POS() {
     setCart([]);
     setSelectedClientId(undefined);
     setSelectedClient(null);
-    setClientSearch('');
     setMetodoPago('EFECTIVO');
     setFechaVencimiento('');
     setEsPedido(false);
     setFechaEntrega('');
+    setDescuentoPct('');
     setCompletedSale(null);
   }
 
   const createSale = useMutation({
     mutationFn: async () => {
       const { data } = await api.post('/sales', {
-        clientId: selectedClientId,
+        clientId: selectedClientId || undefined,
         metodoPago,
         fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
         esPedido: esPedido || undefined,
         fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
+        descuentoPct: Number(descuentoPct) || undefined,
         items: cart.map((l) => ({
-          productId: l.productId,
+          // `|| undefined`: un articulo manual no lleva producto; si se manda
+          // como cadena vacia el backend lo toma como un producto real y falla.
+          productId: l.productId || undefined,
           descripcion: l.descripcion,
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,
@@ -187,15 +207,15 @@ export default function POS() {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-      {/* Catalogo */}
-      <div>
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-porcelain-300 bg-white px-3 py-2.5">
-          <Search size={16} className="text-muted" />
+      {/* Catalogo. En celular va DESPUES del carrito (order-2): asi el carrito/cobro
+          queda arriba, sin tener que scrollear todo el catalogo para pagar. */}
+      <div className="order-2 lg:order-1">
+        <div className="buscador mb-4">
+          <Search size={16} className="shrink-0 text-muted" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o codigo..."
-            className="w-full text-sm outline-none"
             autoFocus
           />
         </div>
@@ -211,10 +231,10 @@ export default function POS() {
             <button
               key={product.id}
               onClick={() => addProduct(product)}
-              className={`relative flex flex-col items-start overflow-hidden rounded-xl2 border text-left transition-colors ${
+              className={`relative flex flex-col items-start overflow-hidden rounded-xl2 text-left transition-all ${
                 enCarrito
-                  ? 'border-sage-500 bg-sage-100 hover:bg-sage-100'
-                  : 'border-porcelain-300 bg-white hover:border-copper-400 hover:bg-copper-50'
+                  ? 'bg-sage-100 shadow-neu-inset ring-1 ring-sage-500/40'
+                  : 'bg-porcelain-100 shadow-neu-sm hover:-translate-y-0.5 active:shadow-neu-pressed'
               }`}
             >
               {enCarrito && (
@@ -226,7 +246,9 @@ export default function POS() {
               <div className="flex h-24 w-full items-center justify-center bg-porcelain-200">
                 {product.imageUrl ? (
                   <img
-                    src={product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl)}
+                    src={urlConToken(
+                      product.imageUrl.startsWith('http') ? product.imageUrl : apiUrl(product.imageUrl),
+                    )}
                     alt={product.nombre}
                     className="h-full w-full object-cover"
                   />
@@ -276,7 +298,7 @@ export default function POS() {
       </div>
 
       {/* Carrito */}
-      <Card className="flex h-fit flex-col p-4">
+      <Card className="order-1 flex h-fit flex-col p-4 lg:order-2">
         <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
           Carrito ({cart.length})
         </h2>
@@ -309,7 +331,28 @@ export default function POS() {
         <div className="mb-3 space-y-1 border-t border-porcelain-200 pt-3 text-sm tabular-nums">
           <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>RD$ {formatMoney(totals.subtotal)}</span>
+            <span>RD$ {formatMoney(totals.bruto)}</span>
+          </div>
+          <div className="flex items-center justify-between text-muted">
+            <div className="flex items-center gap-1.5">
+              <span>Descuento</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={descuentoPct}
+                onChange={(e) => setDescuentoPct(e.target.value)}
+                placeholder="0"
+                // Sin flechitas de subir/bajar: el descuento se escribe a
+                // mano, no tiene sentido ir clic por clic hasta un numero.
+                className="w-14 appearance-none rounded border border-porcelain-300 px-1.5 py-0.5 text-right text-xs outline-none [appearance:textfield] focus:border-copper-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span className="text-xs">%</span>
+            </div>
+            <span>
+              {totals.bruto > totals.subtotal ? `-RD$ ${formatMoney(totals.bruto - totals.subtotal)}` : 'RD$ 0.00'}
+            </span>
           </div>
           <div className="flex justify-between text-muted">
             <span>Impuestos ({Math.round(tasaImpuesto * 100)}%)</span>
@@ -323,7 +366,7 @@ export default function POS() {
 
         <div className="mb-3">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Metodo de pago</p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {METODOS.map((m) => (
               <button
                 key={m}
@@ -341,92 +384,14 @@ export default function POS() {
         </div>
 
         <div className="mb-3">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            Cliente {metodoPago === 'CREDITO' && <span className="text-brick-500">(requerido)</span>}
-          </p>
-
-          {selectedClient ? (
-            <div className="mb-1.5 flex items-center justify-between rounded-lg border border-sage-500 bg-sage-100 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sage-500 text-white">
-                  <Check size={12} strokeWidth={3} />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-sage-700">{selectedClient.nombre}</p>
-                  <p className="text-xs text-sage-600">{selectedClient.telefono}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedClientId(undefined);
-                  setSelectedClient(null);
-                  setClientSearch('');
-                }}
-                className="rounded p-1 text-sage-600 hover:bg-sage-500/10"
-                title="Quitar cliente"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setClientModalOpen(true)}
-              className="mb-1.5 flex w-full items-center gap-2 rounded-lg border border-porcelain-300 px-3 py-2 text-left text-sm text-muted outline-none transition-colors hover:border-copper-400 focus:border-copper-500"
-            >
-              <Search size={15} /> Buscar cliente...
-            </button>
-          )}
-
-          {clientModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-              <Card className="flex max-h-[70vh] w-full max-w-md flex-col p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-display text-sm font-bold uppercase tracking-wide text-muted">
-                    Buscar cliente
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setClientModalOpen(false)}
-                    className="rounded p-1 text-muted hover:bg-porcelain-100"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <input
-                  autoFocus
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  placeholder="Nombre o telefono..."
-                  className="mb-3 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-                />
-                <div className="flex-1 overflow-y-auto rounded-lg border border-porcelain-200">
-                  {clients.length === 0 ? (
-                    <p className="px-3 py-3 text-sm text-muted">
-                      {clientSearch ? 'Sin resultados.' : 'Escribe para buscar un cliente.'}
-                    </p>
-                  ) : (
-                    clients.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClientId(c.id);
-                          setSelectedClient(c);
-                          setClientModalOpen(false);
-                        }}
-                        className="block w-full border-b border-porcelain-100 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-porcelain-100"
-                      >
-                        <span className="font-medium text-ink">{c.nombre}</span>{' '}
-                        <span className="text-xs text-muted">{c.telefono}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Card>
-            </div>
-          )}
+          <ClientPicker
+            client={selectedClient}
+            onChange={(c) => {
+              setSelectedClient(c);
+              setSelectedClientId(c?.id);
+            }}
+            required={metodoPago === 'CREDITO'}
+          />
 
           {metodoPago === 'CREDITO' && (
             <input
@@ -483,24 +448,40 @@ export default function POS() {
   );
 }
 
-function InvoicePreview({
-  sale,
+export function InvoicePreview({
+  sale: saleInicial,
   onNewSale,
 }: {
   sale: Sale;
   onNewSale: () => void;
 }) {
+  // Tras encolar el envío, la factura pasa por EN_COLA → ENVIADA/ERROR en
+  // segundo plano. Se refresca la venta cada 4s mientras esté en cola para
+  // que el cajero vea el resultado sin recargar.
+  const { data: sale = saleInicial } = useQuery<Sale>({
+    queryKey: ['sale', saleInicial.id],
+    queryFn: async () => (await api.get(`/sales/${saleInicial.id}`)).data,
+    initialData: saleInicial,
+    refetchInterval: (query) =>
+      query.state.data?.invoice?.whatsappEstado === 'EN_COLA' ? 4000 : false,
+  });
+
+  const queryClient = useQueryClient();
   const png = sale.invoice?.pngUrl;
-  const imageSrc = png?.startsWith('http') ? png : png ? apiUrl(png) : undefined;
+  const waEstado = sale.invoice?.whatsappEstado;
 
   const sendWhatsapp = useMutation({
     mutationFn: async () =>
       (await api.post(`/sales/${sale.id}/send-invoice-whatsapp`, undefined, { skipErrorToast: true })).data,
-    onSuccess: () => {
-      toast.success('Factura enviada por WhatsApp.');
+    onSuccess: (invoice) => {
+      queryClient.setQueryData<Sale>(['sale', sale.id], (prev) =>
+        prev ? { ...prev, invoice: { ...prev.invoice, ...invoice } } : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: ['sale', sale.id] });
+      toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message ?? 'No se pudo enviar la factura por WhatsApp.');
+      toast.error(error?.response?.data?.message ?? 'No se pudo poner la factura en cola.');
     },
   });
 
@@ -511,28 +492,45 @@ function InvoicePreview({
           <p className="font-display text-sm font-bold text-sage-600">Venta registrada &middot; {sale.invoice?.numero}</p>
         </div>
         <div className="p-5">
-          {imageSrc ? (
-            <img src={imageSrc} alt="Factura" className="mx-auto rounded-lg border border-porcelain-200" />
-          ) : (
-            <p className="py-8 text-center text-sm text-muted">
-              La factura se esta generando o no se pudo renderizar. Puedes reintentar el envio.
-            </p>
-          )}
+          <FacturaImagen pngUrl={png} className="mx-auto max-h-[60vh]" />
           <div className="receipt-edge mt-0" />
         </div>
-        <div className="space-y-2 p-5 pt-0">
+
+        {waEstado && (
+          <div className="px-5">
+            {waEstado === 'EN_COLA' && (
+              <p className="flex items-center gap-2 rounded-lg bg-copper-50 px-3 py-2 text-sm text-copper-700">
+                <Loader2 size={15} className="animate-spin" /> En cola de envío por WhatsApp…
+              </p>
+            )}
+            {waEstado === 'ENVIADA' && (
+              <p className="flex items-center gap-2 rounded-lg bg-sage-100 px-3 py-2 text-sm font-medium text-sage-700">
+                <Check size={15} /> Enviada por WhatsApp
+              </p>
+            )}
+            {waEstado === 'ERROR' && (
+              <p className="rounded-lg bg-brick-100 px-3 py-2 text-sm text-brick-700">
+                No se pudo enviar: {sale.invoice?.ultimoError ?? 'error desconocido'}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2 p-5">
           {sale.client?.telefono ? (
             <Button
               className="w-full"
               onClick={() => sendWhatsapp.mutate()}
-              disabled={sendWhatsapp.isPending}
+              disabled={sendWhatsapp.isPending || waEstado === 'EN_COLA'}
             >
-              {sendWhatsapp.isPending ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <MessageCircle size={16} />
-              )}
-              {sendWhatsapp.isPending ? 'Enviando...' : 'Enviar por WhatsApp'}
+              {sendWhatsapp.isPending ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+              {waEstado === 'EN_COLA'
+                ? 'En cola…'
+                : waEstado === 'ENVIADA'
+                  ? 'Enviar de nuevo por WhatsApp'
+                  : waEstado === 'ERROR'
+                    ? 'Reintentar envío por WhatsApp'
+                    : 'Enviar por WhatsApp'}
             </Button>
           ) : (
             <Button className="w-full" disabled>

@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../common/enums';
 import { UsersService } from './users.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -18,6 +19,17 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  /**
+   * Cambio de la propia clave. Es el unico endpoint de este controlador
+   * abierto a cualquier rol: un cajero tiene que poder cambiar la suya, y
+   * solo puede tocar la propia porque el usuario sale del token.
+   */
+  @Patch('me/password')
+  @Roles(Role.ADMIN, Role.CAJERO, Role.CONTABILIDAD)
+  changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.changePassword(user.userId, dto);
   }
 
   @Patch(':id/activo')

@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
+import { useTheme } from '../../lib/useTheme';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { ClientDebt } from '../../types';
@@ -25,6 +25,10 @@ interface Cashflow {
   ingresos: number;
   egresos: number;
   neto: number;
+  /** Contado + abonos cobrados - gastos. Dinero que de verdad entro a la caja. */
+  saldoEnCaja: number;
+  /** Todas las ventas (contado y credito) - gastos. Foto contable del periodo. */
+  balanceTotal: number;
 }
 
 export default function Reports() {
@@ -33,6 +37,13 @@ export default function Reports() {
   const [group, setGroup] = usePersistedState<'day' | 'week' | 'month' | 'year'>('reportes:agrupar', 'day');
   const [from, setFrom] = usePersistedState('reportes:desde', '');
   const [to, setTo] = usePersistedState('reportes:hasta', '');
+
+  // Recharts pinta con atributos SVG, no con clases: los colores del grafico
+  // se pasan a mano segun el tema.
+  const { esOscuro } = useTheme();
+  const chart = esOscuro
+    ? { grid: '#68504F', eje: '#CDA3A5', barra: '#E57D90', tipBg: '#4A3739', tipBorde: '#68504F', tipTexto: '#F5EBEC' }
+    : { grid: '#E3CED4', eje: '#9A828A', barra: '#E57D90', tipBg: '#FFFFFF', tipBorde: '#E3CED4', tipTexto: '#33232A' };
 
   const params = { from: from || undefined, to: to || undefined };
 
@@ -101,31 +112,45 @@ export default function Reports() {
       </div>
 
       <p className="mb-5 -mt-3 text-xs text-muted">
-        {from || to
-          ? 'Usando el rango de fechas de arriba.'
-          : { day: 'Mostrando los ultimos 30 dias.', week: 'Mostrando las ultimas ~12 semanas.', month: 'Mostrando el ultimo año.', year: 'Mostrando los ultimos 5 años.' }[
-              group
-            ]}
+        {from || to ? 'Usando el rango de fechas de arriba.' : 'Mostrando todo el historial.'}
       </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-sage-600">
             RD$ {formatMoney(cashflow?.ingresos ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Todas las ventas del periodo</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Egresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-brick-500">
             RD$ {formatMoney(cashflow?.egresos ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Gastos del periodo</p>
+        </Card>
+        <Card className="p-4 ring-1 ring-copper-400">
+          <p className="text-xs font-medium uppercase text-copper-600">Saldo en caja</p>
+          <p
+            className={`mt-1 font-display text-xl font-bold tabular-nums ${
+              (cashflow?.saldoEnCaja ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
+            }`}
+          >
+            RD$ {formatMoney(cashflow?.saldoEnCaja ?? 0)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted">Contado + abonos cobrados &minus; gastos</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-medium uppercase text-muted">Flujo neto</p>
-          <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">
-            RD$ {formatMoney(cashflow?.neto ?? 0)}
+          <p className="text-xs font-medium uppercase text-muted">Balance total</p>
+          <p
+            className={`mt-1 font-display text-xl font-bold tabular-nums ${
+              (cashflow?.balanceTotal ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
+            }`}
+          >
+            RD$ {formatMoney(cashflow?.balanceTotal ?? 0)}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Todas las ventas &minus; gastos</p>
         </Card>
       </div>
 
@@ -139,14 +164,21 @@ export default function Reports() {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesReport}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E6C7C9" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#93767C' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#93767C' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: chart.eje }} />
+                <YAxis tick={{ fontSize: 11, fill: chart.eje }} />
                 <Tooltip
                   formatter={(value: number) => `RD$ ${formatMoney(value)}`}
-                  contentStyle={{ borderRadius: 8, borderColor: '#E6C7C9', fontSize: 13 }}
+                  cursor={{ fill: chart.grid, opacity: 0.3 }}
+                  contentStyle={{
+                    borderRadius: 8,
+                    background: chart.tipBg,
+                    borderColor: chart.tipBorde,
+                    color: chart.tipTexto,
+                    fontSize: 13,
+                  }}
                 />
-                <Bar dataKey="total" fill="#B75D66" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" fill={chart.barra} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

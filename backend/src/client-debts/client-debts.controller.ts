@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { EstadoDeuda, Role } from '@prisma/client';
+import { EstadoDeuda, Role } from '../common/enums';
 import { ClientDebtsService } from './client-debts.service';
 import { RegisterPaymentDto } from './dto/register-payment.dto';
+import { DeletePaymentDto } from './dto/delete-payment.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -29,6 +30,17 @@ export class ClientDebtsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.debtsService.registerPayment(id, dto, user.userId);
+  }
+
+  @Delete('payments/:paymentId')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.CONTABILIDAD)
+  removePayment(
+    @Param('paymentId') paymentId: string,
+    @Body() dto: DeletePaymentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.debtsService.removePayment(paymentId, dto, user.userId);
   }
 
   @Post(':id/remind')

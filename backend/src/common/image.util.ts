@@ -16,6 +16,18 @@ const PRODUCT_SIZE = 1200;
 /** Lado maximo del logo del negocio (se muestra a 42px en la factura y 36px en el menu). */
 const LOGO_SIZE = 256;
 
+/**
+ * Limite de tamaño ANTES de comprimir, para el interceptor de subida.
+ *
+ * La foto se reduce y convierte a WebP en el servidor (ver
+ * optimizeProductImage), asi que este numero no es "cuanto pesa la foto
+ * final" - es solo un techo razonable para lo que sube el celular. Los
+ * celulares modernos (48+ MP) sacan fotos de 10-20 MB sin comprimir; 5 MB
+ * rechazaba fotos reales de joyeria antes de que el servidor llegara a
+ * comprimirlas.
+ */
+export const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+
 export interface OptimizedImage {
   buffer: Buffer;
   contentType: string;
@@ -39,11 +51,18 @@ export interface OptimizedImage {
  * WebP en vez de JPEG porque pesa bastante menos con la misma calidad visual y
  * conserva la transparencia (util para fotos de joyas recortadas del fondo).
  */
-export async function optimizeProductImage(buffer: Buffer, mimetype: string): Promise<OptimizedImage> {
+export async function optimizeProductImage(
+  buffer: Buffer,
+  mimetype: string,
+): Promise<OptimizedImage> {
   try {
     const optimized = await sharp(buffer)
       .rotate() // respeta la orientacion EXIF del celular (si no, salen acostadas)
-      .resize(PRODUCT_SIZE, PRODUCT_SIZE, { fit: 'cover', position: 'centre', withoutEnlargement: true })
+      .resize(PRODUCT_SIZE, PRODUCT_SIZE, {
+        fit: 'cover',
+        position: 'centre',
+        withoutEnlargement: true,
+      })
       .webp({ quality: 90 })
       .toBuffer();
 

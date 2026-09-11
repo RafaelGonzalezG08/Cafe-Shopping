@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../common/enums';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -48,7 +48,11 @@ export class SalesController {
   @Put(':id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() dto: UpdateSaleDto, @CurrentUser() user: AuthenticatedUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateSaleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.salesService.update(id, dto, user.userId);
   }
 
@@ -63,7 +67,11 @@ export class SalesController {
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  remove(@Param('id') id: string, @Body() dto: DeleteSaleDto, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeleteSaleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.salesService.remove(id, dto, user.userId);
   }
 

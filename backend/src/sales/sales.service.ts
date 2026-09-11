@@ -1,9 +1,17 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { EstadoFactura, MetodoPago, Prisma } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { EstadoFactura, MetodoPago } from '../common/enums';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { CatalogoService } from '../catalogo/catalogo.service';
 import { parseFromDate, parseToDate } from '../common/date-range';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -13,6 +21,10 @@ export interface SaleTotals {
   subtotal: number;
   impuestos: number;
   total: number;
+}
+
+function redondear(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 const DEFAULT_TAX_RATE = Number(process.env.DEFAULT_TAX_RATE ?? 0.18);
@@ -25,23 +37,73 @@ export class SalesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly invoicesService: InvoicesService,
+    private readonly catalogo: CatalogoService,
   ) {}
 
-  /** Calcula subtotal/impuestos/total. Expuesto tambien para pruebas unitarias. */
-  static calculateTotals(items: { cantidad: number; precioUnitario: number }[], tasaImpuesto: number): SaleTotals {
-    const subtotal = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0);
-    const impuestos = Math.round(subtotal * tasaImpuesto * 100) / 100;
-    const total = Math.round((subtotal + impuestos) * 100) / 100;
-    return { subtotal: Math.round(subtotal * 100) / 100, impuestos, total };
+  /**
+   * Toda venta que descuenta o devuelve stock de un producto del catalogo
+   * puede sacar o volver a meter una pieza del sitio publico (que solo
+   * muestra piezas con existencia). Nunca tumba la venta si falla: es el
+   * mismo motivo que en ProductsService.
+   */
+  private async regenerarCatalogo(): Promise<void> {
+    try {
+      const resultado = await this.catalogo.generar();
+      if (!resultado.ok) {
+        this.logger.warn(`No se pudo actualizar el catalogo web: ${resultado.error}`);
+      }
+    } catch (error) {
+      this.logger.warn(`No se pudo actualizar el catalogo web: ${error}`);
+    }
+  }
+
+  /**
+   * Calcula subtotal/impuestos/total. Expuesto tambien para pruebas unitarias.
+   *
+   * `descuentoPct` (0-100) se resta del bruto ANTES de sacar el impuesto: es
+   * como se factura normalmente (el impuesto se calcula sobre lo que el
+   * cliente de verdad paga, no sobre el precio de lista).
+   */
+  static calculateTotals(
+    items: { cantidad: number; precioUnitario: number }[],
+    tasaImpuesto: number,
+    descuentoPct = 0,
+  ): SaleTotals {
+    const bruto = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0);
+    const subtotal = redondear(bruto * (1 - descuentoPct / 100));
+    const impuestos = redondear(subtotal * tasaImpuesto);
+    const total = redondear(subtotal + impuestos);
+    return { subtotal, impuestos, total };
   }
 
   async create(dto: CreateSaleDto, userId: string) {
+    // Normaliza referencias "vacias". El carrito guardado en el navegador (o
+    // una version vieja de la app) puede mandar `clientId` o `productId` como
+    // cadena vacia en vez de omitirlos. Prisma trata "" como un id real y
+    // `sale.create` se cae con un choque de llave foranea que el cajero ve
+    // como "hace referencia a un registro que ya no existe". Aqui "" pasa a
+    // undefined = "sin cliente / articulo manual".
+    dto = {
+      ...dto,
+      clientId: dto.clientId || undefined,
+      items: dto.items.map((i) => ({ ...i, productId: i.productId || undefined })),
+    };
+
     if (dto.metodoPago === MetodoPago.CREDITO && !dto.clientId) {
       throw new BadRequestException('Una venta a credito requiere seleccionar un cliente.');
     }
 
+    // El carrito del POS se guarda en el navegador (localStorage). Si mientras
+    // tanto se borro el cliente o alguno de esos productos (limpieza de
+    // duplicados, importacion de inventario, restauracion de un respaldo...),
+    // los IDs guardados quedan apuntando a nada y `sale.create` reventaba con
+    // un choque de llave foranea que llegaba como "error inesperado". Aqui se
+    // revisa ANTES y se dice exactamente que quitar del carrito.
+    await this.validarReferencias(dto);
+
     const tasaImpuesto = dto.tasaImpuesto ?? (await this.getTasaImpuestoDefault());
-    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    const descuentoPct = dto.descuentoPct ?? 0;
+    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto, descuentoPct);
     const costByProductId = await this.getCostByProductId(dto.items);
 
     const sale = await this.prisma.$transaction(async (tx) => {
@@ -51,9 +113,11 @@ export class SalesService {
           subtotal: totals.subtotal,
           impuestos: totals.impuestos,
           total: totals.total,
+          descuentoPct,
           metodoPago: dto.metodoPago,
           userId,
           clientId: dto.clientId,
+          webCodigo: dto.webCodigo,
           items: {
             create: dto.items.map((item) => ({
               productId: item.productId,
@@ -63,7 +127,7 @@ export class SalesService {
               // Copiado del catalogo al momento de vender (nunca del cliente) para
               // que el margen reportado en Costos no cambie si luego se edita el
               // costo del producto.
-              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
+              costoUnitario: item.productId ? (costByProductId.get(item.productId) ?? 0) : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -117,6 +181,7 @@ export class SalesService {
       total: totals.total,
       metodoPago: dto.metodoPago,
     });
+    void this.regenerarCatalogo();
 
     if (dto.generarFactura !== false) {
       try {
@@ -135,6 +200,10 @@ export class SalesService {
    * Edita los items de una venta ya creada (correccion de un error de
    * facturacion: cantidad o precio mal digitado, etc.).
    *
+   * Tambien permite corregir A QUIEN esta facturada (`dto.clientId`): el caso
+   * tipico es que en el apuro de cobrar se eligio al cliente equivocado o no
+   * se eligio ninguno, y la factura ya salio con el nombre errado.
+   *
    * Requiere que quien llama sea ADMIN (verificado por el guard en el
    * controller) Y que vuelva a escribir SU PROPIA clave en `dto.adminPassword`
    * como confirmacion extra — aunque ya este loggeado, editar una factura ya
@@ -142,6 +211,9 @@ export class SalesService {
    * deuda de cliente), asi que no basta con tener la sesion abierta.
    */
   async update(id: string, dto: UpdateSaleDto, userId: string) {
+    // Mismo saneo que en create(): productId "" -> undefined (articulo manual).
+    dto = { ...dto, items: dto.items.map((i) => ({ ...i, productId: i.productId || undefined })) };
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado.');
     const passwordOk = await bcrypt.compare(dto.adminPassword, user.passwordHash);
@@ -156,8 +228,37 @@ export class SalesService {
     if (!existing) throw new NotFoundException('Venta no encontrada.');
     const existingDebt = await this.prisma.clientDebt.findFirst({ where: { saleId: id } });
 
-    const tasaImpuesto = existing.subtotal.gt(0) ? Number(existing.impuestos) / Number(existing.subtotal) : await this.getTasaImpuestoDefault();
-    const totals = SalesService.calculateTotals(dto.items, tasaImpuesto);
+    // Cliente de la factura. Si el dto no trae `clientId` se deja el actual
+    // (asi las correcciones que solo tocan lineas siguen funcionando igual).
+    const nuevoClientId = dto.clientId === undefined ? existing.clientId : dto.clientId || null;
+    const cambiaCliente = nuevoClientId !== existing.clientId;
+    if (cambiaCliente) {
+      if (nuevoClientId) {
+        const cliente = await this.prisma.client.findUnique({ where: { id: nuevoClientId } });
+        if (!cliente) throw new NotFoundException('El cliente seleccionado ya no existe.');
+      } else if (existing.metodoPago === MetodoPago.CREDITO) {
+        // Sin cliente no hay a quien cobrarle: la deuda quedaria huerfana.
+        throw new BadRequestException(
+          'Una venta a credito tiene que quedar a nombre de un cliente: es quien debe el dinero. ' +
+            'Elige otro cliente en vez de quitarlo.',
+        );
+      }
+    }
+
+    // Igual que al crear: si algun producto de las lineas corregidas ya no
+    // existe, decirlo claro en vez de reventar con un error de base de datos.
+    await this.validarReferencias({ items: dto.items });
+
+    const tasaImpuesto = existing.subtotal.gt(0)
+      ? Number(existing.impuestos) / Number(existing.subtotal)
+      : await this.getTasaImpuestoDefault();
+    // El descuento de la factura original se mantiene: corregir un item no
+    // deberia hacer desaparecer un descuento que ya se le habia dado al cliente.
+    const totals = SalesService.calculateTotals(
+      dto.items,
+      tasaImpuesto,
+      Number(existing.descuentoPct),
+    );
     const costByProductId = await this.getCostByProductId(dto.items);
 
     if (existingDebt && totals.total < Number(existingDebt.amountPaid)) {
@@ -187,13 +288,14 @@ export class SalesService {
           subtotal: totals.subtotal,
           impuestos: totals.impuestos,
           total: totals.total,
+          clientId: nuevoClientId,
           items: {
             create: dto.items.map((item) => ({
               productId: item.productId,
               descripcion: item.descripcion,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
-              costoUnitario: item.productId ? costByProductId.get(item.productId) ?? 0 : 0,
+              costoUnitario: item.productId ? (costByProductId.get(item.productId) ?? 0) : 0,
               total: Math.round(item.cantidad * item.precioUnitario * 100) / 100,
             })),
           },
@@ -208,7 +310,16 @@ export class SalesService {
       if (existingDebt) {
         await tx.clientDebt.update({
           where: { id: existingDebt.id },
-          data: { amountTotal: totals.total },
+          data: {
+            amountTotal: totals.total,
+            // La deuda tiene que seguir a la factura: si el cliente cambia y
+            // la cuenta se queda con el anterior, en Cobros le seguiria
+            // apareciendo el saldo a alguien que ya no aparece en la factura.
+            // (nuevoClientId no puede ser null aqui: arriba se rechaza quitar
+            // el cliente de una venta a credito, que es la unica que genera
+            // deuda.)
+            ...(nuevoClientId ? { clientId: nuevoClientId } : {}),
+          },
         });
       }
     });
@@ -217,7 +328,9 @@ export class SalesService {
       accion: 'correccion-factura',
       totalAnterior: Number(existing.total),
       totalNuevo: totals.total,
+      ...(cambiaCliente ? { clienteAnterior: existing.clientId, clienteNuevo: nuevoClientId } : {}),
     });
+    void this.regenerarCatalogo();
 
     // Vuelve a generar el PNG/PDF de la factura para que refleje la correccion.
     try {
@@ -292,6 +405,7 @@ export class SalesService {
         .filter((i) => i.productId)
         .map((i) => ({ productId: i.productId, cantidad: i.cantidad })),
     });
+    void this.regenerarCatalogo();
 
     return { id, deleted: true, numeroFactura: sale.invoice?.numero ?? null };
   }
@@ -372,9 +486,54 @@ export class SalesService {
     }
   }
 
+  /**
+   * Verifica que el cliente y los productos referidos por la venta todavia
+   * existan. Lanza un 400 con un mensaje que dice que quitar, en vez de dejar
+   * que la creacion se caiga con un error de base de datos.
+   */
+  private async validarReferencias(dto: {
+    clientId?: string;
+    items: { productId?: string; descripcion: string }[];
+  }) {
+    if (dto.clientId) {
+      const cliente = await this.prisma.client.findUnique({
+        where: { id: dto.clientId },
+        select: { id: true },
+      });
+      if (!cliente) {
+        throw new BadRequestException(
+          'El cliente seleccionado ya no existe (se pudo haber borrado). Busca al cliente otra vez o quitalo de la venta.',
+        );
+      }
+    }
+
+    const productIds = [
+      ...new Set(dto.items.map((i) => i.productId).filter((id): id is string => Boolean(id))),
+    ];
+    if (productIds.length === 0) return;
+
+    const existentes = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true },
+    });
+    const existentesSet = new Set(existentes.map((p) => p.id));
+    const faltantes = dto.items
+      .filter((i) => i.productId && !existentesSet.has(i.productId))
+      .map((i) => i.descripcion);
+
+    if (faltantes.length > 0) {
+      const lista = [...new Set(faltantes)].map((n) => `"${n}"`).join(', ');
+      throw new BadRequestException(
+        `Ya no estan en el inventario: ${lista}. Quitalos del carrito y, si siguen a la venta, vuelve a agregarlos o ponlos como articulo manual.`,
+      );
+    }
+  }
+
   /** Trae el costo actual del catalogo para los items que vienen de un producto (ignora items manuales). */
   private async getCostByProductId(items: { productId?: string }[]): Promise<Map<string, number>> {
-    const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id)))];
+    const productIds = [
+      ...new Set(items.map((i) => i.productId).filter((id): id is string => Boolean(id))),
+    ];
     if (productIds.length === 0) return new Map();
     const products = await this.prisma.product.findMany({
       where: { id: { in: productIds } },
@@ -391,29 +550,51 @@ export class SalesService {
   /**
    * Numero consecutivo de factura para el año en curso (FAC-2026-00007).
    *
-   * Se toma del MAXIMO numero existente + 1, no de un `count()`:
-   *  - Con count, si alguna vez se borra una factura (o se restaura un
-   *    respaldo mas viejo), el conteo baja y se vuelve a emitir un numero ya
-   *    usado — chocando con el indice unico de `numero` y tumbando la venta.
-   *  - Ademas se toma un advisory lock de Postgres, que se libera solo al
-   *    terminar la transaccion: sin el, dos cajeros cobrando al mismo tiempo
-   *    leen el mismo maximo, piden el mismo numero, y a uno de los dos le
-   *    revienta la venta entera por el indice unico.
+   * Se toma del MAXIMO numero existente + 1, no de un `count()`: con count,
+   * si alguna vez se borra una factura (o se restaura un respaldo mas viejo),
+   * el conteo baja y se vuelve a emitir un numero ya usado — chocando con el
+   * indice unico de `numero` y tumbando la venta.
+   *
+   * Sobre la concurrencia: la version con Postgres tomaba un advisory lock
+   * (`pg_advisory_xact_lock`) para que dos cajeros cobrando a la vez no
+   * leyeran el mismo maximo. SQLite no tiene esos locks, pero tampoco hacen
+   * falta: la base es un archivo servido por un unico proceso backend, y
+   * SQLite serializa las escrituras. El `await` de este metodo se resuelve
+   * dentro de una transaccion, asi que dos ventas simultaneas no pueden
+   * intercalar su lectura del maximo con la escritura de la otra. Si alguna
+   * vez esto volviera a ser multi-proceso, habria que reintroducir un
+   * bloqueo explicito aqui.
    */
   private async generateInvoiceNumber(tx: Prisma.TransactionClient): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `FAC-${year}-`;
 
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-number-${year}`}))`;
-
-    const last = await tx.invoice.findFirst({
+    // Se traen TODOS los numeros del año y se calcula el maximo A MANO (no con
+    // `orderBy: numero desc`). Motivo: si el negocio trae datos de la version
+    // vieja o de un respaldo, puede haber numeros con distinto relleno de ceros
+    // ("FAC-2026-7" y "FAC-2026-00012" a la vez). El orden alfabetico pone
+    // "FAC-2026-7" por encima de "FAC-2026-00012", asi que el "+1" salia 8 —
+    // un numero ya usado — y la venta entera se caia con un choque del indice
+    // unico ("Ocurrio un error inesperado en el servidor"). Comparando como
+    // numeros eso no pasa. Ademas se guarda el conjunto de numeros ya usados
+    // para saltar cualquier hueco ocupado.
+    const existentes = await tx.invoice.findMany({
       where: { numero: { startsWith: prefix } },
-      orderBy: { numero: 'desc' },
       select: { numero: true },
     });
 
-    const lastNumber = last ? parseInt(last.numero.slice(prefix.length), 10) : 0;
-    const next = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-    return `${prefix}${String(next).padStart(5, '0')}`;
+    const usados = new Set<number>();
+    let max = 0;
+    for (const { numero } of existentes) {
+      const n = parseInt(numero.slice(prefix.length), 10);
+      if (Number.isFinite(n)) {
+        usados.add(n);
+        if (n > max) max = n;
+      }
+    }
+
+    let siguiente = max + 1;
+    while (usados.has(siguiente)) siguiente += 1;
+    return `${prefix}${String(siguiente).padStart(5, '0')}`;
   }
 }

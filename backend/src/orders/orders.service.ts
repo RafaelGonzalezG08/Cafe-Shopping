@@ -1,5 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EstadoPedido, Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { EstadoPedido } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { parseFromDate } from '../common/date-range';
@@ -109,7 +115,7 @@ export class OrdersService {
       include: { sale: SALE_PREVIEW },
     });
 
-    await this.audit.log('Order', id, 'UPDATE', userId, data as Prisma.InputJsonValue);
+    await this.audit.log('Order', id, 'UPDATE', userId, data as Record<string, unknown>);
     return this.conUrgencia(updated);
   }
 
@@ -129,7 +135,10 @@ export class OrdersService {
     if (!order) throw new NotFoundException('Pedido no encontrado.');
 
     await this.prisma.order.delete({ where: { id } });
-    await this.audit.log('Order', id, 'DELETE', userId, { motivo: 'cancelado', saleId: order.saleId });
+    await this.audit.log('Order', id, 'DELETE', userId, {
+      motivo: 'cancelado',
+      saleId: order.saleId,
+    });
     return { id, deleted: true };
   }
 
@@ -162,7 +171,9 @@ export class OrdersService {
     return { ...order, urgencia };
   }
 
-  private calcularUrgencia(fechaEntrega: Date | null): 'ATRASADO' | 'HOY' | 'PROXIMO' | 'SIN_FECHA' {
+  private calcularUrgencia(
+    fechaEntrega: Date | null,
+  ): 'ATRASADO' | 'HOY' | 'PROXIMO' | 'SIN_FECHA' {
     if (!fechaEntrega) return 'SIN_FECHA';
 
     const hoy = new Date();

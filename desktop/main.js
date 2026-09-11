@@ -1,38 +1,34 @@
 // main.js — proceso principal de Electron.
 //
-// Hace lo mismo que hacia iniciar_cafe_shopping.ahk, pero como parte de una
-// app de escritorio real:
-//   1) Verifica/arranca Docker Desktop.
-//   2) Corre "docker compose up -d" sobre el proyecto empaquetado.
-//   3) Espera a que el frontend responda.
+// Arranque de la aplicacion (nativo, sin Docker):
+//   1) Levanta el backend como proceso hijo (ver nativo.js).
+//   2) Espera a que la base de datos este lista.
+//   3) Sirve la interfaz compilada desde disco.
 //   4) Lanza el agente de WhatsApp (send_whatsapp_agent.exe o .ahk).
 //   5) Muestra la app en una ventana nativa.
+//   6) Copia los respaldos a OneDrive y busca actualizaciones, en segundo plano.
 
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const nativo = require('./nativo');
 const { spawn, execFile } = require('child_process');
-const net = require('net');
 const path = require('path');
 const fs = require('fs');
 
-const FRONTEND_URL = 'http://localhost:5173';
-const FRONTEND_PORT = 5173;
-const MAX_WAIT_DOCKER_MS = 90000;
-const MAX_WAIT_FRONTEND_MS = 60000;
-const POLL_MS = 2000;
+// Sin aceleracion por GPU: en una PC con tarjeta grafica vieja/integrada o
+// controladores en mal estado, Chromium (el motor de Electron) puede dejar
+// el proceso de GPU trabado o crashearlo, lo que se ve como que la ventana
+// "se reinicia sola" bajo carga - justo lo que pasaba al enviar una factura
+// por WhatsApp en una PC menos potente. Ademas el proceso de GPU tiene un
+// costo fijo de memoria (~100-150 MB) que asi se ahorra por completo. El
+// dibujo por software es un poco menos fluido, pero esta app es sobre todo
+// texto y formularios, no video ni animaciones pesadas, asi que no se nota.
+// Tiene que llamarse ANTES de app.whenReady()/cualquier BrowserWindow.
+app.disableHardwareAcceleration();
 
-// Nombre fijo del proyecto de Docker Compose. IMPORTANTE: tiene que ser el
-// mismo que usa instalar.ps1/instalar.bat (que toma el nombre de la carpeta
-// del proyecto, normalmente "cafe-shopping"). La app empaquetada corre desde
-// una carpeta interna llamada "app-project", asi que sin esto Docker Compose
-// pensaria que es un proyecto distinto y crearia un segundo set de
-// contenedores/base de datos en paralelo (con el mismo puerto -> choque) en
-// vez de reusar el que ya esta corriendo.
-const COMPOSE_PROJECT_NAME = 'cafe-shopping';
-
-// En produccion (app empaquetada), el proyecto completo (docker-compose.yml,
-// backend/, frontend/, agente de WhatsApp) vive en resources/app-project.
-// En desarrollo ("npm start" dentro de desktop/), es la carpeta padre.
+// En produccion (app empaquetada), el proyecto completo (backend/, frontend/,
+// agente de WhatsApp) vive en resources/app-project. En desarrollo ("npm start"
+// dentro de desktop/), es la carpeta padre.
 const PROJECT_DIR = app.isPackaged
   ? path.join(process.resourcesPath, 'app-project')
   : path.join(__dirname, '..');
@@ -96,105 +92,98 @@ function setSplashStatus(text) {
   splashWindow.webContents.executeJavaScript(`window.setStatus && window.setStatus(${safe})`).catch(() => {});
 }
 
-function dockerListo() {
-  return new Promise((resolve) => {
-    execFile('docker', ['info'], { windowsHide: true, timeout: 8000 }, (error) => {
-      resolve(!error);
-    });
-  });
-}
+// ---------------------------------------------------------------------
+// Copia de respaldos a OneDrive
+//
+// El backend genera los respaldos dentro de la carpeta de datos del usuario
+// (AppData). Esa carpeta vive en el MISMO disco que todo lo demas: si el disco
+// falla, lo roban o entra un ransomware, se pierden las ventas y los respaldos
+// juntos. Por eso, ademas, se copian a OneDrive desde aqui.
+//
+// Se COPIA (no se le pide a OneDrive que sincronice esa carpeta directamente)
+// para no depender de como este configurado OneDrive: la copia funciona igual
+// aunque OneDrive este pausado o desinstalado.
+// ---------------------------------------------------------------------
 
-function puertoAbierto(port) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    const done = (ok) => {
-      socket.destroy();
-      resolve(ok);
-    };
-    socket.setTimeout(1500);
-    socket.once('connect', () => done(true));
-    socket.once('timeout', () => done(false));
-    socket.once('error', () => done(false));
-    socket.connect(port, 'localhost');
-  });
-}
+/** Carpeta de OneDrive del usuario que tiene la sesion abierta, o null. */
+function resolveOneDriveBackupDir() {
+  const candidatos = [
+    process.env.OneDrive,
+    process.env.OneDriveCommercial,
+    process.env.OneDriveConsumer,
+    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'OneDrive') : null,
+  ].filter(Boolean);
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function dockerDesktopExePath() {
-  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
-  return path.join(programFiles, 'Docker', 'Docker', 'Docker Desktop.exe');
-}
-
-async function ensureDockerRunning() {
-  if (await dockerListo()) return;
-
-  const exePath = dockerDesktopExePath();
-  if (!fs.existsSync(exePath)) {
-    throw new Error(
-      `No se encontro Docker Desktop en:\n${exePath}\n\nAbrelo manualmente y vuelve a iniciar Cafe Shopping.`,
-    );
-  }
-
-  setSplashStatus('Abriendo Docker Desktop...');
-  spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref();
-
-  let elapsed = 0;
-  while (elapsed < MAX_WAIT_DOCKER_MS) {
-    setSplashStatus(`Esperando a que Docker Desktop inicie... (${Math.round(elapsed / 1000)}s)`);
-    if (await dockerListo()) return;
-    await sleep(POLL_MS);
-    elapsed += POLL_MS;
-  }
-
-  throw new Error(
-    'Docker Desktop no respondio a tiempo.\nAbrelo manualmente, espera a que diga "Docker Desktop is running" y vuelve a intentar.',
-  );
-}
-
-function dockerComposeUp() {
-  return new Promise((resolve, reject) => {
-    // "--build": sin esto, si el auto-updater reemplazo los archivos del
-    // proyecto (backend/frontend nuevos) pero las imagenes de Docker locales
-    // quedaron viejas, "up -d" arrancaria igual los contenedores VIEJOS —
-    // la app se actualizaria de nombre pero seguiria corriendo el codigo
-    // anterior por dentro. Con --build, Docker reconstruye solo lo que
-    // cambio (usa cache de capas, asi que en la mayoria de los arranques
-    // sin cambios es casi instantaneo de todos modos).
-    execFile(
-      'docker',
-      ['compose', '-p', COMPOSE_PROJECT_NAME, 'up', '-d', '--build'],
-      { cwd: PROJECT_DIR, windowsHide: true, timeout: 10 * 60 * 1000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(`docker compose up -d --build fallo:\n${stderr || error.message}`));
-        } else {
-          resolve();
-        }
-      },
-    );
-  });
-}
-
-async function waitForFrontend() {
-  let elapsed = 0;
-  while (elapsed < MAX_WAIT_FRONTEND_MS) {
+  const raiz = candidatos.find((dir) => {
     try {
-      // El puerto 5173 (frontend) responde rapido, pero la API (3000) tarda
-      // mas porque hace migraciones de BD. Esperar al health-check es lo que
-      // de verdad indica que todo esta listo.
-      const resp = await fetch('http://localhost:3000/api/health', { timeout: 2000 });
-      if (resp.ok) return;
+      return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
     } catch {
-      // Todavia no esta listo, seguir esperando
+      return false;
     }
-    await sleep(POLL_MS);
-    elapsed += POLL_MS;
+  });
+  if (!raiz) return null;
+
+  const destino = path.join(raiz, 'CafeShopping', 'Respaldos');
+  try {
+    fs.mkdirSync(destino, { recursive: true });
+    return destino;
+  } catch (error) {
+    console.error(`No se pudo preparar la carpeta de respaldos en OneDrive: ${error}`);
+    return null;
   }
-  // No cortamos el arranque por esto: puede que solo este tardando un poco
-  // mas (primera vez, migraciones, etc.). Abrimos la ventana igual.
+}
+
+/**
+ * Copia a OneDrive los respaldos que todavia no estan alli.
+ *
+ * Solo copia lo que falta (compara nombre y tamaño), asi que repetirlo es
+ * barato. No borra nada en OneDrive: la limpieza por retencion la hace el
+ * backend sobre la carpeta local, y aqui preferimos conservar de mas — el
+ * objetivo de esta copia es justamente sobrevivir a un desastre local.
+ */
+function syncBackupsToOneDrive() {
+  const destino = resolveOneDriveBackupDir();
+  if (!destino) {
+    console.log('Sin OneDrive detectado: los respaldos quedan solo en la carpeta local.');
+    return { copiados: 0, destino: null };
+  }
+
+  // Los respaldos los genera el backend dentro de los datos del usuario, no
+  // en la carpeta del programa (que el instalador reemplaza al actualizar).
+  const origen = path.join(nativo.dataDir(), 'backups');
+  if (!fs.existsSync(origen)) return { copiados: 0, destino };
+
+  let copiados = 0;
+  for (const nombre of fs.readdirSync(origen)) {
+    // Archivos de respaldo: la base (.sqlite.gz, o .sql.gz de la epoca de
+    // PostgreSQL), las fotos (.tar.gz) y la ficha con el contenido (.info.json).
+    //
+    // OJO con este filtro: cuando la base paso a SQLite los respaldos pasaron
+    // a llamarse ".sqlite.gz" y el patron anterior solo aceptaba ".sql.gz", asi
+    // que las fotos si llegaban a OneDrive pero LA BASE DE DATOS NO. El fallo
+    // era invisible: la carpeta se veia con respaldos dentro.
+    if (!/\.(sqlite|sql|tar)\.gz$|\.info\.json$/i.test(nombre)) continue;
+
+    const src = path.join(origen, nombre);
+    const dst = path.join(destino, nombre);
+    try {
+      const infoSrc = fs.statSync(src);
+      if (fs.existsSync(dst) && fs.statSync(dst).size === infoSrc.size) continue;
+
+      // Se escribe a un temporal y se renombra para que OneDrive nunca
+      // sincronice un archivo a medio copiar (que al restaurar estaria
+      // corrupto justo cuando mas se necesita).
+      const tmp = `${dst}.parcial`;
+      fs.copyFileSync(src, tmp);
+      fs.renameSync(tmp, dst);
+      copiados += 1;
+    } catch (error) {
+      console.error(`No se pudo copiar el respaldo ${nombre} a OneDrive: ${error}`);
+    }
+  }
+
+  if (copiados > 0) console.log(`Respaldos copiados a OneDrive (${destino}): ${copiados}`);
+  return { copiados, destino };
 }
 
 function launchWhatsappAgent() {
@@ -215,7 +204,14 @@ function launchWhatsappAgent() {
   }
 }
 
-async function createMainWindow() {
+/**
+ * @param {string} url Direccion que sirve la interfaz. La devuelve
+ *   nativo.startFrontend(), que es quien sabe en que puerto quedo
+ *   escuchando (puede no ser el preferido si estaba ocupado). NO se usa una
+ *   constante: apuntaba al 5173 de la version con Docker y, al instalar sin
+ *   Docker, ese puerto no existe y la ventana se abria en blanco.
+ */
+async function createMainWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -231,12 +227,10 @@ async function createMainWindow() {
     mainWindow.show();
   });
 
-  // index.html (a diferencia de los archivos hasheados en /assets/) no
-  // manda Cache-Control, asi que Chromium puede quedarse con una copia
-  // vieja en su cache HTTP persistente entre una version de la app y la
-  // siguiente. Se limpia SIEMPRE antes de cargar para garantizar que se
-  // vea el build que Docker acaba de servir, no uno cacheado de una
-  // instalacion anterior.
+  // index.html (a diferencia de los archivos hasheados en /assets/) puede
+  // quedarse cacheado en Chromium entre una version de la app y la
+  // siguiente, mostrando la interfaz anterior tras actualizar. Se limpia
+  // siempre antes de cargar.
   try {
     await mainWindow.webContents.session.clearCache();
   } catch {
@@ -244,7 +238,19 @@ async function createMainWindow() {
     // anterior (cache posiblemente vieja), no bloqueamos el arranque por esto.
   }
 
-  mainWindow.loadURL(FRONTEND_URL);
+  // Si la interfaz no carga, la ventana se queda en blanco sin decir por que
+  // (fue justo lo que paso al apuntar al puerto equivocado). Con esto al
+  // menos se ve el motivo en vez de una pantalla vacia.
+  mainWindow.webContents.on('did-fail-load', (_e, code, descripcion, urlFallida) => {
+    console.error(`No se pudo cargar la interfaz (${code} ${descripcion}): ${urlFallida}`);
+    dialog.showErrorBox(
+      'Cafe Shopping',
+      `No se pudo cargar la interfaz desde:\n${urlFallida}\n\n${descripcion}\n\n` +
+        'Cierra la aplicacion y vuelve a abrirla. Si sigue igual, avisa para revisarlo.',
+    );
+  });
+
+  await mainWindow.loadURL(url);
 }
 
 function setupAutoUpdater() {
@@ -418,28 +424,87 @@ async function startup() {
   }
 
   try {
-    setSplashStatus('Verificando Docker Desktop...');
-    await ensureDockerRunning();
+    // Arranque nativo: sin Docker, sin contenedores, sin esperar a que una
+    // maquina virtual despierte. El backend es un proceso hijo y el frontend
+    // se sirve desde disco (ver nativo.js).
+    setSplashStatus('Iniciando el servicio...');
+    // Ademas de la consola (que en la app empaquetada nadie ve), cada linea
+    // que imprime el backend queda en un archivo. Sin esto, cuando algo como
+    // el relevo de pedidos fallaba en silencio no habia ninguna forma de
+    // saber por que -- ni el negocio ni quien lo soporta podian ver nada.
+    const logBackendFile = path.join(app.getPath('userData'), 'backend-log.txt');
+    await nativo.startBackend((linea) => {
+      const conFecha = `[${new Date().toISOString()}] ${linea}\n`;
+      console.log(`[backend] ${linea}`);
+      try {
+        fs.appendFileSync(logBackendFile, conFecha);
+      } catch {
+        // Si ni siquiera se puede escribir el log, no hay nada mas que hacer
+        // aqui: no debe tumbar el arranque de la app por esto.
+      }
+    });
 
-    setSplashStatus('Iniciando los contenedores...');
-    await dockerComposeUp();
+    setSplashStatus('Preparando la base de datos...');
+    const backendListo = await nativo.waitForBackend(setSplashStatus);
+    if (!backendListo) {
+      throw new Error(
+        'El servicio interno no respondio a tiempo.\n\n' +
+          'Vuelve a abrir la aplicacion. Si sigue igual, avisa para revisar el registro de errores.',
+      );
+    }
 
-    setSplashStatus('Esperando a que la app este lista...');
-    await waitForFrontend();
+    setSplashStatus('Cargando la interfaz...');
+    const urlInterfaz = await nativo.startFrontend();
 
-    setSplashStatus('Verificando actualizaciones...');
-    await checkForUpdates();
+    // Caso especial: si en la sesion anterior el usuario eligio "Instalar
+    // despues", esa instalacion SI se hace antes de abrir la ventana. Ya la
+    // acepto, y dejarla para el fondo significaria cerrarle la app encima
+    // cuando quiza ya esta cobrando una venta.
+    if (autoInstallPendingUpdate) {
+      setSplashStatus('Terminando de instalar la actualizacion pendiente...');
+      await checkForUpdates();
+    }
 
-    // El agente se abre AQUI (despues de la verificacion/instalacion de
-    // actualizaciones), no antes: si abriera primero y luego el usuario
-    // decidiera instalar una actualizacion, tocaria cerrarlo de nuevo antes
-    // de poder instalar (por el file-lock, ver killWhatsappAgent()). Asi
-    // evitamos ese abrir-y-cerrar innecesario en el caso mas comun.
     setSplashStatus('Iniciando el agente de WhatsApp...');
     launchWhatsappAgent();
 
     setSplashStatus('Abriendo Cafe Shopping...');
-    await createMainWindow();
+    await createMainWindow(urlInterfaz);
+
+    // Copia de seguridad fuera de la PC. Va despues de abrir la ventana y sin
+    // await: copiar archivos grandes no debe retrasar el momento en que se
+    // puede empezar a facturar. Se repite cada hora porque el respaldo
+    // automatico del backend corre a las 3 AM cada pocos dias, y la app puede
+    // llevar horas abierta cuando eso ocurra.
+    setTimeout(() => {
+      try {
+        syncBackupsToOneDrive();
+      } catch (error) {
+        console.error(`Fallo la copia de respaldos a OneDrive: ${error}`);
+      }
+    }, 5000);
+
+    setInterval(() => {
+      try {
+        syncBackupsToOneDrive();
+      } catch (error) {
+        console.error(`Fallo la copia de respaldos a OneDrive: ${error}`);
+      }
+    }, 60 * 60 * 1000);
+
+    // La busqueda normal de actualizaciones va DESPUES de abrir la ventana y
+    // sin await: antes bloqueaba el arranque completo. electron-updater
+    // descarga el instalador entero (~100 MB) antes de emitir
+    // 'update-downloaded', asi que en un dia con actualizacion disponible el
+    // usuario se quedaba mirando la pantalla de carga durante toda la
+    // descarga, sin poder facturar. Ahora la app ya esta usable y la descarga
+    // ocurre de fondo (installNow() sigue cerrando el agente de WhatsApp
+    // antes de instalar, ver killWhatsappAgent()).
+    if (!autoInstallPendingUpdate) {
+      checkForUpdates().catch(() => {
+        // Un fallo buscando actualizaciones no debe afectar la sesion de venta.
+      });
+    }
   } catch (error) {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
     dialog.showErrorBox('Cafe Shopping', String(error.message || error));
@@ -447,14 +512,38 @@ async function startup() {
   }
 }
 
-app.whenReady().then(startup);
+/**
+ * Una sola instancia a la vez.
+ *
+ * Sin esto, abrir el acceso directo dos veces (o hacer doble clic impaciente
+ * mientras carga) lanzaba una segunda copia que chocaba con la primera por el
+ * puerto, y Windows mostraba un error tecnico ilegible:
+ * "listen EADDRINUSE: address already in use 127.0.0.1:5183".
+ *
+ * Ahora la segunda copia se cierra sola y, en vez de un error, se trae al
+ * frente la ventana que ya estaba abierta — que es lo que la persona queria.
+ */
+const instanciaUnica = app.requestSingleInstanceLock();
+if (!instanciaUnica) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(startup);
+}
 
 app.on('window-all-closed', () => {
-  // A diferencia de los contenedores de Docker (esos SI se quedan corriendo
-  // a proposito, para que la proxima apertura sea instantanea), el agente
-  // de WhatsApp se cierra junto con la app: si no, se queda corriendo en
-  // segundo plano sin que el usuario lo sepa, y puede seguir "activo"
-  // aunque la persona crea que cerro todo.
+  // Todo se cierra junto con la app. En la version con Docker los
+  // contenedores se dejaban corriendo a proposito (para que la siguiente
+  // apertura fuera rapida), pero aqui no hace falta: el backend arranca en
+  // segundos. Dejarlo vivo solo consumiria memoria y mantendria la base de
+  // datos abierta, complicando los respaldos y las actualizaciones.
+  nativo.stopAll();
   killWhatsappAgent().finally(() => {
     if (process.platform !== 'darwin') app.quit();
   });

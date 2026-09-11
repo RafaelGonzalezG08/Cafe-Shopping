@@ -8,20 +8,25 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { BulkProductsDto } from './dto/bulk-products.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
-import { Role } from '@prisma/client';
+import { Role } from '../common/enums';
+import { MAX_UPLOAD_SIZE_BYTES } from '../common/image.util';
+import { generarXlsx, XLSX_CONTENT_TYPE } from '../common/xlsx.util';
 
 @ApiTags('products')
 @ApiBearerAuth()
@@ -36,14 +41,82 @@ export class ProductsController {
     return products.map((p) => this.stripCostForNonAdmin(p, user));
   }
 
+  @Get('export')
+  async exportExcel(
+    @Res() res: Response,
+    @Query('all') all: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const filas = await this.productsService.filasParaExportar(
+      all !== 'true',
+      user.role === Role.ADMIN,
+    );
+    const xlsx = await generarXlsx('Inventario', filas);
+    res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', 'attachment; filename="inventario.xlsx"');
+    res.send(xlsx);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user?: AuthenticatedUser) {
     const product = await this.productsService.findOne(id);
     return this.stripCostForNonAdmin(product, user);
   }
 
+  @Get('duplicados/vista-previa')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  vistaPreviaLimpieza() {
+    return this.productsService.vistaPreviaLimpieza();
+  }
+
+  @Post('duplicados/limpiar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  limpiarDuplicados(@CurrentUser() user: AuthenticatedUser) {
+    return this.productsService.limpiarDuplicados(user.userId);
+  }
+
+  @Get('duplicados/vista-previa-eliminar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  vistaPreviaEliminarDuplicados() {
+    return this.productsService.vistaPreviaEliminarDuplicados();
+  }
+
+  @Post('duplicados/eliminar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  eliminarDuplicados(@CurrentUser() user: AuthenticatedUser) {
+    return this.productsService.eliminarDuplicados(user.userId);
+  }
+
+  @Post('bulk/baja')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  bulkDarDeBaja(@Body() dto: BulkProductsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.productsService.bulkDarDeBaja(dto.ids, user.userId);
+  }
+
+  @Post('bulk/reactivar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  bulkReactivar(@Body() dto: BulkProductsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.productsService.bulkReactivar(dto.ids, user.userId);
+  }
+
+  @Post('bulk/eliminar')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  bulkEliminar(@Body() dto: BulkProductsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.productsService.bulkEliminar(dto.ids, user.userId);
+  }
+
   /** El costo de adquisicion es sensible (margen del negocio): solo ADMIN lo recibe en la respuesta. */
-  private stripCostForNonAdmin<T extends { costoUnitario?: unknown }>(product: T, user?: AuthenticatedUser): T {
+  private stripCostForNonAdmin<T extends { costoUnitario?: unknown }>(
+    product: T,
+    user?: AuthenticatedUser,
+  ): T {
     if (user?.role === Role.ADMIN) return product;
     const { costoUnitario, ...rest } = product;
     return rest as T;
@@ -52,7 +125,7 @@ export class ProductsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }))
   async create(
     @Body() dto: CreateProductDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -69,7 +142,7 @@ export class ProductsController {
   @Put(':id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }))
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateProductDto,
@@ -94,7 +167,7 @@ export class ProductsController {
   @Post(':id/photo')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }))
   uploadPhoto(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,

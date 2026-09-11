@@ -13,6 +13,11 @@ export function formatDateTime(value: string | Date): string {
   return new Date(value).toLocaleString('es-DO', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** Solo la hora ("11:22 p. m."), para mostrarla debajo de la fecha y ahorrar ancho. */
+export function formatTime(value: string | Date): string {
+  return new Date(value).toLocaleTimeString('es-DO', { hour: 'numeric', minute: '2-digit' });
+}
+
 export const ESTADO_DEUDA_LABEL: Record<string, string> = {
   PENDIENTE: 'Pendiente',
   PARCIAL: 'Abono parcial',
@@ -24,6 +29,19 @@ export const ESTADO_PEDIDO_LABEL: Record<string, string> = {
   PENDIENTE: 'Pendiente',
   EMPACADO: 'Empacado',
   ENTREGADO: 'Entregado',
+};
+
+export const ESTADO_PEDIDO_WEB_LABEL: Record<string, string> = {
+  PENDIENTE: 'Por atender',
+  ATENDIDO: 'Atendido',
+  CANCELADO: 'Cancelado',
+};
+
+export const ESTADO_FACTURA_LABEL: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  GENERADA: 'Generada',
+  ENVIADA: 'Enviada',
+  ERROR: 'Error',
 };
 
 export const METODO_PAGO_LABEL: Record<string, string> = {

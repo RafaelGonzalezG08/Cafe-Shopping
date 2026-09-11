@@ -29,17 +29,17 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-espresso-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-porcelain-100 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-copper-500">
-            <Gem size={24} className="text-porcelain-50" />
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
+            <Gem size={24} className="text-white" />
           </div>
-          <h1 className="font-display text-xl font-bold text-porcelain-50">Cafe Shopping</h1>
-          <p className="mt-1 text-sm text-porcelain-300/60">Inicia sesion para continuar</p>
+          <h1 className="font-display text-xl font-bold text-ink">Cafe Shopping</h1>
+          <p className="mt-1 text-sm text-muted">Inicia sesion para continuar</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-xl2 bg-white p-6 shadow-ticket">
+        <form onSubmit={handleSubmit} className="rounded-xl2 bg-porcelain-100 p-6 shadow-neu">
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
             Correo
           </label>
@@ -48,7 +48,7 @@ export default function Login() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mb-4 w-full rounded-lg border border-porcelain-300 px-3 py-2.5 text-sm outline-none focus:border-copper-500"
+            className="mb-4 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
             placeholder="tucorreo@cafeshopping.com"
           />
 
@@ -60,7 +60,7 @@ export default function Login() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mb-2 w-full rounded-lg border border-porcelain-300 px-3 py-2.5 text-sm outline-none focus:border-copper-500"
+            className="mb-2 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
             placeholder="••••••••"
           />
 

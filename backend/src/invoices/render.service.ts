@@ -1,56 +1,91 @@
 import { Injectable, Logger } from '@nestjs/common';
-import puppeteer, { Browser } from 'puppeteer';
+import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 
+/** Cuanto se espera a que la app de escritorio devuelva la factura renderizada. */
+const RENDER_TIMEOUT_MS = 30000;
+
 /**
- * Envuelve Puppeteer para convertir el HTML de la factura en PNG o PDF.
+ * Convierte el HTML de la factura en PNG o PDF.
  *
- * PNG: se usa un screenshot directo del HTML (control total del diseño visual,
- * ideal para enviar por WhatsApp). PDF: se usa page.pdf() para descargas/impresion.
+ * Hay dos caminos, y se elige solo:
  *
- * Reutiliza una sola instancia de Chromium entre llamadas para no pagar el costo
- * de arranque en cada factura; se relanza automaticamente si el browser muere.
+ * 1) App de escritorio (produccion): se le pide el render al proceso padre de
+ *    Electron, que ya ES Chromium. Se comunica por el canal IPC que abre
+ *    `fork()` (ver nativo.js). Asi la app NO necesita Puppeteer: su Chromium
+ *    pesa ~300 MB y, peor, Puppeteer lo descarga al instalar las dependencias
+ *    — en la PC de un cliente esa descarga nunca ocurre y la generacion de
+ *    facturas fallaria. Aqui simplemente no hace falta un segundo navegador.
+ *
+ * 2) Sin proceso padre (desarrollo, o el contenedor de Docker): se usa
+ *    Puppeteer como siempre, reutilizando una sola instancia de Chromium
+ *    entre llamadas.
  */
 @Injectable()
 export class RenderService {
   private readonly logger = new Logger(RenderService.name);
-  private browserPromise: Promise<Browser> | null = null;
 
-  private async getBrowser(): Promise<Browser> {
-    if (!this.browserPromise) {
-      this.browserPromise = puppeteer.launch({
-        headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-    }
-    try {
-      const browser = await this.browserPromise;
-      if (!browser.isConnected()) throw new Error('Browser desconectado');
-      return browser;
-    } catch (error) {
-      this.logger.warn(`Reiniciando instancia de Chromium: ${error}`);
-      this.browserPromise = null;
-      return this.getBrowser();
-    }
+  /** true cuando corremos como proceso hijo de la app de escritorio. */
+  private get tieneRenderizadorPadre(): boolean {
+    // En los tests (jest) process.send TAMBIEN es una funcion (IPC del worker),
+    // pero del otro lado no hay nadie que renderice: quedaria esperando 30s por
+    // cada factura y jest no cerraria. Se trata como "sin renderizador".
+    if (process.env.NODE_ENV === 'test') return false;
+    return typeof process.send === 'function';
+  }
+
+  /**
+   * Pide al proceso padre (Electron) que renderice el HTML y devuelva el
+   * resultado. Cada peticion lleva un id propio porque el canal es compartido:
+   * sin el, dos facturas generadas a la vez podrian quedarse con la respuesta
+   * de la otra.
+   */
+  private pedirRenderAlPadre(
+    tipo: 'png' | 'pdf',
+    html: string,
+    width: number,
+    scale: number,
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const id = randomUUID();
+
+      const limpiar = () => {
+        clearTimeout(temporizador);
+        process.off('message', alRecibir);
+      };
+
+      const temporizador = setTimeout(() => {
+        limpiar();
+        reject(new Error('La app de escritorio no devolvio la factura a tiempo.'));
+      }, RENDER_TIMEOUT_MS);
+
+      const alRecibir = (mensaje: any) => {
+        if (mensaje?.tipo !== 'render-resultado' || mensaje.id !== id) return;
+        limpiar();
+        if (mensaje.error) reject(new Error(String(mensaje.error)));
+        else resolve(Buffer.from(mensaje.datosBase64, 'base64'));
+      };
+
+      process.on('message', alRecibir);
+      process.send!({ tipo: 'render', formato: tipo, id, html, width, scale });
+    });
+  }
+
+  /** Mensaje unico cuando se intenta renderizar fuera de la app de escritorio. */
+  private sinRenderizador(): never {
+    throw new Error(
+      'La generacion de facturas requiere la app de escritorio: es la que aporta el navegador ' +
+        'que dibuja el ticket. Arranca Cafe Shopping en vez de ejecutar el backend suelto.',
+    );
   }
 
   async htmlToPng(html: string, viewportWidth = 420, scale = 3): Promise<Buffer> {
-    const browser = await this.getBrowser();
-    const page = await browser.newPage();
-    try {
-      // deviceScaleFactor simula una pantalla "retina": Chromium renderiza a
-      // `scale`x la resolucion base sin cambiar el layout (sigue siendo un
-      // viewport de `viewportWidth` px de CSS), asi el PNG sale nitido incluso
-      // si el cliente hace zoom al verlo en WhatsApp.
-      await page.setViewport({ width: viewportWidth, height: 800, deviceScaleFactor: scale });
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const element = await page.$('.ticket');
-      const screenshot = await (element ?? page).screenshot({ type: 'png' });
-      return this.compressPng(Buffer.from(screenshot));
-    } finally {
-      await page.close();
+    if (this.tieneRenderizadorPadre) {
+      const png = await this.pedirRenderAlPadre('png', html, viewportWidth, scale);
+      return this.compressPng(png);
     }
+
+    return this.sinRenderizador();
   }
 
   /**
@@ -80,27 +115,18 @@ export class RenderService {
       // la original: el objetivo es que pese menos, no aplicar el filtro porque si.
       return compressed.length < png.length ? compressed : png;
     } catch (error) {
-      this.logger.warn(`No se pudo comprimir el PNG de la factura, se envia sin comprimir: ${error}`);
+      this.logger.warn(
+        `No se pudo comprimir el PNG de la factura, se envia sin comprimir: ${error}`,
+      );
       return png;
     }
   }
 
   async htmlToPdf(html: string): Promise<Buffer> {
-    const browser = await this.getBrowser();
-    const page = await browser.newPage();
-    try {
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20px', bottom: '20px' } });
-      return Buffer.from(pdf);
-    } finally {
-      await page.close();
+    if (this.tieneRenderizadorPadre) {
+      return this.pedirRenderAlPadre('pdf', html, 794, 1);
     }
-  }
 
-  async onModuleDestroy() {
-    if (this.browserPromise) {
-      const browser = await this.browserPromise;
-      await browser.close();
-    }
+    return this.sinRenderizador();
   }
 }

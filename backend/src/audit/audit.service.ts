@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+/** Lo que se puede pasar como detalle del cambio auditado. */
+export type AuditChanges = Record<string, unknown> | unknown[];
 
 @Injectable()
 export class AuditService {
@@ -17,7 +19,7 @@ export class AuditService {
     entityId: string,
     action: 'CREATE' | 'UPDATE' | 'DELETE',
     userId?: string,
-    changes?: Prisma.InputJsonValue,
+    changes?: AuditChanges,
   ): Promise<void> {
     try {
       await this.prisma.auditLog.create({
@@ -26,7 +28,8 @@ export class AuditService {
           entityId,
           action,
           userId,
-          changes: changes ?? undefined,
+          // SQLite no tiene tipo Json: se guarda serializado (ver schema.prisma).
+          changes: changes === undefined ? undefined : JSON.stringify(changes),
         },
       });
     } catch (error) {

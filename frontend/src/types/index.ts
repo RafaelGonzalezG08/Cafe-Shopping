@@ -6,6 +6,16 @@ export type EstadoFactura = 'PENDIENTE' | 'GENERADA' | 'ENVIADA' | 'ERROR';
 
 export type EstadoDeuda = 'PENDIENTE' | 'PARCIAL' | 'PAGADA' | 'VENCIDA';
 
+export type Material = 'PLATA' | 'ORO' | 'GOLDFILLED' | 'ACERO' | 'OTRO';
+
+export const MATERIAL_LABEL: Record<Material, string> = {
+  PLATA: 'Plata',
+  ORO: 'Oro',
+  GOLDFILLED: 'Gold filled',
+  ACERO: 'Acero',
+  OTRO: 'Otro',
+};
+
 export interface AuthUser {
   id: string;
   nombre: string;
@@ -33,9 +43,18 @@ export interface Product {
   precioUnitario: number;
   // Solo presente cuando el backend responde a un usuario ADMIN.
   costoUnitario?: number;
+  material: Material;
   stock: number;
+  /** Tallas / medidas que ofrece la pieza. Vacio = no maneja tallas. */
+  tallas: string[];
   imageUrl?: string | null;
   activo: boolean;
+  categoriaId?: string | null;
+}
+
+export interface Category {
+  id: string;
+  nombre: string;
 }
 
 export interface ProductMargin {
@@ -63,6 +82,8 @@ export interface SaleItem {
   total: number;
 }
 
+export type EstadoWhatsapp = 'EN_COLA' | 'ENVIADA' | 'ERROR';
+
 export interface Invoice {
   id: string;
   numero: string;
@@ -71,6 +92,17 @@ export interface Invoice {
   pngUrl?: string | null;
   sentWhatsappAt?: string | null;
   ultimoError?: string | null;
+  /** Estado del envío por WhatsApp (cola en segundo plano). null = nunca se pidió. */
+  whatsappEstado?: EstadoWhatsapp | null;
+  whatsappIntentos?: number;
+}
+
+export interface Payment {
+  id: string;
+  saleId: string;
+  amount: number;
+  fecha: string;
+  metodo: MetodoPago;
 }
 
 export interface Sale {
@@ -79,10 +111,13 @@ export interface Sale {
   subtotal: number;
   impuestos: number;
   total: number;
+  descuentoPct?: number;
   metodoPago: MetodoPago;
+  clientId?: string | null;
   client?: Client | null;
   items: SaleItem[];
   invoice?: Invoice | null;
+  payments?: Payment[];
 }
 
 export interface ClientDebt {
@@ -131,6 +166,29 @@ export interface Order {
   };
 }
 
+export type EstadoPedidoWeb = 'PENDIENTE' | 'ATENDIDO' | 'CANCELADO';
+
+export interface WebOrderItem {
+  cantidad: number;
+  nombre: string;
+  sku: string | null;
+  /** Precio de la linea completa (cantidad x unitario). */
+  total: number;
+}
+
+/** Pedido llegado por el catalogo web, pegando el mensaje de WhatsApp del cliente. */
+export interface WebOrder {
+  id: string;
+  codigo: string;
+  items: WebOrderItem[];
+  total: number;
+  estado: EstadoPedidoWeb;
+  textoOriginal: string;
+  notas?: string | null;
+  saleId?: string | null;
+  createdAt: string;
+}
+
 export interface OrdersSummary {
   total: number;
   pendientes: number;
@@ -149,10 +207,38 @@ export interface Expense {
   user?: { nombre: string };
 }
 
+export type TipoTransaccion = 'VENTA' | 'ABONO' | 'GASTO';
+
+/** Fila del libro de transacciones (Reportes > Transacciones): venta, abono o gasto. */
+export interface Transaccion {
+  id: string;
+  tipo: TipoTransaccion;
+  fecha: string;
+  monto: number;
+  signo: 'INGRESO' | 'EGRESO';
+  descripcion: string;
+  metodoPago: MetodoPago | null;
+  cliente: string | null;
+  usuario: string | null;
+  referencia: string | null;
+  estado: EstadoFactura | null;
+  saleId: string | null;
+  facturaPngUrl: string | null;
+}
+
+export interface TransaccionesResponse {
+  items: Transaccion[];
+  totales: { ingresos: number; egresos: number; neto: number };
+}
+
 export interface DashboardSummary {
   ventasHoy: { total: number; cantidad: number };
   deudaTotalPendiente: number;
   gastosDelMes: number;
+  /** Contado + abonos cobrados - gastos, del mes en curso. */
+  saldoEnCajaMes: number;
+  /** Todas las ventas - gastos, del mes en curso. */
+  balanceTotalMes: number;
   gastosRecientes: Expense[];
 }
 
@@ -163,4 +249,12 @@ export interface BusinessProfile {
   direccion?: string | null;
   identifFiscal?: string | null;
   tasaImpuesto: number;
+  telefonoWhatsapp?: string | null;
+  descripcionWeb?: string | null;
+  datosPago?: string | null;
+  relevoPedidosUrl?: string | null;
+  relevoPedidosClave?: string | null;
+  cloudflareApiToken?: string | null;
+  cloudflareAccountId?: string | null;
+  cloudflarePagesProject?: string | null;
 }

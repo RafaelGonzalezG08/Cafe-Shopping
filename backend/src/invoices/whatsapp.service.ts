@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { UPLOADS_DIR } from '../common/paths';
 
 export interface WhatsappSendResult {
   ok: boolean;
@@ -11,30 +13,39 @@ export interface WhatsappSendResult {
 
 /**
  * Envia facturas por WhatsApp usando WhatsApp Desktop en la PC del negocio,
- * en vez de Twilio (API paga) o un bucket S3 publico.
+ * en vez de Twilio (API paga).
  *
  * Como funciona:
- * 1) Este servicio deja un archivo "pedido" (.job) en uploads/whatsapp-queue/.
- *    Esa carpeta vive dentro del mismo volumen Docker (backend_uploads) que ya
- *    usa el script send_whatsapp_agent.ahk para sacar los PNG de las facturas.
- * 2) El script .ahk corre en la PC como un agente en segundo plano: revisa esa
- *    carpeta cada pocos segundos, y cuando encuentra un .job saca el PNG del
- *    volumen, lo pega en el chat de WhatsApp Desktop del cliente junto con el
- *    texto de la factura, y escribe la confirmacion en uploads/whatsapp-results/.
+ * 1) Este servicio deja un archivo "pedido" (.job) en la carpeta
+ *    uploads/whatsapp-queue/ de los datos del usuario.
+ * 2) send_whatsapp_agent.ahk (o .exe) corre en la PC como un agente en segundo
+ *    plano: revisa esa carpeta cada pocos segundos, y cuando encuentra un .job
+ *    saca el PNG de la factura, lo pega en el chat de WhatsApp Desktop del
+ *    cliente junto con el texto, y escribe la confirmacion en
+ *    uploads/whatsapp-results/.
  * 3) Este servicio espera (poll) esa confirmacion un tiempo maximo y responde.
  *
- * IMPORTANTE: para que esto funcione, send_whatsapp_agent.ahk debe estar
- * corriendo en la PC donde esta abierto WhatsApp Desktop.
+ * Casi nadie llama a este servicio directamente: WhatsappQueueService lo usa
+ * desde la cola en segundo plano, con reintentos.
+ *
+ * IMPORTANTE: para que esto funcione, el agente debe estar corriendo en la PC
+ * donde esta abierto WhatsApp Desktop.
  */
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  private readonly uploadsDir = join(process.cwd(), 'uploads');
+  private readonly uploadsDir = UPLOADS_DIR;
   private readonly queueDir = join(this.uploadsDir, 'whatsapp-queue');
   private readonly resultsDir = join(this.uploadsDir, 'whatsapp-results');
 
-  /** Cuanto esperamos a que el agente de WhatsApp confirme el envio. */
-  private readonly timeoutMs = Number(process.env.WHATSAPP_AGENT_TIMEOUT_MS || 60000);
+  /**
+   * Cuanto esperamos a que el agente de WhatsApp confirme el envio.
+   * x4 (era 60000): send_whatsapp_agent.ahk tambien cuadruplico sus propios
+   * tiempos de espera para PCs menos potentes, asi que este limite tiene que
+   * crecer igual - si no, el backend reportaria "timeout" por un envio que
+   * en realidad iba a terminar bien, solo que un poco mas tarde.
+   */
+  private readonly timeoutMs = Number(process.env.WHATSAPP_AGENT_TIMEOUT_MS || 240000);
   /** Cada cuanto revisamos si ya llego la confirmacion. */
   private readonly pollMs = Number(process.env.WHATSAPP_AGENT_POLL_MS || 1500);
 
@@ -93,6 +104,44 @@ export class WhatsappService {
     this.logger.warn(`Timeout esperando confirmacion del job ${jobId}.`);
     return { ok: false, sid: jobId, errorMessage: msg };
   }
+
+  /**
+   * Barre los archivos viejos de las carpetas de la cola. En condiciones
+   * normales cada .job y cada .result se borra al procesarse, pero si un envio
+   * caduca (timeout) el .result puede aparecer despues y quedar huerfano, y un
+   * .job puede quedar tirado si el agente estaba caido. Sin esto se van
+   * acumulando para siempre.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async limpiarArchivosViejos() {
+    const limiteMs = 24 * 60 * 60 * 1000; // mas de un dia = huerfano
+    let borrados = 0;
+    for (const dir of [this.queueDir, this.resultsDir]) {
+      let entradas: string[];
+      try {
+        entradas = await fs.readdir(dir);
+      } catch {
+        continue; // la carpeta aun no existe
+      }
+      for (const nombre of entradas) {
+        const ruta = join(dir, nombre);
+        try {
+          const info = await fs.stat(ruta);
+          if (Date.now() - info.mtimeMs > limiteMs) {
+            await fs.unlink(ruta);
+            borrados += 1;
+          }
+        } catch {
+          // se lo llevo el agente entremedio, no pasa nada
+        }
+      }
+    }
+    if (borrados > 0) {
+      this.logger.log(
+        `Limpieza de la cola de WhatsApp: ${borrados} archivo(s) viejo(s) borrado(s).`,
+      );
+    }
+  }
 }
 
 function buildJobFile(data: { phone: string; filename: string; message: string }): string {
@@ -108,7 +157,8 @@ function parseResultFile(raw: string, jobId: string): WhatsappSendResult {
     return { ok: true, sid: jobId };
   }
   const errorMessage = firstLine.startsWith('ERROR:')
-    ? firstLine.slice('ERROR:'.length).trim() || 'El agente de WhatsApp reporto un error sin detalle.'
+    ? firstLine.slice('ERROR:'.length).trim() ||
+      'El agente de WhatsApp reporto un error sin detalle.'
     : firstLine || 'El agente de WhatsApp reporto un error sin detalle.';
   return { ok: false, sid: jobId, errorMessage };
 }
@@ -117,8 +167,31 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Asegura formato E.164 basico (+codigoPais...). No sustituye una libreria completa de validacion. */
+/**
+ * Lleva el telefono a formato E.164 (+codigoPais + numero), que es lo que el
+ * agente escribe en la busqueda de WhatsApp Desktop.
+ *
+ * La mayoria de los clientes son de Republica Dominicana y sus numeros se
+ * guardan de mil formas: "809 555 1234", "(829) 555-1234", "18495551234",
+ * "+1 809-555-1234". Todos esos son el mismo numero y tienen que terminar como
+ * "+18095551234". Los que ya traen un codigo de pais distinto (empiezan con
+ * "+") se respetan tal cual.
+ */
 function normalizePhone(phone: string): string {
-  const trimmed = phone.trim();
-  return trimmed.startsWith('+') ? trimmed : `+${trimmed.replace(/[^0-9]/g, '')}`;
+  const raw = phone.trim();
+  const soloDigitos = raw.replace(/[^0-9]/g, '');
+
+  // Ya viene con "+": se respeta el pais, solo se limpian separadores.
+  if (raw.startsWith('+')) return `+${soloDigitos}`;
+
+  // 10 digitos y area dominicana (809/829/849): falta el "1" de pais.
+  if (soloDigitos.length === 10 && /^(809|829|849)/.test(soloDigitos)) {
+    return `+1${soloDigitos}`;
+  }
+  // 11 digitos que empiezan por "1" + area dominicana: ya trae el pais.
+  if (soloDigitos.length === 11 && /^1(809|829|849)/.test(soloDigitos)) {
+    return `+${soloDigitos}`;
+  }
+  // Cualquier otra cosa: se antepone "+" y que el agente resuelva.
+  return `+${soloDigitos}`;
 }
