@@ -148,8 +148,9 @@ export default function Settings() {
     descripcionWeb: '',
     relevoPedidosUrl: '',
     relevoPedidosClave: '',
-    netlifyToken: '',
-    netlifySiteId: '',
+    cloudflareApiToken: '',
+    cloudflareAccountId: '',
+    cloudflarePagesProject: '',
   });
 
   useEffect(() => {
@@ -163,8 +164,9 @@ export default function Settings() {
         descripcionWeb: profile.descripcionWeb ?? '',
         relevoPedidosUrl: profile.relevoPedidosUrl ?? '',
         relevoPedidosClave: profile.relevoPedidosClave ?? '',
-        netlifyToken: profile.netlifyToken ?? '',
-        netlifySiteId: profile.netlifySiteId ?? '',
+        cloudflareApiToken: profile.cloudflareApiToken ?? '',
+        cloudflareAccountId: profile.cloudflareAccountId ?? '',
+        cloudflarePagesProject: profile.cloudflarePagesProject ?? '',
       });
     }
   }, [profile]);
@@ -375,8 +377,9 @@ export default function Settings() {
             descripcionWeb={form.descripcionWeb}
             relevoPedidosUrl={form.relevoPedidosUrl}
             relevoPedidosClave={form.relevoPedidosClave}
-            netlifyToken={form.netlifyToken}
-            netlifySiteId={form.netlifySiteId}
+            cloudflareApiToken={form.cloudflareApiToken}
+            cloudflareAccountId={form.cloudflareAccountId}
+            cloudflarePagesProject={form.cloudflarePagesProject}
             onChange={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
             onGuardar={() => updateProfile.mutate()}
             guardando={updateProfile.isPending}
@@ -577,8 +580,9 @@ function CatalogoWeb({
   descripcionWeb,
   relevoPedidosUrl,
   relevoPedidosClave,
-  netlifyToken,
-  netlifySiteId,
+  cloudflareApiToken,
+  cloudflareAccountId,
+  cloudflarePagesProject,
   onChange,
   onGuardar,
   guardando,
@@ -587,16 +591,18 @@ function CatalogoWeb({
   descripcionWeb: string;
   relevoPedidosUrl: string;
   relevoPedidosClave: string;
-  netlifyToken: string;
-  netlifySiteId: string;
+  cloudflareApiToken: string;
+  cloudflareAccountId: string;
+  cloudflarePagesProject: string;
   onChange: (
     campo:
       | 'telefonoWhatsapp'
       | 'descripcionWeb'
       | 'relevoPedidosUrl'
       | 'relevoPedidosClave'
-      | 'netlifyToken'
-      | 'netlifySiteId',
+      | 'cloudflareApiToken'
+      | 'cloudflareAccountId'
+      | 'cloudflarePagesProject',
     valor: string,
   ) => void;
   onGuardar: () => void;
@@ -607,9 +613,9 @@ function CatalogoWeb({
     productos: number;
     excluidasSinFoto: number;
     excluidasSinPrecio: number;
-    netlify?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
-    netlifyUrl?: string;
-    netlifyError?: string;
+    cloudflare?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
+    cloudflareUrl?: string;
+    cloudflareError?: string;
   } | null>(null);
 
   const generar = useMutation({
@@ -621,14 +627,14 @@ function CatalogoWeb({
           productos: data.productos,
           excluidasSinFoto: data.excluidasSinFoto ?? 0,
           excluidasSinPrecio: data.excluidasSinPrecio ?? 0,
-          netlify: data.netlify,
-          netlifyUrl: data.netlifyUrl,
-          netlifyError: data.netlifyError,
+          cloudflare: data.cloudflare,
+          cloudflareUrl: data.cloudflareUrl,
+          cloudflareError: data.cloudflareError,
         });
-        if (data.netlify === 'publicado' || data.netlify === 'sin-cambios') {
+        if (data.cloudflare === 'publicado' || data.cloudflare === 'sin-cambios') {
           toast.success('Catalogo generado y publicado en linea.');
-        } else if (data.netlify === 'error') {
-          toast.error(`Catalogo generado, pero no se pudo publicar: ${data.netlifyError ?? ''}`);
+        } else if (data.cloudflare === 'error') {
+          toast.error(`Catalogo generado, pero no se pudo publicar: ${data.cloudflareError ?? ''}`);
         } else {
           toast.success(`Catalogo generado con ${data.productos} piezas.`);
         }
@@ -714,34 +720,58 @@ function CatalogoWeb({
           </p>
           <p className="mb-2 text-xs leading-relaxed text-muted">
             Con esto puesto, cada vez que algo cambia (una pieza se agota, cambia un precio,
-            entra una pieza nueva) la app <strong>sube el catalogo a Netlify sola</strong> — no
-            hay que volver a arrastrar el folder. En{' '}
-            <strong>netlify.com &rarr; User settings &rarr; Applications &rarr; Personal access tokens</strong>{' '}
-            creas un token; el <strong>Site ID</strong> esta en tu sitio, en{' '}
-            <strong>Site configuration &rarr; General</strong>.
+            entra una pieza nueva) la app <strong>sube el catalogo a Cloudflare Pages sola</strong> —
+            no hay que volver a arrastrar el folder. Es gratis y es la misma cuenta de{' '}
+            <strong>Cloudflare</strong> del relevo de pedidos, si ya la tienes.
           </p>
+          <ol className="mb-3 list-inside list-decimal space-y-1 text-xs leading-relaxed text-muted">
+            <li>
+              En Cloudflare: <strong>Workers &amp; Pages &rarr; Create &rarr; Pages &rarr; Upload assets</strong>,
+              dale un nombre (ese nombre es el <strong>Project name</strong> de abajo) y sube cualquier
+              archivo para crearlo — la app se encarga de reemplazarlo despues.
+            </li>
+            <li>
+              <strong>dash.cloudflare.com &rarr; tu cuenta &rarr; API Tokens &rarr; Create Token</strong>{' '}
+              (Custom Token) con permiso <strong>Account &rarr; Cloudflare Pages &rarr; Edit</strong>.
+            </li>
+            <li>
+              El <strong>Account ID</strong> esta en la misma pagina de Overview, a la derecha.
+            </li>
+          </ol>
           <div className="space-y-2">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Token de Netlify
+                Token de API de Cloudflare
               </label>
               <input
                 type="password"
-                value={netlifyToken}
-                onChange={(e) => onChange('netlifyToken', e.target.value)}
-                placeholder="nfp_..."
+                value={cloudflareApiToken}
+                onChange={(e) => onChange('cloudflareApiToken', e.target.value)}
+                placeholder="Token con permiso Cloudflare Pages: Edit"
                 autoComplete="off"
                 className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
               />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Site ID de Netlify
+                Account ID de Cloudflare
               </label>
               <input
-                value={netlifySiteId}
-                onChange={(e) => onChange('netlifySiteId', e.target.value)}
-                placeholder="a1b2c3d4-... o el nombre del sitio"
+                value={cloudflareAccountId}
+                onChange={(e) => onChange('cloudflareAccountId', e.target.value)}
+                placeholder="El de la pagina Overview de tu cuenta"
+                autoComplete="off"
+                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Nombre del proyecto de Pages
+              </label>
+              <input
+                value={cloudflarePagesProject}
+                onChange={(e) => onChange('cloudflarePagesProject', e.target.value)}
+                placeholder="mi-catalogo"
                 autoComplete="off"
                 className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
               />
@@ -780,19 +810,19 @@ function CatalogoWeb({
         {resultado && (
           <div
             className={`rounded-lg p-3 text-xs ${
-              resultado.netlify === 'error'
+              resultado.cloudflare === 'error'
                 ? 'bg-brick-100 text-brick-700'
                 : 'bg-sage-100 text-sage-700'
             }`}
           >
             <p className="font-semibold">Catalogo listo con {resultado.productos} piezas.</p>
 
-            {(resultado.netlify === 'publicado' || resultado.netlify === 'sin-cambios') && (
+            {(resultado.cloudflare === 'publicado' || resultado.cloudflare === 'sin-cambios') && (
               <p className="mt-2">
                 Ya esta en linea.{' '}
-                {resultado.netlifyUrl && (
+                {resultado.cloudflareUrl && (
                   <a
-                    href={resultado.netlifyUrl}
+                    href={resultado.cloudflareUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="font-semibold underline"
@@ -804,15 +834,15 @@ function CatalogoWeb({
               </p>
             )}
 
-            {resultado.netlify === 'error' && (
+            {resultado.cloudflare === 'error' && (
               <p className="mt-2">
-                No se pudo publicar en Netlify: {resultado.netlifyError}. El catalogo quedo en la
-                carpeta <code className="break-all">{resultado.carpeta}</code> — puedes subirlo a
-                mano en <strong>app.netlify.com/drop</strong> mientras tanto.
+                No se pudo publicar en Cloudflare Pages: {resultado.cloudflareError}. El catalogo
+                quedo en la carpeta <code className="break-all">{resultado.carpeta}</code> — puedes
+                subirlo a mano en <strong>app.netlify.com/drop</strong> mientras tanto.
               </p>
             )}
 
-            {(!resultado.netlify || resultado.netlify === 'sin-configurar') && (
+            {(!resultado.cloudflare || resultado.cloudflare === 'sin-configurar') && (
               <>
                 <p className="mt-1 break-all">
                   Carpeta: <code>{resultado.carpeta}</code>
@@ -820,7 +850,8 @@ function CatalogoWeb({
                 <p className="mt-2">
                   Para ponerlo en linea gratis: entra a <strong>app.netlify.com/drop</strong> y
                   arrastra esa carpeta completa a la pagina. Te dara una direccion al instante. (O
-                  llena arriba el token y el Site ID de Netlify para que se suba solo.)
+                  llena arriba el token, el Account ID y el proyecto de Cloudflare Pages para que
+                  se suba solo.)
                 </p>
               </>
             )}

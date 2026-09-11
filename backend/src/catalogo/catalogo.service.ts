@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import AdmZip from 'adm-zip';
+import { join, basename, extname, relative, sep } from 'path';
+import { hash as blake3Hash, load as blake3Load } from 'blake3-wasm';
 import { PrismaService } from '../prisma/prisma.service';
 import { UPLOADS_DIR } from '../common/paths';
 import { generarHtml, DatosCatalogo, ProductoCatalogo } from './plantilla';
@@ -19,6 +19,21 @@ function parsearTallas(raw: string | null): string[] {
   }
 }
 
+const MIME_POR_EXTENSION: Record<string, string> = {
+  html: 'text/html; charset=utf-8',
+  htm: 'text/html; charset=utf-8',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  ico: 'image/x-icon',
+};
+function mimeDeExtension(extension: string): string {
+  return MIME_POR_EXTENSION[extension.toLowerCase()] ?? 'application/octet-stream';
+}
+
 export interface ResultadoGenerar {
   ok: boolean;
   carpeta?: string;
@@ -28,15 +43,15 @@ export interface ResultadoGenerar {
   excluidasSinPrecio?: number;
   error?: string;
   /**
-   * Resultado de la publicacion automatica a Netlify:
-   *  - 'sin-configurar': no hay token/site de Netlify puestos (se sube a mano).
-   *  - 'sin-cambios': Netlify configurado pero el catalogo no cambio nada visible.
-   *  - 'publicado': se subio a Netlify y ya esta en linea.
-   *  - 'error': se intento subir y fallo (ver netlifyError).
+   * Resultado de la publicacion automatica a Cloudflare Pages:
+   *  - 'sin-configurar': no hay token/cuenta/proyecto de Cloudflare puestos (se sube a mano).
+   *  - 'sin-cambios': Cloudflare configurado pero el catalogo no cambio nada visible.
+   *  - 'publicado': se subio a Cloudflare y ya esta en linea.
+   *  - 'error': se intento subir y fallo (ver cloudflareError).
    */
-  netlify?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
-  netlifyUrl?: string;
-  netlifyError?: string;
+  cloudflare?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
+  cloudflareUrl?: string;
+  cloudflareError?: string;
 }
 
 /**
@@ -84,12 +99,18 @@ export class CatalogoService {
   private ejecucionActual: Promise<ResultadoGenerar> | null = null;
   private hayPendiente = false;
   /**
-   * Hash del ultimo index.html publicado en Netlify. Si una regeneracion
+   * Hash del ultimo index.html publicado en Cloudflare. Si una regeneracion
    * produce el mismo HTML (ej. una venta que baja el stock de 5 a 4 no cambia
    * nada visible), no se vuelve a subir. Vive en memoria: tras reiniciar la
    * app se hace una subida de mas, y ya.
    */
   private ultimoHashPublicado: string | null = null;
+  /** blake3-wasm necesita cargar su WebAssembly una vez antes de poder hashear. */
+  private blake3Listo: Promise<void> | null = null;
+  private async asegurarBlake3(): Promise<void> {
+    if (!this.blake3Listo) this.blake3Listo = blake3Load();
+    await this.blake3Listo;
+  }
 
   /**
    * Punto de entrada publico: serializa las generaciones para que nunca
@@ -235,27 +256,28 @@ export class CatalogoService {
       excluidasSinPrecio: sinPrecio.length,
     };
 
-    // Publicacion automatica a Netlify (si esta configurada). Nunca tumba la
-    // generacion: si falla, el folder queda listo para subir a mano igual.
-    const token = perfil.netlifyToken?.trim();
-    const siteId = perfil.netlifySiteId?.trim();
-    if (!token || !siteId) {
-      resultado.netlify = 'sin-configurar';
+    // Publicacion automatica a Cloudflare Pages (si esta configurada). Nunca
+    // tumba la generacion: si falla, el folder queda listo para subir a mano.
+    const token = perfil.cloudflareApiToken?.trim();
+    const accountId = perfil.cloudflareAccountId?.trim();
+    const proyecto = perfil.cloudflarePagesProject?.trim();
+    if (!token || !accountId || !proyecto) {
+      resultado.cloudflare = 'sin-configurar';
     } else {
       const hash = createHash('sha1').update(html).digest('hex');
       if (!forzarPublicacion && hash === this.ultimoHashPublicado) {
-        resultado.netlify = 'sin-cambios';
+        resultado.cloudflare = 'sin-cambios';
       } else {
-        const pub = await this.publicarEnNetlify(carpeta, token, siteId);
+        const pub = await this.publicarEnCloudflarePages(carpeta, token, accountId, proyecto);
         if (pub.ok) {
           this.ultimoHashPublicado = hash;
-          resultado.netlify = 'publicado';
-          resultado.netlifyUrl = pub.url;
-          this.logger.log(`Catalogo publicado en Netlify: ${pub.url ?? '(sin URL)'}`);
+          resultado.cloudflare = 'publicado';
+          resultado.cloudflareUrl = pub.url;
+          this.logger.log(`Catalogo publicado en Cloudflare Pages: ${pub.url ?? '(sin URL)'}`);
         } else {
-          resultado.netlify = 'error';
-          resultado.netlifyError = pub.error;
-          this.logger.warn(`No se pudo publicar el catalogo en Netlify: ${pub.error}`);
+          resultado.cloudflare = 'error';
+          resultado.cloudflareError = pub.error;
+          this.logger.warn(`No se pudo publicar el catalogo en Cloudflare Pages: ${pub.error}`);
         }
       }
     }
@@ -263,49 +285,163 @@ export class CatalogoService {
     return resultado;
   }
 
-  /**
-   * Sube el folder del catalogo a Netlify por su API (mismo mecanismo que
-   * arrastrar el folder a netlify.com/drop, pero automatico). El deploy se
-   * publica en produccion al instante.
-   */
-  private async publicarEnNetlify(
-    carpeta: string,
-    token: string,
-    siteId: string,
-  ): Promise<{ ok: boolean; url?: string; error?: string }> {
-    try {
-      const zip = new AdmZip();
-      // addLocalFolder deja index.html y fotos/ en la raiz del zip, que es lo
-      // que Netlify espera.
-      zip.addLocalFolder(carpeta);
-      const body = zip.toBuffer();
+  /** Todos los archivos del sitio generado, con su ruta absoluta. */
+  private async listarArchivos(carpeta: string): Promise<string[]> {
+    const resultado: string[] = [];
+    const recorrer = async (dir: string): Promise<void> => {
+      const entradas = await fs.readdir(dir, { withFileTypes: true });
+      for (const entrada of entradas) {
+        const ruta = join(dir, entrada.name);
+        if (entrada.isDirectory()) await recorrer(ruta);
+        else resultado.push(ruta);
+      }
+    };
+    await recorrer(carpeta);
+    return resultado;
+  }
 
-      const respuesta = await fetch(
-        `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}/deploys`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/zip' },
-          body,
-          signal: AbortSignal.timeout(90_000),
-        },
+  /**
+   * Sube el folder del catalogo a Cloudflare Pages por su API de "direct
+   * upload" (lo mismo que hace `wrangler pages deploy`, pero sin instalar
+   * wrangler: el catalogo es chico, unos pocos archivos, asi que se hace a
+   * mano con fetch en un solo paso en vez del sistema de baldes/reintentos
+   * que usa wrangler para sitios grandes).
+   *
+   * Son 5 llamadas encadenadas (asi funciona la API de Cloudflare):
+   *  1. Pedir un token de subida (con el token de la cuenta).
+   *  2. Preguntar cuales fotos ya estan subidas de una vez anterior (por su
+   *     hash) para no volver a mandarlas si no cambiaron.
+   *  3. Subir las que faltan.
+   *  4. Confirmar los hashes subidos (mejor esfuerzo).
+   *  5. Crear el despliegue, indicando que archivo (ruta) es cada hash.
+   */
+  private async publicarEnCloudflarePages(
+    carpeta: string,
+    apiToken: string,
+    accountId: string,
+    proyecto: string,
+  ): Promise<{ ok: boolean; url?: string; error?: string }> {
+    const base = 'https://api.cloudflare.com/client/v4';
+    const headersCuenta = { Authorization: `Bearer ${apiToken}` };
+
+    const leerError = async (respuesta: Response): Promise<string> => {
+      try {
+        const cuerpo = (await respuesta.json()) as { errors?: { message?: string }[] };
+        return cuerpo.errors?.[0]?.message || `respondio ${respuesta.status}`;
+      } catch {
+        return `respondio ${respuesta.status}`;
+      }
+    };
+
+    try {
+      await this.asegurarBlake3();
+
+      const rutas = await this.listarArchivos(carpeta);
+      const archivos = await Promise.all(
+        rutas.map(async (ruta) => {
+          const contenido = await fs.readFile(ruta);
+          const base64 = contenido.toString('base64');
+          // El hash de Cloudflare Pages es blake3(base64Contenido + extension),
+          // igual que hace wrangler — hay que replicarlo exacto o el manifest
+          // no coincide con lo subido.
+          const extension = extname(ruta).slice(1);
+          const hash = blake3Hash(base64 + extension).toString('hex').slice(0, 32);
+          const relativa = '/' + relative(carpeta, ruta).split(sep).join('/');
+          return { relativa, hash, base64, contentType: mimeDeExtension(extension) };
+        }),
       );
 
-      if (!respuesta.ok) {
-        if (respuesta.status === 401) {
-          return { ok: false, error: 'El token de Netlify no es valido o expiro.' };
-        }
-        if (respuesta.status === 404) {
-          return { ok: false, error: 'El ID del sitio de Netlify no existe o el token no tiene acceso a el.' };
-        }
-        const detalle = await respuesta.text().catch(() => '');
-        return { ok: false, error: `Netlify respondio ${respuesta.status}. ${detalle}`.trim() };
+      if (archivos.length === 0) {
+        return { ok: false, error: 'El catalogo no tiene archivos que publicar.' };
       }
 
-      const data = (await respuesta.json()) as { ssl_url?: string; deploy_ssl_url?: string };
-      return { ok: true, url: data.ssl_url || data.deploy_ssl_url };
+      // 1) Token de subida (JWT de corta duracion, distinto del token de la cuenta).
+      const respJwt = await fetch(
+        `${base}/accounts/${encodeURIComponent(accountId)}/pages/projects/${encodeURIComponent(proyecto)}/upload-token`,
+        { headers: headersCuenta, signal: AbortSignal.timeout(30_000) },
+      );
+      if (!respJwt.ok) {
+        if (respJwt.status === 401 || respJwt.status === 403) {
+          return { ok: false, error: 'El token de Cloudflare no es valido o no tiene permiso sobre Pages.' };
+        }
+        if (respJwt.status === 404) {
+          return {
+            ok: false,
+            error: 'No se encontro ese proyecto de Cloudflare Pages (revisa el nombre y el Account ID).',
+          };
+        }
+        return { ok: false, error: `Cloudflare no dio el token de subida (${await leerError(respJwt)}).` };
+      }
+      const jwt = ((await respJwt.json()) as { result?: { jwt?: string } }).result?.jwt;
+      if (!jwt) return { ok: false, error: 'Cloudflare no devolvio un token de subida valido.' };
+
+      const headersSubida = { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' };
+
+      // 2) Cuales fotos ya estan (no volver a mandar las que no cambiaron).
+      const respFaltan = await fetch(`${base}/pages/assets/check-missing`, {
+        method: 'POST',
+        headers: headersSubida,
+        body: JSON.stringify({ hashes: archivos.map((a) => a.hash) }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!respFaltan.ok) {
+        return { ok: false, error: `Cloudflare no pudo revisar los archivos (${await leerError(respFaltan)}).` };
+      }
+      const faltantes = ((await respFaltan.json()) as { result?: string[] }).result ?? [];
+
+      // 3) Subir lo que falta. El catalogo es chico (una pagina + unas
+      // fotos): todo en una sola tanda, sin el sistema de baldes de wrangler.
+      const porSubir = archivos.filter((a) => faltantes.includes(a.hash));
+      if (porSubir.length > 0) {
+        const respSubida = await fetch(`${base}/pages/assets/upload`, {
+          method: 'POST',
+          headers: headersSubida,
+          body: JSON.stringify(
+            porSubir.map((a) => ({
+              key: a.hash,
+              value: a.base64,
+              metadata: { contentType: a.contentType },
+              base64: true,
+            })),
+          ),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!respSubida.ok) {
+          return { ok: false, error: `Cloudflare no acepto los archivos (${await leerError(respSubida)}).` };
+        }
+      }
+
+      // 4) Confirmar los hashes (mejor esfuerzo: si falla, la proxima
+      // publicacion simplemente vuelve a subir de mas, nada se rompe).
+      await fetch(`${base}/pages/assets/upsert-hashes`, {
+        method: 'POST',
+        headers: headersSubida,
+        body: JSON.stringify({ hashes: archivos.map((a) => a.hash) }),
+        signal: AbortSignal.timeout(30_000),
+      }).catch(() => {});
+
+      // 5) Crear el despliegue: un manifest de "ruta -> hash", con el token
+      // de la cuenta (no el jwt de subida).
+      const manifest: Record<string, string> = {};
+      for (const a of archivos) manifest[a.relativa] = a.hash;
+
+      const formulario = new FormData();
+      formulario.append('manifest', JSON.stringify(manifest));
+
+      const respDeploy = await fetch(
+        `${base}/accounts/${encodeURIComponent(accountId)}/pages/projects/${encodeURIComponent(proyecto)}/deployments`,
+        { method: 'POST', headers: headersCuenta, body: formulario, signal: AbortSignal.timeout(60_000) },
+      );
+      if (!respDeploy.ok) {
+        return { ok: false, error: `Cloudflare no acepto el despliegue (${await leerError(respDeploy)}).` };
+      }
+      const cuerpoDeploy = (await respDeploy.json()) as { result?: { url?: string; aliases?: string[] } };
+      const url = cuerpoDeploy.result?.url || cuerpoDeploy.result?.aliases?.[0] || `https://${proyecto}.pages.dev`;
+
+      return { ok: true, url };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      return { ok: false, error: `No se pudo contactar a Netlify (${msg}).` };
+      return { ok: false, error: `No se pudo contactar a Cloudflare (${msg}).` };
     }
   }
 

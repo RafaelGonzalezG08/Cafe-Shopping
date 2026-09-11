@@ -336,12 +336,15 @@ model BusinessProfile {
   relevoPedidosUrl   String? @map("relevo_pedidos_url")
   relevoPedidosClave String? @map("relevo_pedidos_clave")
 
-  // Publicacion automatica del catalogo a Netlify (opcional). Con el token
-  // (personal access token de netlify.com) y el ID del sitio puestos, la app
-  // sube el sitio a Netlify por su API despues de cada regeneracion, asi no
-  // hay que volver a arrastrar el folder cuando algo se agota o cambia.
-  netlifyToken  String? @map("netlify_token")
-  netlifySiteId String? @map("netlify_site_id")
+  // Publicacion automatica del catalogo a Cloudflare Pages (opcional). Con el
+  // token de API, el Account ID y el nombre del proyecto puestos, la app sube
+  // el sitio por la API de Cloudflare despues de cada regeneracion, asi no
+  // hay que volver a arrastrar el folder cuando algo se agota o cambia. Se
+  // eligio Cloudflare y no Netlify porque el plan gratis de Netlify cambio a
+  // un sistema de creditos que no alcanza para publicar en cada venta.
+  cloudflareApiToken    String? @map("cloudflare_api_token")
+  cloudflareAccountId   String? @map("cloudflare_account_id")
+  cloudflarePagesProject String? @map("cloudflare_pages_project")
 
   updatedAt    DateTime @updatedAt @map("updated_at")
 

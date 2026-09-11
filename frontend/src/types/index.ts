@@ -254,6 +254,7 @@ export interface BusinessProfile {
   datosPago?: string | null;
   relevoPedidosUrl?: string | null;
   relevoPedidosClave?: string | null;
-  netlifyToken?: string | null;
-  netlifySiteId?: string | null;
+  cloudflareApiToken?: string | null;
+  cloudflareAccountId?: string | null;
+  cloudflarePagesProject?: string | null;
 }

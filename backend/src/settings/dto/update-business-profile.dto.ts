@@ -88,17 +88,25 @@ export class UpdateBusinessProfileDto {
 
   @ApiProperty({
     required: false,
-    description: 'Personal access token de Netlify (para publicar el catalogo solo).',
+    description: 'Token de API de Cloudflare, con permiso "Cloudflare Pages: Edit" (para publicar el catalogo solo).',
   })
   @IsOptional()
   @IsString()
-  netlifyToken?: string;
+  cloudflareApiToken?: string;
 
   @ApiProperty({
     required: false,
-    description: 'ID del sitio de Netlify donde se publica el catalogo.',
+    description: 'Account ID de Cloudflare (Overview del dashboard).',
   })
   @IsOptional()
   @IsString()
-  netlifySiteId?: string;
+  cloudflareAccountId?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Nombre del proyecto de Cloudflare Pages donde se publica el catalogo.',
+  })
+  @IsOptional()
+  @IsString()
+  cloudflarePagesProject?: string;
 }

@@ -37,8 +37,8 @@
     "@nestjs/swagger": "^7.3.0",
     "@prisma/client": "^5.10.0",
     "@types/bcryptjs": "^2.4.6",
-    "adm-zip": "^0.5.18",
     "bcryptjs": "^3.0.3",
+    "blake3-wasm": "^3.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "exceljs": "^4.4.0",
@@ -51,11 +51,15 @@
     "sharp": "^0.35.3",
     "uuid": "^9.0.1"
   },
+  "overrides": {
+    "blake3-wasm": {
+      "@c4312/blake3-internal": "3.0.0"
+    }
+  },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.3.0",
-    "@types/adm-zip": "^0.5.8",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
     "@types/multer": "^1.4.11",
