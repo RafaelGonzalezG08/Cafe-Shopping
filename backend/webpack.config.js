@@ -14,6 +14,10 @@
  *    ARCHIVO real en disco. Empaquetarlo rompe esa resolucion.
  *  - sharp: tiene un binario nativo (.node) para redimensionar imagenes.
  *    Los binarios nativos no se pueden meter dentro de un bundle de webpack.
+ *  - blake3-wasm: carga su archivo .wasm en tiempo de ejecucion buscandolo
+ *    junto a su propio archivo (__filename) en disco, no con un require()
+ *    que webpack pueda seguir. Empaquetado, ese __filename pasa a ser el del
+ *    bundle (dist/main.js) y ya no encuentra el .wasm al lado.
  *  - reflect-metadata, class-transformer, class-validator: dependen de que
  *    los decoradores (@Type(), @IsNumber(), etc.) y el codigo que los lee en
  *    tiempo de ejecucion compartan EXACTAMENTE el mismo registro global de
@@ -39,6 +43,7 @@ module.exports = function (options) {
           request.startsWith('.prisma/') ||
           request.startsWith('@prisma/engines') ||
           request === 'sharp' ||
+          request === 'blake3-wasm' ||
           request === 'reflect-metadata' ||
           request === 'class-transformer' ||
           request.startsWith('class-transformer/') ||
