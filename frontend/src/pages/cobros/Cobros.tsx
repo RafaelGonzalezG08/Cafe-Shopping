@@ -74,7 +74,41 @@ export default function Cobros() {
       ) : debts.length === 0 ? (
         <EmptyState title="Sin cuentas en esta vista" description="No hay clientes con saldo en este filtro." />
       ) : (
-        <Card className="overflow-hidden">
+        <>
+          {/* Celular: tarjetas. El detalle completo (abonos, factura) vive en DebtDetailModal. */}
+          <div className="space-y-2 md:hidden">
+            {debts.map((debt) => {
+              const total = Number(debt.amountTotal ?? 0);
+              const pagado = Number(debt.amountPaid ?? 0);
+              const saldo = Math.max(0, total - pagado);
+              return (
+                <Card
+                  key={debt.id}
+                  className="cursor-pointer p-3.5 active:shadow-neu-pressed"
+                  onClick={() => setSelected(debt)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">{debt.client?.nombre ?? 'Cliente'}</p>
+                      {debt.client?.telefono && <p className="text-xs text-muted">{debt.client.telefono}</p>}
+                    </div>
+                    <span className="shrink-0 font-display font-semibold tabular-nums text-ink">
+                      RD$ {formatMoney(saldo)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Badge tone={ESTADO_TONE[debt.status]}>{ESTADO_DEUDA_LABEL[debt.status]}</Badge>
+                    <span className="text-xs text-muted">
+                      {debt.dueDate ? `Vence ${formatDate(debt.dueDate)}` : 'Sin fecha de vencimiento'}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* PC: tabla, sin cambios. */}
+          <Card className="hidden overflow-hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-porcelain-100 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
@@ -117,7 +151,8 @@ export default function Cobros() {
               })}
             </tbody>
           </table>
-        </Card>
+          </Card>
+        </>
       )}
 
       {selected && <DebtDetailModal debt={selected} onClose={() => setSelected(null)} />}

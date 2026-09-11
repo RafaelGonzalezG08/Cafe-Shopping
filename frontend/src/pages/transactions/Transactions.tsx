@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileText } from 'lucide-react';
+import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileText, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
@@ -83,6 +83,7 @@ export default function Transactions() {
   const [q, setQ] = useState('');
   const [aEliminar, setAEliminar] = useState<Transaccion | null>(null);
   const [facturaVista, setFacturaVista] = useState<string | null>(null);
+  const [seleccionada, setSeleccionada] = useState<Transaccion | null>(null);
 
   // Eliminar una venta solo lo puede hacer ADMIN (misma regla que en
   // Ventas); abonos y gastos los puede corregir tambien Contabilidad.
@@ -289,7 +290,39 @@ export default function Transactions() {
           description="Ajusta el rango de fechas o los filtros de arriba."
         />
       ) : (
-        <Card className="overflow-hidden">
+        <>
+          {/* Celular: tarjetas compactas; el detalle completo va en TransaccionDetailModal. */}
+          <div className="space-y-2 md:hidden">
+            {items.map((t) => (
+              <Card
+                key={t.id}
+                className="cursor-pointer p-3.5 active:shadow-neu-pressed"
+                onClick={() => setSeleccionada(t)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-ink">{t.descripcion}</p>
+                    <p className="text-xs text-muted">
+                      {formatDate(t.fecha)} · {formatTime(t.fecha)}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 whitespace-nowrap font-display font-semibold tabular-nums ${
+                      t.signo === 'INGRESO' ? 'text-sage-600' : 'text-brick-600'
+                    }`}
+                  >
+                    {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <Badge tone={TONE_BY_TIPO[t.tipo]}>{TIPOS.find((x) => x.value === t.tipo)?.label}</Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* PC: tabla, sin cambios. */}
+          <Card className="hidden overflow-hidden md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-porcelain-100 text-left text-xs uppercase tracking-wide text-muted">
@@ -360,7 +393,21 @@ export default function Transactions() {
           <p className="border-t border-porcelain-200 px-4 py-2.5 text-xs text-muted">
             {items.length} transaccion{items.length === 1 ? '' : 'es'} en este filtro.
           </p>
-        </Card>
+          </Card>
+        </>
+      )}
+
+      {seleccionada && (
+        <TransaccionDetailModal
+          t={seleccionada}
+          puedeEliminar={puedeEliminar(seleccionada)}
+          onVerFactura={() => setFacturaVista(seleccionada.facturaPngUrl)}
+          onEliminar={() => {
+            setAEliminar(seleccionada);
+            setSeleccionada(null);
+          }}
+          onClose={() => setSeleccionada(null)}
+        />
       )}
 
       {aEliminar && (
@@ -384,6 +431,99 @@ export default function Transactions() {
       {facturaVista && (
         <FacturaLightbox pngUrl={facturaVista} onClose={() => setFacturaVista(null)} />
       )}
+    </div>
+  );
+}
+
+/** Detalle completo de una transaccion, para celular (la tabla de PC ya muestra todo en la fila). */
+function TransaccionDetailModal({
+  t,
+  puedeEliminar,
+  onVerFactura,
+  onEliminar,
+  onClose,
+}: {
+  t: Transaccion;
+  puedeEliminar: boolean;
+  onVerFactura: () => void;
+  onEliminar: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
+      <Card className="w-full max-w-sm p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <Badge tone={TONE_BY_TIPO[t.tipo]}>{TIPOS.find((x) => x.value === t.tipo)?.label}</Badge>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p
+          className={`mb-3 font-display text-2xl font-bold tabular-nums ${
+            t.signo === 'INGRESO' ? 'text-sage-600' : 'text-brick-600'
+          }`}
+        >
+          {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
+        </p>
+
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted">Fecha</dt>
+            <dd className="text-right text-ink">{formatDateTime(t.fecha)}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted">Detalle</dt>
+            <dd className="text-right text-ink">{t.descripcion}</dd>
+          </div>
+          {t.cliente && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Cliente</dt>
+              <dd className="text-right text-ink">{t.cliente}</dd>
+            </div>
+          )}
+          {t.usuario && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Usuario</dt>
+              <dd className="text-right text-ink">{t.usuario}</dd>
+            </div>
+          )}
+          {t.metodoPago && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Metodo</dt>
+              <dd className="text-right text-ink">{METODO_PAGO_LABEL[t.metodoPago]}</dd>
+            </div>
+          )}
+          {t.referencia && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Referencia</dt>
+              <dd className="text-right text-ink">
+                {t.referencia}
+                {t.estado && ` · ${ESTADO_FACTURA_LABEL[t.estado]}`}
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        <div className="mt-4 flex gap-2">
+          {t.facturaPngUrl && (
+            <button
+              onClick={onVerFactura}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-porcelain-300 px-3 py-2 text-sm font-medium text-copper-600 hover:border-copper-400"
+            >
+              <FileText size={15} /> Ver factura
+            </button>
+          )}
+          {puedeEliminar && (
+            <button
+              onClick={onEliminar}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-porcelain-300 px-3 py-2 text-sm font-medium text-brick-600 hover:border-brick-400"
+            >
+              <Trash2 size={15} /> Eliminar
+            </button>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

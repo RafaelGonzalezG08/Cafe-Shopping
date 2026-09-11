@@ -207,8 +207,9 @@ export default function POS() {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-      {/* Catalogo */}
-      <div>
+      {/* Catalogo. En celular va DESPUES del carrito (order-2): asi el carrito/cobro
+          queda arriba, sin tener que scrollear todo el catalogo para pagar. */}
+      <div className="order-2 lg:order-1">
         <div className="buscador mb-4">
           <Search size={16} className="shrink-0 text-muted" />
           <input
@@ -297,7 +298,7 @@ export default function POS() {
       </div>
 
       {/* Carrito */}
-      <Card className="flex h-fit flex-col p-4">
+      <Card className="order-1 flex h-fit flex-col p-4 lg:order-2">
         <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
           Carrito ({cart.length})
         </h2>
@@ -365,7 +366,7 @@ export default function POS() {
 
         <div className="mb-3">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Metodo de pago</p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {METODOS.map((m) => (
               <button
                 key={m}

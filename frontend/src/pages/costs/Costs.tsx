@@ -85,7 +85,47 @@ export default function Costs() {
             description="El margen se calcula sobre piezas vendidas; asigna un costo a tus productos en Productos para verlo aqui."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Celular: tarjetas, con todos los numeros -- es un reporte de solo lectura, no hace falta un panel aparte. */}
+            <div className="space-y-2 md:hidden">
+              {productos.map((p) => (
+                <div key={p.productId ?? p.nombre} className="rounded-lg border border-porcelain-200 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Gem size={14} className="shrink-0 text-copper-500" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-ink">{p.nombre}</p>
+                        {p.sku && <p className="font-mono text-[11px] text-muted">{p.sku}</p>}
+                      </div>
+                    </div>
+                    <Badge tone={p.margenPct < 20 ? 'brick' : p.margenPct < 40 ? 'copper' : 'sage'}>
+                      {p.margenPct.toFixed(1)}%
+                    </Badge>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                    <div>
+                      <span className="text-muted">Unidades: </span>
+                      <span className="tabular-nums text-ink">{p.unidades}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted">Ingresos: </span>
+                      <span className="tabular-nums text-ink">RD$ {formatMoney(p.ingresos)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted">Costo: </span>
+                      <span className="tabular-nums text-muted">RD$ {formatMoney(p.costo)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted">Utilidad: </span>
+                      <span className="tabular-nums font-semibold text-sage-600">RD$ {formatMoney(p.utilidad)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* PC: tabla, sin cambios. */}
+            <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-porcelain-200 text-xs uppercase text-muted">
@@ -124,7 +164,8 @@ export default function Costs() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
     </div>

@@ -18,6 +18,7 @@ import {
   Moon,
   Sun,
   X,
+  Menu,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api, apiUrl, urlConToken } from '../lib/api';
@@ -53,6 +54,8 @@ export function Layout() {
   const { user, logout } = useAuthStore();
   const { esOscuro, alternar } = useTheme();
   const [confirmandoSalir, setConfirmandoSalir] = useState(false);
+  /** En celular el menu lateral empieza escondido; en PC (md+) siempre se ve, sin importar esto. */
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
@@ -68,7 +71,19 @@ export function Layout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
-      <aside className="z-10 flex h-screen w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)]">
+      {/* Fondo oscuro detras del menu en celular; tocarlo lo cierra. No existe en PC. */}
+      {menuAbierto && (
+        <div
+          className="fixed inset-0 z-20 bg-espresso-950/50 md:hidden"
+          onClick={() => setMenuAbierto(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 flex h-screen w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)] transition-transform duration-200 md:static md:translate-x-0 ${
+          menuAbierto ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="flex shrink-0 items-center gap-2.5 px-5 py-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
             {logoSrc ? (
@@ -77,14 +92,21 @@ export function Layout() {
               <Gem size={18} strokeWidth={2.25} className="text-white" />
             )}
           </div>
-          <div>
-            <p className="font-display text-[15px] font-bold leading-none tracking-tight text-ink">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-[15px] font-bold leading-none tracking-tight text-ink">
               {profile?.nombre || 'Cafe Shopping'}
             </p>
             <p className="mt-1 font-lema text-[13px] italic leading-none text-copper-600">
               un placer al comprar
             </p>
           </div>
+          <button
+            onClick={() => setMenuAbierto(false)}
+            aria-label="Cerrar menu"
+            className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-porcelain-200 md:hidden"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
@@ -93,6 +115,7 @@ export function Layout() {
               key={to}
               to={to}
               end={to === '/'}
+              onClick={() => setMenuAbierto(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all ${
                   isActive
@@ -137,6 +160,7 @@ export function Layout() {
               <NavLink
                 to="/configuracion"
                 title="Configuracion"
+                onClick={() => setMenuAbierto(false)}
                 className={({ isActive }) =>
                   `flex shrink-0 items-center justify-center rounded-xl p-2.5 transition-all ${
                     isActive
@@ -179,7 +203,19 @@ export function Layout() {
       )}
 
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-6 py-8 md:px-10">
+        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-porcelain-200 bg-porcelain-100 px-4 py-3 md:hidden">
+          <button
+            onClick={() => setMenuAbierto(true)}
+            aria-label="Abrir menu"
+            className="shrink-0 rounded-lg p-2 text-ink shadow-neu-sm active:shadow-neu-pressed"
+          >
+            <Menu size={20} />
+          </button>
+          <p className="truncate font-display text-sm font-bold text-ink">
+            {profile?.nombre || 'Cafe Shopping'}
+          </p>
+        </div>
+        <div className="mx-auto max-w-6xl px-4 py-6 md:px-10 md:py-8">
           <Outlet />
         </div>
       </main>

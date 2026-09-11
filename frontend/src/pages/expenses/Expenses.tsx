@@ -72,14 +72,14 @@ export default function Expenses() {
           ) : (
             <Card className="divide-y divide-porcelain-200 overflow-hidden">
               {expenses.map((g) => (
-                <div key={g.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <div>
-                    <p className="font-medium text-ink">{g.descripcion}</p>
-                    <p className="text-xs text-muted">
+                <div key={g.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{g.descripcion}</p>
+                    <p className="truncate text-xs text-muted">
                       {g.categoria} &middot; {formatDate(g.fecha)} &middot; {g.user?.nombre}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-3">
                     <p className="font-display font-semibold tabular-nums text-ink">
                       RD$ {formatMoney(g.monto)}
                     </p>

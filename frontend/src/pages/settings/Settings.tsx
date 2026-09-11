@@ -356,7 +356,7 @@ export default function Settings() {
         <Seccion titulo="Usuarios y roles" icono={Users} resumen={`${users.length} usuario(s)`}>
           <div className="mb-3 divide-y divide-porcelain-200">
             {users.map((u) => (
-              <div key={u.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div key={u.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2 text-sm">
                 <div className="min-w-0">
                   <p className={`truncate ${u.activo ? 'text-ink' : 'text-muted line-through'}`}>{u.nombre}</p>
                   <p className="truncate text-xs text-muted">{u.email}</p>
@@ -423,7 +423,7 @@ export default function Settings() {
               <Play size={13} /> {runBackup.isPending ? 'Generando...' : 'Respaldar ahora'}
             </Button>
           </div>
-          <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+          <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
             <div className="rounded-lg bg-porcelain-100 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-muted">Ultimo respaldo</p>
               <p className="font-medium text-ink">

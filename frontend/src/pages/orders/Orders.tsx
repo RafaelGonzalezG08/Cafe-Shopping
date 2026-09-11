@@ -637,7 +637,7 @@ function AtenderPedidoWebModal({
 
         <div className="mb-3">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Metodo de pago</p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {METODOS_ATENDER.map((m) => (
               <button
                 key={m}

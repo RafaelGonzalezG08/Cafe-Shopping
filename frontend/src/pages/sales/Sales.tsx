@@ -56,7 +56,78 @@ export default function Sales() {
       ) : sales.length === 0 ? (
         <EmptyState title="Sin ventas en este rango" description="Registra una venta desde el Punto de venta." />
       ) : (
-        <Card className="overflow-hidden">
+        <>
+          {/* Celular: tarjetas. El detalle completo (items, factura) vive en SaleDetailModal. */}
+          <div className="space-y-2 md:hidden">
+            {sales.map((sale) => (
+              <Card
+                key={sale.id}
+                className="cursor-pointer p-3.5 active:shadow-neu-pressed"
+                onClick={() => setSelectedSale(sale)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {sale.client?.nombre ?? 'Consumidor final'}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {formatDate(sale.fecha)} · {formatTime(sale.fecha)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-display font-semibold tabular-nums text-ink">
+                    RD$ {formatMoney(sale.total)}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={sale.metodoPago === 'CREDITO' ? 'brick' : 'sage'}>
+                      {METODO_PAGO_LABEL[sale.metodoPago]}
+                    </Badge>
+                    {sale.invoice && (
+                      <Badge tone={ESTADO_TONE[sale.invoice.estado]}>{sale.invoice.numero}</Badge>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                    {sale.invoice?.pngUrl && (
+                      <a
+                        href={urlConToken(
+                          sale.invoice.pngUrl.startsWith('http')
+                            ? sale.invoice.pngUrl
+                            : apiUrl(sale.invoice.pngUrl),
+                        )}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg p-1.5 text-muted hover:bg-porcelain-200"
+                        title="Descargar PNG"
+                      >
+                        <Download size={15} />
+                      </a>
+                    )}
+                    {sale.client?.telefono && (
+                      <button
+                        onClick={() => sendWhatsapp.mutate(sale.id)}
+                        disabled={sendWhatsapp.isPending || sale.invoice?.whatsappEstado === 'EN_COLA'}
+                        className={`rounded-lg p-1.5 hover:bg-sage-100 ${
+                          sale.invoice?.whatsappEstado === 'ERROR' ? 'text-brick-600' : 'text-sage-600'
+                        }`}
+                        title="Enviar por WhatsApp"
+                      >
+                        {(sendWhatsapp.isPending && sendWhatsapp.variables === sale.id) ||
+                        sale.invoice?.whatsappEstado === 'EN_COLA' ? (
+                          <Loader2 size={15} className="animate-spin" />
+                        ) : (
+                          <MessageCircle size={15} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* PC: tabla, sin cambios. */}
+          <Card className="hidden overflow-hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-porcelain-100 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
@@ -148,7 +219,8 @@ export default function Sales() {
               ))}
             </tbody>
           </table>
-        </Card>
+          </Card>
+        </>
       )}
 
       {selectedSale && <SaleDetailModal sale={selectedSale} onClose={() => setSelectedSale(null)} />}

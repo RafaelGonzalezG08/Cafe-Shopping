@@ -260,7 +260,7 @@ function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => 
                   {d.dueDate && (
                     <p className="mt-1 text-xs text-muted">Vence: {formatDate(d.dueDate)}</p>
                   )}
-                  <div className="mt-2 flex gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     <input
                       type="number"
                       min="0"
