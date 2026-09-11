@@ -15,10 +15,12 @@
 const { app } = require('electron');
 const { fork } = require('child_process');
 const http = require('http');
+const https = require('https');
 const net = require('net');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+const selfsigned = require('selfsigned');
 
 // Puertos propios, distintos a los de la version con Docker (3000/5173): asi
 // las dos pueden convivir en la misma PC mientras se prueba la migracion, sin
@@ -30,6 +32,7 @@ const MAX_WAIT_BACKEND_MS = 60000;
 
 let backendProcess = null;
 let frontendServer = null;
+let frontendServerHttps = null;
 
 // Estado del reinicio automatico del backend.
 let cerrando = false; // true cuando stopAll() esta cerrando todo a proposito
@@ -197,6 +200,10 @@ async function startBackend(onLog) {
   fs.mkdirSync(uploads, { recursive: true });
 
   const ipLan = obtenerIpLan();
+  // El certificado solo hace falta si hay red -- sin el, esta PC sigue
+  // funcionando sola en HTTP como siempre. obtenerCertificadoTls ya deja los
+  // archivos en disco (tls-cert.pem/tls-key.pem dentro de "datos").
+  if (ipLan) await obtenerCertificadoTls(datos, ipLan);
 
   backendEnv = {
     ...process.env,
@@ -224,13 +231,20 @@ async function startBackend(onLog) {
     // Se suma la IP de la red local (si hay) para que el CORS del backend
     // tambien acepte al celular abriendo la app por esa IP -- sin esto, la
     // pagina cargaria pero cada llamada a la API se rechazaria por origen
-    // distinto. main.ts ya separa esta lista por comas.
-    FRONTEND_URL: [`http://localhost:${FRONTEND_PORT}`, ipLan && `http://${ipLan}:${FRONTEND_PORT}`]
+    // distinto. main.ts ya separa esta lista por comas. La PC sigue por
+    // "http://localhost" (Chrome ya lo trata como origen seguro sin HTTPS);
+    // el celular entra por HTTPS con el certificado autofirmado.
+    FRONTEND_URL: [`http://localhost:${FRONTEND_PORT}`, ipLan && `https://${ipLan}:${FRONTEND_PORT}`]
       .filter(Boolean)
       .join(','),
     // Para mostrarla en Configuracion y que el dueño no tenga que correr
     // "ipconfig" para saber que direccion abrir en el celular.
-    LAN_URL: ipLan ? `http://${ipLan}:${FRONTEND_PORT}` : '',
+    LAN_URL: ipLan ? `https://${ipLan}:${FRONTEND_PORT}` : '',
+    // Para que el backend sepa en que direccion escuchar el HTTPS y arme la
+    // URL de descarga del certificado (ver /tls-cert.pem en main.ts).
+    LAN_IP: ipLan || '',
+    TLS_CERT_PATH: ipLan ? path.join(datos, 'tls-cert.pem') : '',
+    TLS_KEY_PATH: ipLan ? path.join(datos, 'tls-key.pem') : '',
     JWT_SECRET: obtenerJwtSecret(datos),
   };
   backendEntrada = entrada;
@@ -416,6 +430,56 @@ function obtenerJwtSecret(datos) {
   return secreto;
 }
 
+/**
+ * Certificado autofirmado para servir por HTTPS a quien entra por la IP de la
+ * red local (el celular). No hace falta para la PC: Electron sigue cargando
+ * "http://localhost", que Chrome ya trata como origen seguro sin HTTPS -- por
+ * eso este certificado nunca lo ve el propio Electron, solo el celular.
+ *
+ * Se cachea junto a los demas datos (mismo patron que obtenerJwtSecret) para
+ * no generar uno nuevo en cada arranque. Se regenera si cambia la IP de la
+ * red (el certificado anterior no serviria para la IP nueva) o si faltan los
+ * archivos.
+ */
+async function obtenerCertificadoTls(datos, ipLan) {
+  const archivoCert = path.join(datos, 'tls-cert.pem');
+  const archivoKey = path.join(datos, 'tls-key.pem');
+  const archivoMeta = path.join(datos, 'tls-meta.json');
+
+  try {
+    if (fs.existsSync(archivoCert) && fs.existsSync(archivoKey) && fs.existsSync(archivoMeta)) {
+      const meta = JSON.parse(fs.readFileSync(archivoMeta, 'utf8'));
+      if (meta.ip === (ipLan || null)) {
+        return { cert: fs.readFileSync(archivoCert, 'utf8'), key: fs.readFileSync(archivoKey, 'utf8') };
+      }
+    }
+  } catch {
+    // Cache corrupto o ilegible: se regenera abajo.
+  }
+
+  const altNames = [
+    { type: 2, value: 'localhost' },
+    { type: 7, ip: '127.0.0.1' },
+  ];
+  if (ipLan) altNames.push({ type: 7, ip: ipLan });
+
+  const pems = await selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
+    days: 3650,
+    algorithm: 'sha256',
+    extensions: [{ name: 'subjectAltName', altNames }],
+  });
+
+  try {
+    fs.writeFileSync(archivoCert, pems.cert, { mode: 0o600 });
+    fs.writeFileSync(archivoKey, pems.private, { mode: 0o600 });
+    fs.writeFileSync(archivoMeta, JSON.stringify({ ip: ipLan || null }), { mode: 0o600 });
+  } catch {
+    // Aunque no se pueda guardar, el certificado sirve para esta sesion.
+  }
+
+  return { cert: pems.cert, key: pems.private };
+}
+
 async function waitForBackend(onStatus) {
   let transcurrido = 0;
   while (transcurrido < MAX_WAIT_BACKEND_MS) {
@@ -463,7 +527,13 @@ const TIPOS = {
 };
 
 /**
- * Sirve el frontend compilado por HTTP en localhost.
+ * Sirve el frontend compilado en dos direcciones a la vez:
+ *  - HTTP en 127.0.0.1, solo para esta PC (lo que carga la ventana de
+ *    Electron). Chrome ya trata "localhost" como origen seguro sin HTTPS,
+ *    asi que Electron nunca necesita saber nada de certificados.
+ *  - HTTPS en la IP de la red local (si hay), para el celular: Chrome solo
+ *    ofrece "Instalar aplicacion" (sin la barra del navegador) en un origen
+ *    seguro de verdad, y una IP en HTTP plano no cuenta como tal.
  *
  * Se usa un servidor HTTP diminuto en vez de cargar los archivos con file://
  * porque la app es una SPA con rutas (/pos, /pedidos, ...): con file:// esas
@@ -471,7 +541,7 @@ const TIPOS = {
  * distinto, rompiendo las llamadas a la API. Con http://localhost todo se
  * comporta igual que en la version con nginx.
  */
-function startFrontend() {
+async function startFrontend() {
   const raiz = path.join(projectDir(), 'frontend', 'dist');
   if (!fs.existsSync(path.join(raiz, 'index.html'))) {
     throw new Error(
@@ -479,7 +549,7 @@ function startFrontend() {
     );
   }
 
-  frontendServer = http.createServer((req, res) => {
+  const manejador = (req, res) => {
     const url = decodeURIComponent((req.url || '/').split('?')[0]);
     let archivo = path.join(raiz, url);
 
@@ -501,32 +571,49 @@ function startFrontend() {
     // app sigue mostrando la version anterior tras actualizar (ya paso).
     res.setHeader('Cache-Control', ext === '.html' ? 'no-cache' : 'public, max-age=31536000');
     fs.createReadStream(archivo).pipe(res);
-  });
+  };
+
+  const ipLan = obtenerIpLan();
+  const tls = ipLan ? await obtenerCertificadoTls(dataDir(), ipLan) : null;
 
   // Si el puerto esta ocupado se prueba el siguiente, en vez de reventar con
   // "EADDRINUSE" — un error tecnico que al usuario no le dice nada. La
   // interfaz puede vivir en cualquier puerto porque la ventana carga la URL
   // que devolvemos aqui; el del backend NO (viene fijo en la compilacion del
   // frontend), por eso alli si se avisa con un mensaje claro.
-  const intentar = (puerto, quedan) =>
+  //
+  // Se crea un servidor nuevo en cada intento (en vez de reintentar sobre el
+  // mismo objeto ya cerrado): un http.Server cerrado puede tardar un instante
+  // en soltar el puerto, y no hay necesidad de arriesgarse a esa carrera.
+  const escuchar = (servidor, puerto, host) =>
     new Promise((resolve, reject) => {
       const alFallar = (error) => {
-        frontendServer.removeListener('error', alFallar);
-        if (error.code === 'EADDRINUSE' && quedan > 0) {
-          resolve(intentar(puerto + 1, quedan - 1));
-        } else {
-          reject(error);
-        }
+        servidor.removeListener('error', alFallar);
+        reject(error);
       };
-      frontendServer.once('error', alFallar);
-      // 0.0.0.0: tambien se sirve en la red local, para abrir la app desde el
-      // celular en la misma WiFi (ver obtenerIpLan()). La ventana de Electron
-      // sigue cargando "localhost" igual que siempre.
-      frontendServer.listen(puerto, '0.0.0.0', () => {
-        frontendServer.removeListener('error', alFallar);
-        resolve(`http://localhost:${puerto}`);
+      servidor.once('error', alFallar);
+      servidor.listen(puerto, host, () => {
+        servidor.removeListener('error', alFallar);
+        resolve();
       });
     });
+
+  const intentar = async (puerto, quedan) => {
+    const servidorHttp = http.createServer(manejador);
+    const servidorHttps = tls ? https.createServer({ key: tls.key, cert: tls.cert }, manejador) : null;
+    try {
+      await escuchar(servidorHttp, puerto, '127.0.0.1');
+      if (servidorHttps) await escuchar(servidorHttps, puerto, ipLan);
+      frontendServer = servidorHttp;
+      frontendServerHttps = servidorHttps;
+      return `http://localhost:${puerto}`;
+    } catch (error) {
+      servidorHttp.close();
+      if (servidorHttps) servidorHttps.close();
+      if (error.code === 'EADDRINUSE' && quedan > 0) return intentar(puerto + 1, quedan - 1);
+      throw error;
+    }
+  };
 
   return intentar(FRONTEND_PORT, 10);
 }
@@ -544,6 +631,10 @@ function stopAll() {
   if (frontendServer) {
     frontendServer.close();
     frontendServer = null;
+  }
+  if (frontendServerHttps) {
+    frontendServerHttps.close();
+    frontendServerHttps = null;
   }
 }
 

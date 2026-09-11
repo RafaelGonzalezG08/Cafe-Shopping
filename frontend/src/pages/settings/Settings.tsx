@@ -134,7 +134,7 @@ export default function Settings() {
     queryFn: async () => (await api.get('/settings/integrations-status')).data,
   });
 
-  const { data: redLocal } = useQuery<{ url: string | null }>({
+  const { data: redLocal } = useQuery<{ url: string | null; certUrl: string | null }>({
     queryKey: ['settings', 'red-local'],
     queryFn: async () => (await api.get('/settings/red-local')).data,
   });
@@ -348,6 +348,24 @@ export default function Settings() {
                   <strong>{redLocal.url}</strong> en el navegador para usar la app (ventas,
                   productos, fotos) igual que en la computadora.
                 </p>
+                {redLocal.certUrl && (
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    La primera vez, Chrome va a avisar "conexion no privada" — toca{' '}
+                    <strong>Avanzado &rarr; Continuar</strong> (es esta misma PC). Para que ese
+                    aviso no vuelva a salir y puedas instalar la app sin la barra del navegador,{' '}
+                    <a
+                      href={redLocal.certUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-copper-600 hover:underline"
+                    >
+                      descarga el certificado
+                    </a>{' '}
+                    desde el celular y en <strong>Ajustes &rarr; Seguridad &rarr; Cifrado y
+                    credenciales &rarr; Instalar un certificado &rarr; Certificado de CA</strong>{' '}
+                    elige ese archivo. Se hace una sola vez (hasta que cambie la IP de la WiFi).
+                  </p>
+                )}
               </div>
             )}
           </div>

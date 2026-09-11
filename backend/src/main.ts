@@ -4,6 +4,9 @@ import { JwtService } from '@nestjs/jwt';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as express from 'express';
+import * as http from 'http';
+import * as https from 'https';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -57,6 +60,19 @@ async function bootstrap() {
   // ?token= (ver urlConToken en frontend/src/lib/api.ts).
   app.use('/uploads', crearMiddlewareUploads(app.get(JwtService)), express.static(UPLOADS_DIR));
 
+  // Descarga de la parte publica del certificado autofirmado (ver
+  // desktop/nativo.js -> obtenerCertificadoTls). El celular la necesita para
+  // instalarla como CA de confianza y que Chrome deje de mostrar el aviso de
+  // "conexion no privada" -- no es informacion secreta, no lleva token.
+  const certPath = process.env.TLS_CERT_PATH;
+  if (certPath && existsSync(certPath)) {
+    app.use('/tls-cert.pem', (req: express.Request, res: express.Response) => {
+      res.setHeader('Content-Disposition', 'attachment; filename="cafe-shopping.pem"');
+      res.setHeader('Content-Type', 'application/x-x509-ca-cert');
+      res.sendFile(certPath);
+    });
+  }
+
   app.setGlobalPrefix('api');
 
   const config = new DocumentBuilder()
@@ -71,13 +87,38 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  // 0.0.0.0: se escucha en toda la red local (no solo en esta PC) para poder
-  // usar la app tambien desde el celular en la misma WiFi. La API ya exige
-  // JWT en cada endpoint y /uploads ahora tambien lo exige (ver mas arriba),
-  // asi que abrir el puerto a la red no expone nada sin loguearse primero.
-  await app.listen(port, '0.0.0.0');
-  // eslint-disable-next-line no-console
-  console.log(`Cafe Shopping API escuchando en http://localhost:${port}/api`);
+  const keyPath = process.env.TLS_KEY_PATH;
+  const lanIp = process.env.LAN_IP;
+
+  // Con certificado y una IP de red detectados (empaquetado con Electron):
+  // se escucha en DOS direcciones a la vez, cada una en el mismo puerto.
+  // 127.0.0.1 en HTTP plano es solo para esta PC (Chrome ya trata
+  // "localhost" como origen seguro sin HTTPS, asi que el frontend de
+  // Electron nunca necesita saber nada de certificados). La IP de la red en
+  // HTTPS es para el celular: sin un origen realmente seguro, Chrome no deja
+  // "instalar" la app como si fuera nativa, solo un simple acceso directo.
+  //
+  // Sin esas variables (ej. "npm run start:dev" suelto) se comporta
+  // exactamente igual que siempre: un solo listener en HTTP en 0.0.0.0.
+  if (certPath && keyPath && lanIp && existsSync(certPath) && existsSync(keyPath)) {
+    await app.init();
+    const expressApp = app.getHttpAdapter().getInstance();
+    const httpsOptions = { key: readFileSync(keyPath), cert: readFileSync(certPath) };
+
+    await new Promise<void>((resolve) => http.createServer(expressApp).listen(port, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) =>
+      https.createServer(httpsOptions, expressApp).listen(port, lanIp, resolve),
+    );
+    // eslint-disable-next-line no-console
+    console.log(`Cafe Shopping API escuchando en http://localhost:${port}/api y https://${lanIp}:${port}/api`);
+  } else {
+    // 0.0.0.0 aqui es inofensivo: sin TLS_CERT_PATH no hay celular
+    // apuntandole (usa localhost:5173 en desarrollo), y con el candado de
+    // /uploads y el JWT en cada endpoint no queda nada expuesto sin loguearse.
+    await app.listen(port, '0.0.0.0');
+    // eslint-disable-next-line no-console
+    console.log(`Cafe Shopping API escuchando en http://localhost:${port}/api`);
+  }
   // eslint-disable-next-line no-console
   console.log(`Documentacion Swagger en http://localhost:${port}/api/docs`);
 }

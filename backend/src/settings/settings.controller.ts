@@ -64,11 +64,22 @@ export class SettingsController {
    * LAN_URL; aqui solo se expone para que Configuracion no obligue al dueño
    * a correr "ipconfig". null si no se detecto ninguna red (ej. corriendo
    * "npm run start:dev" suelto, sin Electron).
+   *
+   * certUrl: de donde el celular descarga el certificado autofirmado (ver
+   * /tls-cert.pem en main.ts) para instalarlo como CA de confianza -- sin
+   * eso, Chrome nunca deja de mostrar el aviso de "conexion no privada" ni
+   * ofrece "Instalar aplicacion". null si no hay certificado (sin red, o
+   * corriendo suelto sin Electron).
    */
   @Get('red-local')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   redLocal() {
-    return { url: process.env.LAN_URL || null };
+    const ip = process.env.LAN_IP;
+    const port = process.env.PORT || '3000';
+    return {
+      url: process.env.LAN_URL || null,
+      certUrl: ip && process.env.TLS_CERT_PATH ? `https://${ip}:${port}/tls-cert.pem` : null,
+    };
   }
 }
