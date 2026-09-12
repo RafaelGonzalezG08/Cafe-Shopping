@@ -70,7 +70,7 @@ export function Layout() {
     : null;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-porcelain-100">
+    <div className="flex h-dvh w-full overflow-hidden bg-porcelain-100">
       {/* Fondo oscuro detras del menu en celular; tocarlo lo cierra. No existe en PC. */}
       {menuAbierto && (
         <div
@@ -80,7 +80,7 @@ export function Layout() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-30 flex h-screen w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)] transition-transform duration-200 md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 flex h-dvh w-72 shrink-0 flex-col bg-porcelain-side text-ink shadow-[8px_0_24px_-16px_rgba(20,10,16,0.35)] transition-transform duration-200 md:static md:translate-x-0 ${
           menuAbierto ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
