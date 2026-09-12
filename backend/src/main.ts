@@ -66,8 +66,11 @@ async function bootstrap() {
   // "conexion no privada" -- no es informacion secreta, no lleva token.
   const certPath = process.env.TLS_CERT_PATH;
   if (certPath && existsSync(certPath)) {
-    app.use('/tls-cert.pem', (req: express.Request, res: express.Response) => {
-      res.setHeader('Content-Disposition', 'attachment; filename="cafe-shopping.pem"');
+    // .crt en vez de .pem: Android (y su administrador de archivos) lo
+    // reconoce mejor como certificado instalable. El contenido es el mismo
+    // (PEM), solo cambia el nombre con el que se descarga.
+    app.use(['/tls-cert.pem', '/tls-cert.crt'], (req: express.Request, res: express.Response) => {
+      res.setHeader('Content-Disposition', 'attachment; filename="cafe-shopping.crt"');
       res.setHeader('Content-Type', 'application/x-x509-ca-cert');
       res.sendFile(certPath);
     });

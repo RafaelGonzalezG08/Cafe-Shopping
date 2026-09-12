@@ -79,7 +79,7 @@ export class SettingsController {
     const port = process.env.PORT || '3000';
     return {
       url: process.env.LAN_URL || null,
-      certUrl: ip && process.env.TLS_CERT_PATH ? `https://${ip}:${port}/tls-cert.pem` : null,
+      certUrl: ip && process.env.TLS_CERT_PATH ? `https://${ip}:${port}/tls-cert.crt` : null,
     };
   }
 }
