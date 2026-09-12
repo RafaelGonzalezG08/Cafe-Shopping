@@ -84,7 +84,10 @@ export function Layout() {
           menuAbierto ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex shrink-0 items-center gap-2.5 px-5 py-5">
+        <div
+          className="flex shrink-0 items-center gap-2.5 px-5 pb-5"
+          style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
+        >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
             {logoSrc ? (
               <img src={logoSrc} alt="Logo" className="h-full w-full object-cover" />
@@ -130,7 +133,10 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mx-3 mb-3 mt-2 shrink-0 border-t border-porcelain-300 px-0 pt-3">
+        <div
+          className="mx-3 mt-2 shrink-0 border-t border-porcelain-300 px-0 pt-3"
+          style={{ marginBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
           <div className="mb-2 flex items-center gap-2.5 rounded-xl bg-porcelain-side px-3 py-2 shadow-neu-inset">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-copper-400 to-copper-600 font-display text-xs font-bold text-white">
               {user?.nombre?.slice(0, 2).toUpperCase()}
@@ -203,7 +209,10 @@ export function Layout() {
       )}
 
       <main className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-porcelain-200 bg-porcelain-100 px-4 py-3 md:hidden">
+        <div
+          className="sticky top-0 z-10 flex items-center gap-3 border-b border-porcelain-200 bg-porcelain-100 px-4 pb-3 md:hidden"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={() => setMenuAbierto(true)}
             aria-label="Abrir menu"
@@ -215,7 +224,10 @@ export function Layout() {
             {profile?.nombre || 'Cafe Shopping'}
           </p>
         </div>
-        <div className="mx-auto max-w-6xl px-4 py-6 md:px-10 md:py-8">
+        <div
+          className="mx-auto max-w-6xl px-4 pt-6 md:px-10 md:pt-8"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
           <Outlet />
         </div>
       </main>
