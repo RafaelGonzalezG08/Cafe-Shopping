@@ -412,18 +412,20 @@ export default function Products() {
                 )}
               </div>
               <div className="p-3">
-                <p className="select-text font-mono text-[11px] font-semibold text-copper-600">{product.sku}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="select-text font-mono text-[11px] font-semibold text-copper-600">{product.sku}</p>
+                  <span className="shrink-0 text-[11px] text-muted">Stock: {product.stock}</span>
+                </div>
                 <p className="select-text truncate text-sm font-medium text-ink">{product.nombre}</p>
                 {product.categoriaId && categoriaPorId.get(product.categoriaId) && (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                     <Tag size={10} /> {categoriaPorId.get(product.categoriaId)}
                   </p>
                 )}
-                <div className="mt-1.5 flex items-center justify-between">
+                <div className="mt-1.5">
                   <span className="font-display font-bold tabular-nums text-ink">
                     RD$ {formatMoney(product.precioUnitario)}
                   </span>
-                  <span className="text-xs text-muted">Stock: {product.stock}</span>
                 </div>
                 {product.tallas.length > 0 && (
                   <p className="mt-1 truncate text-[11px] text-muted" title={product.tallas.join(', ')}>
