@@ -74,7 +74,7 @@ export default function Expenses() {
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <p className="font-display font-semibold tabular-nums text-ink">
-                      RD$ {formatMoney(g.monto)}
+                      {formatMoney(g.monto)}
                     </p>
                     <button
                       onClick={() => setGastoAEliminar(g)}
@@ -134,7 +134,7 @@ export default function Expenses() {
           titulo="Eliminar gasto"
           mensaje={
             <>
-              Se eliminara "{gastoAEliminar.descripcion}" por RD$ {formatMoney(gastoAEliminar.monto)}.
+              Se eliminara "{gastoAEliminar.descripcion}" por {formatMoney(gastoAEliminar.monto)}.
             </>
           }
           pendiente={deleteExpense.isPending}

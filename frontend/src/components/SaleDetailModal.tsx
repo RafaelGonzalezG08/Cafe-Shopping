@@ -106,10 +106,10 @@ export function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: 
                 <div>
                   <p className="text-ink">{item.descripcion}</p>
                   <p className="text-xs text-muted">
-                    {item.cantidad} x RD$ {formatMoney(item.precioUnitario)}
+                    {item.cantidad} x {formatMoney(item.precioUnitario)}
                   </p>
                 </div>
-                <p className="font-display font-semibold tabular-nums text-ink">RD$ {formatMoney(item.total)}</p>
+                <p className="font-display font-semibold tabular-nums text-ink">{formatMoney(item.total)}</p>
               </div>
             ))}
           </div>
@@ -117,15 +117,15 @@ export function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: 
           <div className="space-y-1 border-t border-porcelain-200 pt-3 text-sm tabular-nums">
             <div className="flex justify-between text-muted">
               <span>Subtotal</span>
-              <span>RD$ {formatMoney(sale.subtotal)}</span>
+              <span>{formatMoney(sale.subtotal)}</span>
             </div>
             <div className="flex justify-between text-muted">
               <span>Impuestos</span>
-              <span>RD$ {formatMoney(sale.impuestos)}</span>
+              <span>{formatMoney(sale.impuestos)}</span>
             </div>
             <div className="flex justify-between font-display text-lg font-bold text-copper-600">
               <span>Total</span>
-              <span>RD$ {formatMoney(sale.total)}</span>
+              <span>{formatMoney(sale.total)}</span>
             </div>
           </div>
 
@@ -427,7 +427,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
           <div className="flex justify-between border-t border-porcelain-200 pt-3 text-sm font-semibold text-ink">
             <span>Nuevo subtotal</span>
-            <span>RD$ {formatMoney(Math.round(subtotal * 100) / 100)}</span>
+            <span>{formatMoney(Math.round(subtotal * 100) / 100)}</span>
           </div>
           <p className="text-xs text-muted">
             Los impuestos y el total se recalculan automaticamente con la tasa configurada, y la factura (PNG/PDF) se

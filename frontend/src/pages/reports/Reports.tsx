@@ -93,14 +93,14 @@ export default function Reports() {
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-sage-600">
-            RD$ {formatMoney(cashflow?.ingresos ?? 0)}
+            {formatMoney(cashflow?.ingresos ?? 0)}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">Todas las ventas del periodo</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Egresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-brick-500">
-            RD$ {formatMoney(cashflow?.egresos ?? 0)}
+            {formatMoney(cashflow?.egresos ?? 0)}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">Gastos del periodo</p>
         </Card>
@@ -111,7 +111,7 @@ export default function Reports() {
               (cashflow?.saldoEnCaja ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
             }`}
           >
-            RD$ {formatMoney(cashflow?.saldoEnCaja ?? 0)}
+            {formatMoney(cashflow?.saldoEnCaja ?? 0)}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">Contado + abonos cobrados &minus; gastos</p>
         </Card>
@@ -122,7 +122,7 @@ export default function Reports() {
               (cashflow?.balanceTotal ?? 0) < 0 ? 'text-brick-500' : 'text-ink'
             }`}
           >
-            RD$ {formatMoney(cashflow?.balanceTotal ?? 0)}
+            {formatMoney(cashflow?.balanceTotal ?? 0)}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">Todas las ventas &minus; gastos</p>
         </Card>
@@ -142,7 +142,7 @@ export default function Reports() {
                 <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: chart.eje }} />
                 <YAxis tick={{ fontSize: 11, fill: chart.eje }} />
                 <Tooltip
-                  formatter={(value: number) => `RD$ ${formatMoney(value)}`}
+                  formatter={(value: number) => `${formatMoney(value)}`}
                   cursor={{ fill: chart.grid, opacity: 0.3 }}
                   contentStyle={{
                     borderRadius: 8,
@@ -176,7 +176,7 @@ export default function Reports() {
                   </div>
                   <div className="text-right">
                     <p className="font-display font-semibold tabular-nums text-ink">
-                      RD$ {formatMoney(d.saldo ?? 0)}
+                      {formatMoney(d.saldo ?? 0)}
                     </p>
                     <Badge tone={d.status === 'VENCIDA' ? 'brick' : 'copper'}>
                       {ESTADO_DEUDA_LABEL[d.status]}
@@ -200,7 +200,7 @@ export default function Reports() {
                 <div key={c.categoria} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-ink">{c.categoria}</span>
                   <span className="font-display font-semibold tabular-nums text-ink">
-                    RD$ {formatMoney(c.monto)}
+                    {formatMoney(c.monto)}
                   </span>
                 </div>
               ))}

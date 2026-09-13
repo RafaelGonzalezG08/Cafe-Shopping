@@ -86,7 +86,7 @@ export function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: 
       return;
     }
     if (value > saldo + 0.01) {
-      toast.error(`El abono no puede superar el saldo pendiente (RD$ ${formatMoney(saldo)}).`);
+      toast.error(`El abono no puede superar el saldo pendiente (${formatMoney(saldo)}).`);
       return;
     }
     registerPayment.mutate();
@@ -109,15 +109,15 @@ export function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: 
           <div className="mb-4 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-porcelain-100 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-muted">Total</p>
-              <p className="font-display font-bold tabular-nums text-ink">RD$ {formatMoney(total)}</p>
+              <p className="font-display font-bold tabular-nums text-ink">{formatMoney(total)}</p>
             </div>
             <div className="rounded-lg bg-sage-100 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-sage-700">Abonado</p>
-              <p className="font-display font-bold tabular-nums text-sage-700">RD$ {formatMoney(pagado)}</p>
+              <p className="font-display font-bold tabular-nums text-sage-700">{formatMoney(pagado)}</p>
             </div>
             <div className="rounded-lg bg-brick-100 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-brick-700">Saldo</p>
-              <p className="font-display font-bold tabular-nums text-brick-700">RD$ {formatMoney(saldo)}</p>
+              <p className="font-display font-bold tabular-nums text-brick-700">{formatMoney(saldo)}</p>
             </div>
           </div>
 
@@ -131,10 +131,10 @@ export function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: 
                   <div>
                     <p className="text-ink">{item.descripcion}</p>
                     <p className="text-xs text-muted">
-                      {item.cantidad} x RD$ {formatMoney(item.precioUnitario)}
+                      {item.cantidad} x {formatMoney(item.precioUnitario)}
                     </p>
                   </div>
-                  <p className="font-display font-semibold tabular-nums text-ink">RD$ {formatMoney(item.total)}</p>
+                  <p className="font-display font-semibold tabular-nums text-ink">{formatMoney(item.total)}</p>
                 </div>
               ))}
             </div>
@@ -147,7 +147,7 @@ export function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: 
                 {abonos.map((p) => (
                   <div key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
                     <div>
-                      <p className="text-ink">RD$ {formatMoney(p.amount)}</p>
+                      <p className="text-ink">{formatMoney(p.amount)}</p>
                       <p className="text-xs text-muted">
                         {formatDateTime(p.fecha)} &middot; {METODO_PAGO_LABEL[p.metodo]}
                       </p>
@@ -232,7 +232,7 @@ export function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: 
           titulo="Eliminar abono"
           mensaje={
             <>
-              Se eliminara el abono de RD$ {formatMoney(abonoAEliminar.amount)} del{' '}
+              Se eliminara el abono de {formatMoney(abonoAEliminar.amount)} del{' '}
               {formatDateTime(abonoAEliminar.fecha)}. El saldo pendiente de la cuenta va a subir de nuevo.
             </>
           }

@@ -266,7 +266,7 @@ export default function POS() {
                 <span className="font-mono text-[10px] font-semibold text-copper-600">{product.sku}</span>
                 <p className="text-sm font-medium leading-snug text-ink">{product.nombre}</p>
                 <span className="mt-1.5 block font-display text-base font-bold tabular-nums text-copper-600">
-                  RD$ {formatMoney(product.precioUnitario)}
+                  {formatMoney(product.precioUnitario)}
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">Stock: {product.stock}</span>
               </div>
@@ -317,7 +317,7 @@ export default function POS() {
               <div key={line.key} className="flex items-center gap-2 text-sm">
                 <div className="flex-1 min-w-0">
                   <p className="truncate font-medium text-ink">{line.descripcion}</p>
-                  <p className="text-xs text-muted tabular-nums">RD$ {formatMoney(line.precioUnitario)} c/u</p>
+                  <p className="text-xs text-muted tabular-nums">{formatMoney(line.precioUnitario)} c/u</p>
                 </div>
                 <button onClick={() => updateQty(line.key, -1)} className="rounded p-1 text-muted hover:bg-porcelain-200">
                   <Minus size={14} />
@@ -337,7 +337,7 @@ export default function POS() {
         <div className="mb-3 space-y-1 border-t border-porcelain-200 pt-3 text-sm tabular-nums">
           <div className="flex justify-between text-muted">
             <span>Subtotal</span>
-            <span>RD$ {formatMoney(totals.bruto)}</span>
+            <span>{formatMoney(totals.bruto)}</span>
           </div>
           <div className="flex items-center justify-between text-muted">
             <div className="flex items-center gap-1.5">
@@ -357,16 +357,16 @@ export default function POS() {
               <span className="text-xs">%</span>
             </div>
             <span>
-              {totals.bruto > totals.subtotal ? `-RD$ ${formatMoney(totals.bruto - totals.subtotal)}` : 'RD$ 0.00'}
+              {totals.bruto > totals.subtotal ? `-${formatMoney(totals.bruto - totals.subtotal)}` : formatMoney(0)}
             </span>
           </div>
           <div className="flex justify-between text-muted">
             <span>Impuestos ({Math.round(tasaImpuesto * 100)}%)</span>
-            <span>RD$ {formatMoney(totals.impuestos)}</span>
+            <span>{formatMoney(totals.impuestos)}</span>
           </div>
           <div className="flex justify-between font-display text-lg font-bold text-copper-600">
             <span>Total</span>
-            <span>RD$ {formatMoney(totals.total)}</span>
+            <span>{formatMoney(totals.total)}</span>
           </div>
         </div>
 
@@ -447,7 +447,7 @@ export default function POS() {
           className="w-full"
         >
           {createSale.isPending ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
-          Cobrar RD$ {formatMoney(totals.total)}
+          Cobrar {formatMoney(totals.total)}
         </Button>
       </Card>
     </div>

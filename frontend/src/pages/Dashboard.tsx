@@ -159,7 +159,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard
               label="Ventas de hoy"
-              value={`RD$ ${formatMoney(data.ventasHoy.total)}`}
+              value={`${formatMoney(data.ventasHoy.total)}`}
               icon={DollarSign}
               tone="copper"
             />
@@ -171,26 +171,26 @@ export default function Dashboard() {
             />
             <KpiCard
               label="Deuda pendiente"
-              value={`RD$ ${formatMoney(data.deudaTotalPendiente)}`}
+              value={`${formatMoney(data.deudaTotalPendiente)}`}
               icon={AlertCircle}
               tone="amber"
             />
             <KpiCard
               label="Gastos del mes"
-              value={`RD$ ${formatMoney(data.gastosDelMes)}`}
+              value={`${formatMoney(data.gastosDelMes)}`}
               icon={Wallet}
               tone="copper"
             />
             <KpiCard
               label="Saldo en caja (mes)"
-              value={`RD$ ${formatMoney(data.saldoEnCajaMes)}`}
+              value={`${formatMoney(data.saldoEnCajaMes)}`}
               icon={PiggyBank}
               tone={data.saldoEnCajaMes < 0 ? 'brick' : 'sage'}
               hint="Contado + abonos − gastos"
             />
             <KpiCard
               label="Balance del mes"
-              value={`RD$ ${formatMoney(data.balanceTotalMes)}`}
+              value={`${formatMoney(data.balanceTotalMes)}`}
               icon={Scale}
               tone={data.balanceTotalMes < 0 ? 'brick' : 'sage'}
               hint="Todas las ventas − gastos"
@@ -214,7 +214,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <p className="font-display font-semibold tabular-nums text-ink">
-                      RD$ {formatMoney(g.monto)}
+                      {formatMoney(g.monto)}
                     </p>
                   </div>
                 ))}

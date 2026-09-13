@@ -519,7 +519,7 @@ export default function Products() {
                 )}
                 <div className="mt-1.5">
                   <span className="font-display font-bold tabular-nums text-ink">
-                    RD$ {formatMoney(product.precioUnitario)}
+                    {formatMoney(product.precioUnitario)}
                   </span>
                 </div>
                 {product.tallas.length > 0 && (

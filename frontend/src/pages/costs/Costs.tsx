@@ -50,19 +50,19 @@ export default function Costs() {
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">
-            RD$ {formatMoney(totales?.ingresos ?? 0)}
+            {formatMoney(totales?.ingresos ?? 0)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Costo</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-brick-500">
-            RD$ {formatMoney(totales?.costo ?? 0)}
+            {formatMoney(totales?.costo ?? 0)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Utilidad</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-sage-600">
-            RD$ {formatMoney(totales?.utilidad ?? 0)}
+            {formatMoney(totales?.utilidad ?? 0)}
           </p>
         </Card>
         <Card className="p-4">
@@ -109,15 +109,15 @@ export default function Costs() {
                     </div>
                     <div>
                       <span className="text-muted">Ingresos: </span>
-                      <span className="tabular-nums text-ink">RD$ {formatMoney(p.ingresos)}</span>
+                      <span className="tabular-nums text-ink">{formatMoney(p.ingresos)}</span>
                     </div>
                     <div>
                       <span className="text-muted">Costo: </span>
-                      <span className="tabular-nums text-muted">RD$ {formatMoney(p.costo)}</span>
+                      <span className="tabular-nums text-muted">{formatMoney(p.costo)}</span>
                     </div>
                     <div>
                       <span className="text-muted">Utilidad: </span>
-                      <span className="tabular-nums font-semibold text-sage-600">RD$ {formatMoney(p.utilidad)}</span>
+                      <span className="tabular-nums font-semibold text-sage-600">{formatMoney(p.utilidad)}</span>
                     </div>
                   </div>
                 </div>
@@ -150,10 +150,10 @@ export default function Costs() {
                       </div>
                     </td>
                     <td className="py-2.5 pr-3 tabular-nums text-ink">{p.unidades}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-ink">RD$ {formatMoney(p.ingresos)}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-muted">RD$ {formatMoney(p.costo)}</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-ink">{formatMoney(p.ingresos)}</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-muted">{formatMoney(p.costo)}</td>
                     <td className="py-2.5 pr-3 tabular-nums font-semibold text-sage-600">
-                      RD$ {formatMoney(p.utilidad)}
+                      {formatMoney(p.utilidad)}
                     </td>
                     <td className="py-2.5 pr-3">
                       <Badge tone={p.margenPct < 20 ? 'brick' : p.margenPct < 40 ? 'copper' : 'sage'}>

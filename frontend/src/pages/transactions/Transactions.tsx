@@ -181,7 +181,7 @@ export default function Transactions() {
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted">Ingresos</p>
             <p className="font-display text-lg font-bold tabular-nums text-sage-600">
-              RD$ {formatMoney(data?.totales.ingresos ?? 0)}
+              {formatMoney(data?.totales.ingresos ?? 0)}
             </p>
           </div>
         </Card>
@@ -192,7 +192,7 @@ export default function Transactions() {
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted">Egresos</p>
             <p className="font-display text-lg font-bold tabular-nums text-brick-600">
-              RD$ {formatMoney(data?.totales.egresos ?? 0)}
+              {formatMoney(data?.totales.egresos ?? 0)}
             </p>
           </div>
         </Card>
@@ -203,7 +203,7 @@ export default function Transactions() {
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted">Neto</p>
             <p className="font-display text-lg font-bold tabular-nums text-ink">
-              RD$ {formatMoney(data?.totales.neto ?? 0)}
+              {formatMoney(data?.totales.neto ?? 0)}
             </p>
           </div>
         </Card>
@@ -313,7 +313,7 @@ export default function Transactions() {
                       t.signo === 'INGRESO' ? 'text-sage-600' : 'text-brick-600'
                     }`}
                   >
-                    {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
+                    {t.signo === 'INGRESO' ? '+' : '-'} {formatMoney(t.monto)}
                   </span>
                 </div>
                 <div className="mt-2">
@@ -374,7 +374,7 @@ export default function Transactions() {
                         t.signo === 'INGRESO' ? 'text-sage-600' : 'text-brick-600'
                       }`}
                     >
-                      {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
+                      {t.signo === 'INGRESO' ? '+' : '-'} {formatMoney(t.monto)}
                     </td>
                     <td className="px-4 py-2.5">
                       {puedeEliminar(t) && (
@@ -417,7 +417,7 @@ export default function Transactions() {
           titulo="Eliminar transaccion"
           mensaje={
             <>
-              Se eliminara: {aEliminar.descripcion} por RD$ {formatMoney(aEliminar.monto)} del{' '}
+              Se eliminara: {aEliminar.descripcion} por {formatMoney(aEliminar.monto)} del{' '}
               {formatDateTime(aEliminar.fecha)}.
               {aEliminar.tipo === 'VENTA' &&
                 ' Las piezas de esta venta volveran al inventario y su factura se borrara.'}
@@ -466,7 +466,7 @@ function TransaccionDetailModal({
             t.signo === 'INGRESO' ? 'text-sage-600' : 'text-brick-600'
           }`}
         >
-          {t.signo === 'INGRESO' ? '+' : '-'} RD$ {formatMoney(t.monto)}
+          {t.signo === 'INGRESO' ? '+' : '-'} {formatMoney(t.monto)}
         </p>
 
         <dl className="space-y-2 text-sm">

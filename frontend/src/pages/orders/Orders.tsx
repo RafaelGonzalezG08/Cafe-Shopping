@@ -188,7 +188,7 @@ function PedidosTienda() {
 
                   <div className="text-right">
                     <p className="font-display text-lg font-bold tabular-nums text-copper-600">
-                      RD$ {formatMoney(order.sale?.total ?? 0)}
+                      {formatMoney(order.sale?.total ?? 0)}
                     </p>
                     <label className="mt-2 block text-[11px] font-semibold uppercase tracking-wide text-muted">
                       Fecha de entrega
@@ -445,7 +445,7 @@ function PedidosWeb() {
                     {pedido.items.map((item, i) => (
                       <li key={i}>
                         {item.cantidad} x {item.nombre}
-                        {item.sku && <span className="text-muted"> ({item.sku})</span>} - RD$ {formatMoney(item.total)}
+                        {item.sku && <span className="text-muted"> ({item.sku})</span>} - {formatMoney(item.total)}
                       </li>
                     ))}
                   </ul>
@@ -454,7 +454,7 @@ function PedidosWeb() {
                 </div>
 
                 <p className="font-display text-lg font-bold tabular-nums text-copper-600">
-                  RD$ {formatMoney(pedido.total)}
+                  {formatMoney(pedido.total)}
                 </p>
               </div>
 
@@ -512,7 +512,7 @@ function PedidosWeb() {
           titulo="Eliminar pedido"
           mensaje={
             <>
-              Se eliminara el pedido {aEliminar.codigo} por RD$ {formatMoney(aEliminar.total)}.
+              Se eliminara el pedido {aEliminar.codigo} por {formatMoney(aEliminar.total)}.
             </>
           }
           pendiente={eliminar.isPending}
@@ -599,7 +599,7 @@ function AtenderPedidoWebModal({
               <span>
                 {item.cantidad} x {item.nombre}
               </span>
-              <span className="tabular-nums">RD$ {formatMoney(item.total)}</span>
+              <span className="tabular-nums">{formatMoney(item.total)}</span>
             </div>
           ))}
           <div className="flex items-center justify-between border-t border-porcelain-300 pt-1 text-ink">
@@ -620,7 +620,7 @@ function AtenderPedidoWebModal({
           </div>
           <div className="flex justify-between font-display font-bold text-copper-600">
             <span>Total</span>
-            <span className="tabular-nums">RD$ {formatMoney(totalConDescuento)}</span>
+            <span className="tabular-nums">{formatMoney(totalConDescuento)}</span>
           </div>
         </div>
 
@@ -690,7 +690,7 @@ function AtenderPedidoWebModal({
           className="w-full"
         >
           {atender.isPending ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
-          Crear factura RD$ {formatMoney(totalConDescuento)}
+          Crear factura {formatMoney(totalConDescuento)}
         </Button>
       </Card>
     </div>

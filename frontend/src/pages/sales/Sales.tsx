@@ -97,7 +97,7 @@ export default function Sales() {
                     </p>
                   </div>
                   <span className="shrink-0 font-display font-semibold tabular-nums text-ink">
-                    RD$ {formatMoney(sale.total)}
+                    {formatMoney(sale.total)}
                   </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
@@ -184,7 +184,7 @@ export default function Sales() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-display font-semibold tabular-nums text-ink">
-                    RD$ {formatMoney(sale.total)}
+                    {formatMoney(sale.total)}
                   </td>
                   <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1.5">

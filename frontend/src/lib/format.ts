@@ -1,8 +1,13 @@
+/**
+ * Incluye el simbolo de moneda ("$", no "RD$"): en celular "RD$" le come
+ * espacio a numeros que ya son largos, y esta app solo maneja pesos
+ * dominicanos, asi que no hay ambiguedad posible con el simbolo corto.
+ */
 export function formatMoney(value: number | string): string {
-  return Number(value).toLocaleString('es-DO', {
+  return `$${Number(value).toLocaleString('es-DO', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
+  })}`;
 }
 
 export function formatDate(value: string | Date): string {

@@ -170,7 +170,7 @@ export default function Clients() {
               </div>
               <div className="flex items-center gap-2">
                 {Boolean(c.deudaPendiente) && (
-                  <Badge tone="brick">Debe RD$ {formatMoney(c.deudaPendiente!)}</Badge>
+                  <Badge tone="brick">Debe {formatMoney(c.deudaPendiente!)}</Badge>
                 )}
                 {!modoSeleccion && <ChevronRight size={16} className="shrink-0 text-muted" />}
               </div>
@@ -269,7 +269,7 @@ function ClientDetailModal({ client, onClose }: { client: Client; onClose: () =>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <span className="font-display font-bold tabular-nums text-ink">
-                          RD$ {formatMoney(saldo)}
+                          {formatMoney(saldo)}
                         </span>
                         <ChevronRight size={16} className="text-muted" />
                       </div>
@@ -298,7 +298,7 @@ function ClientDetailModal({ client, onClose }: { client: Client; onClose: () =>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="font-display font-semibold tabular-nums text-ink">
-                        RD$ {formatMoney(s.total)}
+                        {formatMoney(s.total)}
                       </span>
                       <ChevronRight size={16} className="text-muted" />
                     </div>

@@ -44,7 +44,7 @@ export default function Cobros() {
           totalPendiente > 0 ? (
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Total por cobrar</p>
-              <p className="font-display text-xl font-bold text-brick-600">RD$ {formatMoney(totalPendiente)}</p>
+              <p className="font-display text-xl font-bold text-brick-600">{formatMoney(totalPendiente)}</p>
             </div>
           ) : undefined
         }
@@ -90,7 +90,7 @@ export default function Cobros() {
                       {debt.client?.telefono && <p className="text-xs text-muted">{debt.client.telefono}</p>}
                     </div>
                     <span className="shrink-0 font-display font-semibold tabular-nums text-ink">
-                      RD$ {formatMoney(saldo)}
+                      {formatMoney(saldo)}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
@@ -135,10 +135,10 @@ export default function Cobros() {
                     </td>
                     <td className="px-4 py-2.5 text-muted">{debt.sale?.invoice?.numero ?? '-'}</td>
                     <td className="px-4 py-2.5 text-muted">{debt.dueDate ? formatDate(debt.dueDate) : '-'}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink">RD$ {formatMoney(total)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-sage-600">RD$ {formatMoney(pagado)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-ink">{formatMoney(total)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-sage-600">{formatMoney(pagado)}</td>
                     <td className="px-4 py-2.5 text-right font-display font-semibold tabular-nums text-ink">
-                      RD$ {formatMoney(saldo)}
+                      {formatMoney(saldo)}
                     </td>
                     <td className="px-4 py-2.5">
                       <Badge tone={ESTADO_TONE[debt.status]}>{ESTADO_DEUDA_LABEL[debt.status]}</Badge>

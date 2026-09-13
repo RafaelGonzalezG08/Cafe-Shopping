@@ -1,5 +1,6 @@
 import { Trash2, X, Loader2, ArrowRight } from 'lucide-react';
 import { Button, Card } from '../../../components/ui';
+import { formatMoney } from '../../../lib/format';
 import type { VistaPreviaEliminarDuplicados } from '../../../api/products.api';
 
 /**
@@ -51,7 +52,7 @@ export function EliminarDuplicadosModal({
               {vistaPrevia.grupos.map((g, i) => (
                 <div key={i} className="border-b border-porcelain-100 px-3 py-2 text-xs last:border-b-0">
                   <p className="font-medium text-ink">
-                    {g.nombre} · RD$ {g.precioUnitario.toLocaleString('es-DO')}
+                    {g.nombre} · {formatMoney(g.precioUnitario)}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1 text-muted">
                     <span className="rounded bg-sage-100 px-1.5 py-0.5 font-mono text-sage-700">
