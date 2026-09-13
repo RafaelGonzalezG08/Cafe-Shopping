@@ -46,11 +46,15 @@ export default function Sales() {
     <div>
       <PageHeader title="Ventas" subtitle="Historial de ventas y estado de facturacion" />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label className="text-xs font-medium text-muted">Desde</label>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
-        <label className="text-xs font-medium text-muted">Hasta</label>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-muted">Desde</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-muted">Hasta</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
+        </div>
       </div>
 
       {isLoading ? (
