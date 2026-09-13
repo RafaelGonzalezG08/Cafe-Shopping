@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Minus, Plus, Search, Trash2, MessageCircle, Loader2, Receipt, X, Gem, Check, Package } from 'lucide-react';
-import { api, apiUrl, urlConToken } from '../../lib/api';
+import { apiUrl, urlConToken } from '../../lib/api';
+import { productsApi } from '../../api/products.api';
+import { settingsApi } from '../../api/settings.api';
+import { salesApi } from '../../api/sales.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
@@ -46,7 +49,7 @@ export default function POS() {
 
   const { data: products = [], isSuccess: productsLoaded } = useQuery<Product[]>({
     queryKey: ['products'],
-    queryFn: async () => (await api.get('/products')).data,
+    queryFn: () => productsApi.list(),
   });
 
   // El carrito se guarda en el navegador. Si un producto que quedo dentro se
@@ -70,7 +73,7 @@ export default function POS() {
 
   const { data: businessProfile } = useQuery<{ tasaImpuesto: number }>({
     queryKey: ['settings', 'business-profile'],
-    queryFn: async () => (await api.get('/settings/business-profile')).data,
+    queryFn: () => settingsApi.getBusinessProfile(),
     staleTime: 60_000,
   });
   const tasaImpuesto = businessProfile?.tasaImpuesto ?? 0;
@@ -173,8 +176,8 @@ export default function POS() {
   }
 
   const createSale = useMutation({
-    mutationFn: async () => {
-      const { data } = await api.post('/sales', {
+    mutationFn: () =>
+      salesApi.create({
         clientId: selectedClientId || undefined,
         metodoPago,
         fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
@@ -189,9 +192,7 @@ export default function POS() {
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,
         })),
-      });
-      return data as Sale;
-    },
+      }),
     onSuccess: (sale) => {
       toast.success(esPedido ? 'Venta registrada y agregada a Pedidos.' : 'Venta registrada.');
       setCompletedSale(sale);
@@ -460,7 +461,7 @@ export function InvoicePreview({
   // que el cajero vea el resultado sin recargar.
   const { data: sale = saleInicial } = useQuery<Sale>({
     queryKey: ['sale', saleInicial.id],
-    queryFn: async () => (await api.get(`/sales/${saleInicial.id}`)).data,
+    queryFn: () => salesApi.get(saleInicial.id),
     initialData: saleInicial,
     refetchInterval: (query) =>
       query.state.data?.invoice?.whatsappEstado === 'EN_COLA' ? 4000 : false,
@@ -471,8 +472,7 @@ export function InvoicePreview({
   const waEstado = sale.invoice?.whatsappEstado;
 
   const sendWhatsapp = useMutation({
-    mutationFn: async () =>
-      (await api.post(`/sales/${sale.id}/send-invoice-whatsapp`, undefined, { skipErrorToast: true })).data,
+    mutationFn: () => salesApi.sendWhatsapp(sale.id, { skipErrorToast: true }),
     onSuccess: (invoice) => {
       queryClient.setQueryData<Sale>(['sale', sale.id], (prev) =>
         prev ? { ...prev, invoice: { ...prev.invoice, ...invoice } } : prev,
