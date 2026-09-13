@@ -7,7 +7,14 @@ import './index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      // Un 401/404 no se arregla reintentando -- solo vale la pena insistir
+      // cuando la peticion ni siquiera llego a la PC (WiFi cortada un
+      // instante, la PC durmiendose), que es justo cuando axios no trae
+      // "response" en el error.
+      retry: (fallas, error: any) => (error?.response ? false : fallas < 3),
+      refetchOnWindowFocus: false,
+    },
   },
 });
 

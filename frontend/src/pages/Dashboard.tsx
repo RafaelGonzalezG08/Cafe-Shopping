@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatMoney, formatDate, ESTADO_PEDIDO_LABEL } from '../lib/format';
-import { Card, PageHeader, Badge } from '../components/ui';
+import { Card, PageHeader, Badge, Skeleton } from '../components/ui';
 import type { DashboardSummary, OrdersSummary } from '../types';
 
 function KpiCard({
@@ -150,7 +150,7 @@ export default function Dashboard() {
       {isLoading || !data ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="h-28 animate-pulse" />
+            <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (

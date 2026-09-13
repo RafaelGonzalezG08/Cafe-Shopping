@@ -21,7 +21,7 @@ import {
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, ESTADO_PEDIDO_LABEL, ESTADO_PEDIDO_WEB_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState, ConfirmPasswordModal } from '../../components/ui';
+import { Button, Card, PageHeader, Badge, EmptyState, ConfirmPasswordModal, Skeleton } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import { InvoicePreview } from '../pos/POS';
 import { ClientPicker } from '../../components/ClientPicker';
@@ -137,7 +137,7 @@ function PedidosTienda() {
       </div>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : orders.length === 0 ? (
         <EmptyState
           title="Sin pedidos por entregar"
@@ -427,7 +427,7 @@ function PedidosWeb() {
       </div>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : pedidos.length === 0 ? (
         <EmptyState
           title="Sin pedidos web"

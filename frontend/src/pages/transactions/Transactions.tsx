@@ -5,7 +5,7 @@ import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileTe
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
-import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal, Skeleton } from '../../components/ui';
 import { FacturaLightbox } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { MetodoPago, Transaccion, TipoTransaccion, TransaccionesResponse } from '../../types';
@@ -283,7 +283,7 @@ export default function Transactions() {
       </Card>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : items.length === 0 ? (
         <EmptyState
           title="Sin transacciones en este filtro"

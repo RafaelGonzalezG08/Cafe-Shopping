@@ -5,7 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate } from '../../lib/format';
-import { Button, Card, PageHeader, EmptyState, ConfirmPasswordModal } from '../../components/ui';
+import { Button, Card, PageHeader, EmptyState, ConfirmPasswordModal, Skeleton } from '../../components/ui';
 import type { Expense } from '../../types';
 
 export default function Expenses() {
@@ -66,7 +66,7 @@ export default function Expenses() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div>
           {isLoading ? (
-            <Card className="h-40 animate-pulse" />
+            <Skeleton />
           ) : expenses.length === 0 ? (
             <EmptyState title="Sin gastos registrados" />
           ) : (

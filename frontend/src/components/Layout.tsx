@@ -19,10 +19,12 @@ import {
   Sun,
   X,
   Menu,
+  WifiOff,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 import { api, apiUrl, urlConToken } from '../lib/api';
 import { useTheme } from '../lib/useTheme';
+import { useConexionPc } from '../lib/useConexionPc';
 import { Button, Card } from './ui';
 import type { BusinessProfile, Role } from '../types';
 
@@ -56,6 +58,7 @@ export function Layout() {
   const [confirmandoSalir, setConfirmandoSalir] = useState(false);
   /** En celular el menu lateral empieza escondido; en PC (md+) siempre se ve, sin importar esto. */
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const conectado = useConexionPc();
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
@@ -70,7 +73,15 @@ export function Layout() {
     : null;
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-porcelain-100">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-porcelain-100">
+      {!conectado && (
+        <div className="flex shrink-0 items-center justify-center gap-2 bg-brick-500 px-3 py-1.5 text-xs font-medium text-white">
+          <WifiOff size={14} />
+          Sin conexión con la PC — reintentando…
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
       {/* Fondo oscuro detras del menu en celular; tocarlo lo cierra. No existe en PC. */}
       {menuAbierto && (
         <div
@@ -231,6 +242,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,11 @@ export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement
   );
 }
 
+/** Placeholder de carga -- una sola definicion en vez del `<div animate-pulse>` repetido a mano en cada pagina. */
+export function Skeleton({ className = 'h-40' }: { className?: string }) {
+  return <Card className={`animate-pulse ${className}`} />;
+}
+
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">

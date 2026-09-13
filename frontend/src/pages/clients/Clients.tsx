@@ -5,7 +5,7 @@ import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download } from '
 import { api } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { Button, Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import type { Client, MetodoPago } from '../../types';
 
@@ -136,7 +136,7 @@ export default function Clients() {
           )}
 
           {isLoading ? (
-            <Card className="h-40 animate-pulse" />
+            <Skeleton />
           ) : clients.length === 0 ? (
             <EmptyState title="Sin clientes" description="Registra tu primer cliente para empezar." />
           ) : (

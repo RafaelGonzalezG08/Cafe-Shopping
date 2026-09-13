@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { X, Banknote, MessageCircle, Loader2, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatMoney, formatDate, formatDateTime, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
-import { Button, Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal } from '../../components/ui';
+import { Button, Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal, Skeleton } from '../../components/ui';
 import { FacturaImagen } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { ClientDebt, EstadoDeuda, MetodoPago, Payment, Sale } from '../../types';
@@ -70,7 +70,7 @@ export default function Cobros() {
       </div>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : debts.length === 0 ? (
         <EmptyState title="Sin cuentas en esta vista" description="No hay clientes con saldo en este filtro." />
       ) : (
@@ -298,7 +298,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
 
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Productos de la factura</p>
           {isLoading ? (
-            <div className="h-24 animate-pulse rounded-lg bg-porcelain-100" />
+            <Skeleton className="h-24" />
           ) : (
             <div className="mb-4 divide-y divide-porcelain-200 rounded-lg border border-porcelain-200">
               {sale?.items.map((item) => (

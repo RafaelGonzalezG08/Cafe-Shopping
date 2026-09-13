@@ -45,7 +45,11 @@ api.interceptors.response.use(
     if (status === 401) {
       useAuthStore.getState().logout();
     }
-    if (status !== 401 && !error?.config?.skipErrorToast) {
+    // Sin "response" es que la peticion ni siquiera llego a la PC (WiFi
+    // cortada, la PC apagada/durmiendo) -- eso ya lo avisa la franja de
+    // "Sin conexion con la PC" (ver useConexionPc en Layout.tsx), un toast
+    // encima por cada peticion que fallo seria ruido repetido de lo mismo.
+    if (status !== 401 && error?.response && !error?.config?.skipErrorToast) {
       const texto = Array.isArray(message) ? message.join(', ') : String(message);
       // `id` estable por mensaje: si varias peticiones fallan con lo mismo
       // (o el usuario reintenta el mismo boton), react-hot-toast reemplaza el

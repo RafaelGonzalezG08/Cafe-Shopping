@@ -5,7 +5,7 @@ import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil,
 import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
-import { Card, PageHeader, Badge, EmptyState, Button } from '../../components/ui';
+import { Card, PageHeader, Badge, EmptyState, Button, Skeleton } from '../../components/ui';
 import { FacturaImagen } from '../../components/FacturaImagen';
 import { useAuthStore } from '../../store/auth.store';
 import type { Client, EstadoFactura, Sale } from '../../types';
@@ -52,7 +52,7 @@ export default function Sales() {
       </div>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : sales.length === 0 ? (
         <EmptyState title="Sin ventas en este rango" description="Registra una venta desde el Punto de venta." />
       ) : (

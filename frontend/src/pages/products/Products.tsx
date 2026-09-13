@@ -6,7 +6,7 @@ import { api, apiUrl, urlConToken } from '../../lib/api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
-import { Button, Card, PageHeader, EmptyState, Badge, Select } from '../../components/ui';
+import { Button, Card, PageHeader, EmptyState, Badge, Select, Skeleton } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import type { Category, Material, Product } from '../../types';
 import { MATERIAL_LABEL } from '../../types';
@@ -403,7 +403,7 @@ export default function Products() {
       </div>
 
       {isLoading ? (
-        <Card className="h-40 animate-pulse" />
+        <Skeleton />
       ) : productosPestana.length === 0 ? (
         <EmptyState
           title={pestana === 'ACTIVOS' ? 'Sin productos' : 'Sin piezas dadas de baja'}

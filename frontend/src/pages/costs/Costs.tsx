@@ -3,7 +3,7 @@ import { Gem } from 'lucide-react';
 import { api } from '../../lib/api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
-import { Card, PageHeader, Badge, EmptyState } from '../../components/ui';
+import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
 import type { CostsReport } from '../../types';
 
 export default function Costs() {
@@ -78,7 +78,7 @@ export default function Costs() {
           Margen por producto
         </h2>
         {isLoading ? (
-          <div className="h-40 animate-pulse rounded-lg bg-porcelain-200" />
+          <Skeleton />
         ) : productos.length === 0 ? (
           <EmptyState
             title="Sin ventas en este rango"
