@@ -128,8 +128,8 @@ export interface ClientDebt {
   client?: { id: string; nombre: string; telefono: string; lastReminderSentAt?: string | null } | null;
   sale?: {
     id: string;
-    fecha: string;
-    total: number;
+    fecha?: string;
+    total?: number;
     invoice?: { numero: string; pngUrl?: string | null; estado: EstadoFactura } | null;
   } | null;
   amountTotal?: number;

@@ -68,7 +68,10 @@ export class ClientsService {
     const client = await this.prisma.client.findUnique({
       where: { id },
       include: {
-        debts: { orderBy: { createdAt: 'desc' } },
+        // `sale: { select: { id } }` alcanza: el frontend abre el detalle
+        // completo (items, factura) con un GET /sales/:id aparte, igual que
+        // ya hace Cobros con DebtDetailModal.
+        debts: { orderBy: { createdAt: 'desc' }, include: { sale: { select: { id: true } } } },
         sales: {
           orderBy: { createdAt: 'desc' },
           take: 20,
