@@ -1,11 +1,10 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   CheckCircle2,
   XCircle,
   Save,
-  UserPlus,
   DatabaseBackup,
   Play,
   ShieldCheck,
@@ -14,7 +13,6 @@ import {
   Image as ImageIcon,
   Globe,
   UploadCloud,
-  ArrowRight,
   Loader2,
   ChevronDown,
   Store,
@@ -23,52 +21,22 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react';
-import { api, apiUrl, urlConToken } from '../../lib/api';
-import { Button, Card, PageHeader, Select, Badge } from '../../components/ui';
+import { apiUrl, urlConToken } from '../../lib/api';
+import {
+  settingsApi,
+  type AppUser,
+  type BackupsStatus,
+  type IntegrationsStatus,
+  type CrearUsuarioDto,
+} from '../../api/settings.api';
+import { Button, Card, PageHeader, Badge } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
 import { useAuthStore } from '../../store/auth.store';
-import type { BusinessProfile, Role } from '../../types';
-
-/** Cuantos registros trae un respaldo (lo calcula el backend al generarlo). */
-interface BackupContenido {
-  productos: number;
-  clientes: number;
-  ventas: number;
-  facturas: number;
-  deudas: number;
-  gastos: number;
-  pedidos: number;
-  usuarios: number;
-}
-
-interface BackupFile {
-  name: string;
-  sizeBytes: number;
-  createdAt: string;
-  /** Si se encontro en esta computadora o en la copia de OneDrive. */
-  origen: 'local' | 'nube';
-  contenido: BackupContenido | null;
-}
-
-interface BackupsStatus {
-  lastRun: string | null;
-  intervalDays: number;
-  retentionDays: number;
-  copiaEnNube: boolean;
-  files: BackupFile[];
-}
-
-interface IntegrationsStatus {
-  whatsapp: boolean;
-}
-
-interface AppUser {
-  id: string;
-  nombre: string;
-  email: string;
-  role: Role;
-  activo: boolean;
-}
+import type { BusinessProfile } from '../../types';
+import { CatalogoWeb } from './components/CatalogoWeb';
+import { AgregarDatos } from './components/AgregarDatos';
+import { CambiarClave } from './components/CambiarClave';
+import { NewUserForm } from './components/NewUserForm';
 
 /**
  * Seccion plegable de Configuracion. Todas arrancan cerradas menos la que se
@@ -126,22 +94,22 @@ export default function Settings() {
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
-    queryFn: async () => (await api.get('/settings/business-profile')).data,
+    queryFn: () => settingsApi.getBusinessProfile(),
   });
 
   const { data: integrations } = useQuery<IntegrationsStatus>({
     queryKey: ['settings', 'integrations'],
-    queryFn: async () => (await api.get('/settings/integrations-status')).data,
+    queryFn: () => settingsApi.getIntegrationsStatus(),
   });
 
   const { data: redLocal } = useQuery<{ url: string | null; certUrl: string | null }>({
     queryKey: ['settings', 'red-local'],
-    queryFn: async () => (await api.get('/settings/red-local')).data,
+    queryFn: () => settingsApi.getRedLocal(),
   });
 
   const { data: users = [] } = useQuery<AppUser[]>({
     queryKey: ['users'],
-    queryFn: async () => (await api.get('/users')).data,
+    queryFn: () => settingsApi.listUsers(),
   });
 
   const [form, setForm] = useState({
@@ -177,13 +145,7 @@ export default function Settings() {
   }, [profile]);
 
   const updateProfile = useMutation({
-    mutationFn: async () =>
-      (
-        await api.put('/settings/business-profile', {
-          ...form,
-          tasaImpuesto: Number(form.tasaImpuesto),
-        })
-      ).data,
+    mutationFn: () => settingsApi.updateBusinessProfile(form),
     onSuccess: () => {
       toast.success('Datos del negocio actualizados.');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -191,11 +153,7 @@ export default function Settings() {
   });
 
   const uploadLogo = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return (await api.post('/settings/business-profile/logo', formData, { skipErrorToast: true })).data;
-    },
+    mutationFn: (file: File) => settingsApi.uploadLogo(file),
     onSuccess: () => {
       toast.success('Icono del negocio actualizado.');
       queryClient.invalidateQueries({ queryKey: ['settings', 'business-profile'] });
@@ -205,12 +163,12 @@ export default function Settings() {
 
   const { data: backups } = useQuery<BackupsStatus>({
     queryKey: ['settings', 'backups'],
-    queryFn: async () => (await api.get('/backups')).data,
+    queryFn: () => settingsApi.getBackupsStatus(),
     refetchInterval: 15000,
   });
 
   const runBackup = useMutation({
-    mutationFn: async () => (await api.post('/backups/run')).data,
+    mutationFn: () => settingsApi.runBackup(),
     onSuccess: (data) => {
       if (data.ok) {
         toast.success('Respaldo generado correctamente.');
@@ -223,8 +181,7 @@ export default function Settings() {
 
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const restoreBackup = useMutation({
-    mutationFn: async (fileName: string) =>
-      (await api.post('/backups/restore', { fileName }, { skipErrorToast: true })).data,
+    mutationFn: (fileName: string) => settingsApi.restoreBackup(fileName),
     onSuccess: (data) => {
       if (data.ok) {
         toast.success(
@@ -244,8 +201,7 @@ export default function Settings() {
   });
 
   const createUser = useMutation({
-    mutationFn: async (payload: { nombre: string; email: string; password: string; role: Role }) =>
-      (await api.post('/auth/register', payload)).data,
+    mutationFn: (payload: CrearUsuarioDto) => settingsApi.createUser(payload),
     onSuccess: () => {
       toast.success('Usuario creado.');
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -253,8 +209,7 @@ export default function Settings() {
   });
 
   const toggleActive = useMutation({
-    mutationFn: async ({ id, activo }: { id: string; activo: boolean }) =>
-      (await api.patch(`/users/${id}/activo`, { activo }, { skipErrorToast: true })).data,
+    mutationFn: ({ id, activo }: { id: string; activo: boolean }) => settingsApi.toggleUserActive(id, activo),
     onSuccess: (_data, variables) => {
       toast.success(
         variables.activo ? 'Usuario activado.' : 'Usuario desactivado. Ya no podra iniciar sesion.',
@@ -610,577 +565,3 @@ function Field({
   );
 }
 
-/**
- * Catalogo web: datos que solo usa el sitio publico y el boton que lo genera.
- */
-function CatalogoWeb({
-  telefonoWhatsapp,
-  descripcionWeb,
-  relevoPedidosUrl,
-  relevoPedidosClave,
-  cloudflareApiToken,
-  cloudflareAccountId,
-  cloudflarePagesProject,
-  onChange,
-  onGuardar,
-  guardando,
-}: {
-  telefonoWhatsapp: string;
-  descripcionWeb: string;
-  relevoPedidosUrl: string;
-  relevoPedidosClave: string;
-  cloudflareApiToken: string;
-  cloudflareAccountId: string;
-  cloudflarePagesProject: string;
-  onChange: (
-    campo:
-      | 'telefonoWhatsapp'
-      | 'descripcionWeb'
-      | 'relevoPedidosUrl'
-      | 'relevoPedidosClave'
-      | 'cloudflareApiToken'
-      | 'cloudflareAccountId'
-      | 'cloudflarePagesProject',
-    valor: string,
-  ) => void;
-  onGuardar: () => void;
-  guardando: boolean;
-}) {
-  const [resultado, setResultado] = useState<{
-    carpeta: string;
-    productos: number;
-    excluidasSinFoto: number;
-    excluidasSinPrecio: number;
-    cloudflare?: 'sin-configurar' | 'sin-cambios' | 'publicado' | 'error';
-    cloudflareUrl?: string;
-    cloudflareError?: string;
-  } | null>(null);
-
-  const generar = useMutation({
-    mutationFn: async () => (await api.post('/catalogo/generar', undefined, { skipErrorToast: true })).data,
-    onSuccess: (data) => {
-      if (data.ok) {
-        setResultado({
-          carpeta: data.carpeta,
-          productos: data.productos,
-          excluidasSinFoto: data.excluidasSinFoto ?? 0,
-          excluidasSinPrecio: data.excluidasSinPrecio ?? 0,
-          cloudflare: data.cloudflare,
-          cloudflareUrl: data.cloudflareUrl,
-          cloudflareError: data.cloudflareError,
-        });
-        if (data.cloudflare === 'publicado' || data.cloudflare === 'sin-cambios') {
-          toast.success('Catalogo generado y publicado en linea.');
-        } else if (data.cloudflare === 'error') {
-          toast.error(`Catalogo generado, pero no se pudo publicar: ${data.cloudflareError ?? ''}`);
-        } else {
-          toast.success(`Catalogo generado con ${data.productos} piezas.`);
-        }
-      } else {
-        toast.error(data.error || 'No se pudo generar el catalogo.');
-      }
-    },
-    onError: (error: any) => {
-      const msg = error?.response?.data?.message ?? 'No se pudo generar el catalogo.';
-      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
-    },
-  });
-
-  return (
-    <div>
-      <p className="mb-3 text-xs text-muted">
-        Genera una pagina publica con tus piezas. Los clientes arman su pedido y te llega por WhatsApp; el
-        cobro lo coordinas tu por transferencia.
-      </p>
-
-      <div className="space-y-3">
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            WhatsApp para pedidos *
-          </label>
-          <input
-            value={telefonoWhatsapp}
-            onChange={(e) => onChange('telefonoWhatsapp', e.target.value)}
-            placeholder="+1 809 555 1234"
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Frase del negocio
-          </label>
-          <input
-            value={descripcionWeb}
-            onChange={(e) => onChange('descripcionWeb', e.target.value)}
-            placeholder="Joyeria fina · Envios a todo el pais"
-            className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-          />
-        </div>
-
-        <div className="border-t border-porcelain-200 pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Pedidos web automaticos (opcional)
-          </p>
-          <p className="mb-2 text-xs text-muted">
-            Sin esto, los pedidos siguen llegando por WhatsApp igual — solo hay que pegar el mensaje en
-            Pedidos web. Con esto puesto, la app los revisa y los crea sola cada pocos minutos.
-          </p>
-          <div className="space-y-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                URL del relevo
-              </label>
-              <input
-                value={relevoPedidosUrl}
-                onChange={(e) => onChange('relevoPedidosUrl', e.target.value)}
-                placeholder="https://cafe-shopping-pedidos.tu-usuario.workers.dev"
-                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Clave secreta del relevo
-              </label>
-              <input
-                type="password"
-                value={relevoPedidosClave}
-                onChange={(e) => onChange('relevoPedidosClave', e.target.value)}
-                placeholder="La misma que pusiste en Cloudflare"
-                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-porcelain-200 pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Publicar el catalogo solo (opcional)
-          </p>
-          <p className="mb-2 text-xs leading-relaxed text-muted">
-            Con esto puesto, cada vez que algo cambia (una pieza se agota, cambia un precio,
-            entra una pieza nueva) la app <strong>sube el catalogo a Cloudflare Pages sola</strong> —
-            no hay que volver a arrastrar el folder. Es gratis y es la misma cuenta de{' '}
-            <strong>Cloudflare</strong> del relevo de pedidos, si ya la tienes.
-          </p>
-          <ol className="mb-3 list-inside list-decimal space-y-1 text-xs leading-relaxed text-muted">
-            <li>
-              En Cloudflare: <strong>Workers &amp; Pages &rarr; Create &rarr; Pages &rarr; Upload assets</strong>,
-              dale un nombre (ese nombre es el <strong>Project name</strong> de abajo) y sube cualquier
-              archivo para crearlo — la app se encarga de reemplazarlo despues.
-            </li>
-            <li>
-              <strong>dash.cloudflare.com &rarr; tu cuenta &rarr; API Tokens &rarr; Create Token</strong>{' '}
-              (Custom Token) con permiso <strong>Account &rarr; Cloudflare Pages &rarr; Edit</strong>.
-            </li>
-            <li>
-              El <strong>Account ID</strong> esta en la misma pagina de Overview, a la derecha.
-            </li>
-          </ol>
-          <div className="space-y-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Token de API de Cloudflare
-              </label>
-              <input
-                type="password"
-                value={cloudflareApiToken}
-                onChange={(e) => onChange('cloudflareApiToken', e.target.value)}
-                placeholder="Token con permiso Cloudflare Pages: Edit"
-                autoComplete="off"
-                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Account ID de Cloudflare
-              </label>
-              <input
-                value={cloudflareAccountId}
-                onChange={(e) => onChange('cloudflareAccountId', e.target.value)}
-                placeholder="El de la pagina Overview de tu cuenta"
-                autoComplete="off"
-                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-                Nombre del proyecto de Pages
-              </label>
-              <input
-                value={cloudflarePagesProject}
-                onChange={(e) => onChange('cloudflarePagesProject', e.target.value)}
-                placeholder="mi-catalogo"
-                autoComplete="off"
-                className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-porcelain-200 pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Punto de venta desde el catalogo (opcional)
-          </p>
-          <p className="text-xs leading-relaxed text-muted">
-            En la pagina del catalogo, manteniendo pulsado el boton <strong>Filtros</strong> por 2
-            segundos aparece un cuadro para una clave. Con esa clave, el personal puede registrar una
-            venta real desde el celular y esa venta cae sola en la app (factura, stock, y deuda si es
-            a credito), a nombre del usuario <strong>Ventas web</strong>.
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-muted">
-            La clave del punto de venta es <strong>otro secreto de Cloudflare</strong>, aparte de la
-            de arriba: en tu Worker <code>cafe-shopping-pedidos</code> &rarr;{' '}
-            <strong>Settings &rarr; Variables and Secrets &rarr; Add</strong>, nombre{' '}
-            <code>CLAVE_POS</code>, tipo Secret. La pide de nuevo en cada recarga de la pagina o
-            pasados 5 minutos. Sin ese secreto puesto, el punto de venta simplemente no funciona.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={onGuardar} disabled={guardando}>
-            <Save size={15} /> Guardar datos
-          </Button>
-          <Button onClick={() => generar.mutate()} disabled={generar.isPending || !telefonoWhatsapp.trim()}>
-            <Globe size={15} /> {generar.isPending ? 'Generando...' : 'Generar catalogo'}
-          </Button>
-        </div>
-
-        {resultado && (
-          <div
-            className={`rounded-lg p-3 text-xs ${
-              resultado.cloudflare === 'error'
-                ? 'bg-brick-100 text-brick-700'
-                : 'bg-sage-100 text-sage-700'
-            }`}
-          >
-            <p className="font-semibold">Catalogo listo con {resultado.productos} piezas.</p>
-
-            {(resultado.cloudflare === 'publicado' || resultado.cloudflare === 'sin-cambios') && (
-              <p className="mt-2">
-                Ya esta en linea.{' '}
-                {resultado.cloudflareUrl && (
-                  <a
-                    href={resultado.cloudflareUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold underline"
-                  >
-                    Abrir el catalogo
-                  </a>
-                )}{' '}
-                Desde ahora se actualiza solo con cada venta o cambio.
-              </p>
-            )}
-
-            {resultado.cloudflare === 'error' && (
-              <p className="mt-2">
-                No se pudo publicar en Cloudflare Pages: {resultado.cloudflareError}. El catalogo
-                quedo en la carpeta <code className="break-all">{resultado.carpeta}</code> — puedes
-                subirlo a mano en <strong>app.netlify.com/drop</strong> mientras tanto.
-              </p>
-            )}
-
-            {(!resultado.cloudflare || resultado.cloudflare === 'sin-configurar') && (
-              <>
-                <p className="mt-1 break-all">
-                  Carpeta: <code>{resultado.carpeta}</code>
-                </p>
-                <p className="mt-2">
-                  Para ponerlo en linea gratis: entra a <strong>app.netlify.com/drop</strong> y
-                  arrastra esa carpeta completa a la pagina. Te dara una direccion al instante. (O
-                  llena arriba el token, el Account ID y el proyecto de Cloudflare Pages para que
-                  se suba solo.)
-                </p>
-              </>
-            )}
-
-            {(resultado.excluidasSinFoto > 0 || resultado.excluidasSinPrecio > 0) && (
-              <p className="mt-2 border-t border-sage-600/20 pt-2 text-brick-600">
-                Quedaron fuera{' '}
-                {resultado.excluidasSinFoto > 0 && (
-                  <strong>{resultado.excluidasSinFoto} piezas sin foto</strong>
-                )}
-                {resultado.excluidasSinFoto > 0 && resultado.excluidasSinPrecio > 0 && ' y '}
-                {resultado.excluidasSinPrecio > 0 && <strong>{resultado.excluidasSinPrecio} sin precio</strong>}
-                . Completalas en Productos y vuelve a generar para incluirlas.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Une el inventario de OTRA computadora (ej. la de mama) con el de esta,
- * a partir de un respaldo .sqlite.gz generado alli en Respaldos automaticos.
- */
-function AgregarDatos() {
-  const queryClient = useQueryClient();
-  const [archivo, setArchivo] = useState<File | null>(null);
-  const [archivoFotos, setArchivoFotos] = useState<File | null>(null);
-  const [resultado, setResultado] = useState<{
-    total: number;
-    agregados: number;
-    omitidos: number;
-    conFoto: number;
-    renumerados: { nombre: string; skuOriginal: string; skuNuevo: string }[];
-  } | null>(null);
-
-  const importar = useMutation({
-    mutationFn: async () => {
-      const formData = new FormData();
-      formData.append('file', archivo!);
-      if (archivoFotos) formData.append('fotos', archivoFotos);
-      return (await api.post('/data-import/productos', formData, { skipErrorToast: true })).data;
-    },
-    onSuccess: (data) => {
-      setResultado(data);
-      setArchivo(null);
-      setArchivoFotos(null);
-      toast.success(`Listo: ${data.agregados + data.renumerados.length} productos agregados.`);
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-    onError: (error: any) => {
-      const msg = error?.response?.data?.message ?? 'No se pudo importar ese archivo.';
-      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
-    },
-  });
-
-  return (
-    <div>
-      <p className="mb-3 text-xs text-muted">
-        Si tu y otra persona (ej. mama) trabajan cada quien en su propia computadora, usa esto para traer
-        el inventario de la otra hacia esta. Lo que ya existe aqui no se toca — solo se agrega lo nuevo, y
-        si un codigo se repite se le pone uno nuevo automaticamente.
-      </p>
-
-      <div className="space-y-2">
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Base de datos (obligatorio)
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-porcelain-300 px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-copper-400 hover:text-copper-600">
-            {archivo ? archivo.name : 'Elegir archivo .sqlite.gz...'}
-            <input
-              type="file"
-              accept=".gz,.sqlite,.db"
-              className="hidden"
-              disabled={importar.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                setArchivo(file ?? null);
-                setResultado(null);
-              }}
-            />
-          </label>
-          <p className="mt-1 text-[11px] text-muted">
-            El archivo <code>db-....sqlite.gz</code> que se genera en <strong>Respaldos automaticos</strong>{' '}
-            de la OTRA computadora.
-          </p>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-            Fotos de los productos (opcional)
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-porcelain-300 px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-copper-400 hover:text-copper-600">
-            {archivoFotos ? archivoFotos.name : 'Elegir archivo .tar.gz...'}
-            <input
-              type="file"
-              accept=".gz,.tar.gz"
-              className="hidden"
-              disabled={importar.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                setArchivoFotos(file ?? null);
-                setResultado(null);
-              }}
-            />
-          </label>
-          <p className="mt-1 text-[11px] text-muted">
-            El archivo <code>uploads-....tar.gz</code> (misma fecha que el de arriba, tambien esta en{' '}
-            <strong>Respaldos automaticos</strong>) trae las fotos. Sin este, los productos se agregan igual
-            pero sin foto — se completan despues desde Productos.
-          </p>
-        </div>
-
-        <Button size="sm" onClick={() => importar.mutate()} disabled={!archivo || importar.isPending}>
-          <UploadCloud size={14} /> {importar.isPending ? 'Importando...' : 'Importar productos'}
-        </Button>
-      </div>
-
-      {resultado && (
-        <div className="mt-3 rounded-lg bg-sage-100 p-3 text-xs text-sage-700">
-          <p className="font-semibold">
-            {resultado.total} productos en el archivo · {resultado.agregados} agregados tal cual
-            {resultado.renumerados.length > 0 && ` · ${resultado.renumerados.length} renumerados`}
-            {resultado.omitidos > 0 && ` · ${resultado.omitidos} omitidos`}
-          </p>
-          <p className="mt-1">
-            {resultado.conFoto > 0
-              ? `${resultado.conFoto} de ${resultado.agregados + resultado.renumerados.length} llegaron con foto.`
-              : 'Ninguno llego con foto — se completan despues desde Productos.'}
-          </p>
-          {resultado.renumerados.length > 0 && (
-            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t border-sage-600/20 pt-2">
-              <p className="text-[11px] text-muted">
-                Estos ya existian con ese codigo en esta base, asi que se les asigno uno nuevo:
-              </p>
-              {resultado.renumerados.map((r, i) => (
-                <p key={i} className="flex items-center gap-1 font-mono text-[11px]">
-                  {r.nombre}: {r.skuOriginal} <ArrowRight size={10} /> {r.skuNuevo}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Cambio de la propia clave. */
-function CambiarClave() {
-  const [actual, setActual] = useState('');
-  const [nueva, setNueva] = useState('');
-  const [repetir, setRepetir] = useState('');
-
-  const cambiar = useMutation({
-    mutationFn: async () =>
-      (
-        await api.patch(
-          '/users/me/password',
-          { passwordActual: actual, passwordNueva: nueva },
-          { skipErrorToast: true },
-        )
-      ).data,
-    onSuccess: () => {
-      toast.success('Clave actualizada.');
-      setActual('');
-      setNueva('');
-      setRepetir('');
-    },
-    onError: (error: any) => {
-      const msg = error?.response?.data?.message ?? 'No se pudo cambiar la clave.';
-      toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
-    },
-  });
-
-  function enviar(e: FormEvent) {
-    e.preventDefault();
-    if (nueva.length < 6) {
-      toast.error('La clave nueva debe tener al menos 6 caracteres.');
-      return;
-    }
-    if (nueva !== repetir) {
-      toast.error('La clave nueva y su repeticion no coinciden.');
-      return;
-    }
-    cambiar.mutate();
-  }
-
-  return (
-    <form onSubmit={enviar} className="space-y-3">
-      <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-          Clave actual
-        </label>
-        <input
-          type="password"
-          value={actual}
-          onChange={(e) => setActual(e.target.value)}
-          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-          Clave nueva
-        </label>
-        <input
-          type="password"
-          value={nueva}
-          onChange={(e) => setNueva(e.target.value)}
-          placeholder="Minimo 6 caracteres"
-          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-          Repetir la clave nueva
-        </label>
-        <input
-          type="password"
-          value={repetir}
-          onChange={(e) => setRepetir(e.target.value)}
-          className="w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
-        />
-      </div>
-      <Button type="submit" className="w-full" disabled={!actual || !nueva || cambiar.isPending}>
-        {cambiar.isPending ? 'Guardando...' : 'Cambiar clave'}
-      </Button>
-    </form>
-  );
-}
-
-function NewUserForm({
-  onSubmit,
-}: {
-  onSubmit: (payload: { nombre: string; email: string; password: string; role: Role }) => void;
-}) {
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'CAJERO' as Role });
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!form.nombre || !form.email || form.password.length < 6) {
-          toast.error('Completa nombre, correo y una contraseña de al menos 6 caracteres.');
-          return;
-        }
-        onSubmit(form);
-        setForm({ nombre: '', email: '', password: '', role: 'CAJERO' });
-      }}
-      className="space-y-2 border-t border-porcelain-200 pt-3"
-    >
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Agregar usuario</p>
-      <input
-        placeholder="Nombre"
-        value={form.nombre}
-        onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-        className="w-full rounded-lg border border-porcelain-300 px-3 py-1.5 text-sm outline-none focus:border-copper-500"
-      />
-      <input
-        placeholder="Correo"
-        type="email"
-        value={form.email}
-        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-        className="w-full rounded-lg border border-porcelain-300 px-3 py-1.5 text-sm outline-none focus:border-copper-500"
-      />
-      <div className="flex gap-2">
-        <input
-          placeholder="Contraseña"
-          type="password"
-          value={form.password}
-          onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-          className="min-w-0 flex-1 rounded-lg border border-porcelain-300 px-3 py-1.5 text-sm outline-none focus:border-copper-500"
-        />
-        <Select
-          value={form.role}
-          onChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}
-          className="w-36 shrink-0"
-          size="sm"
-          options={[
-            { value: 'CAJERO', label: 'Cajero' },
-            { value: 'CONTABILIDAD', label: 'Contabilidad' },
-            { value: 'ADMIN', label: 'Admin' },
-          ]}
-        />
-      </div>
-      <Button type="submit" size="sm" variant="secondary" className="w-full">
-        <UserPlus size={14} /> Crear usuario
-      </Button>
-    </form>
-  );
-}
