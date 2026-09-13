@@ -1,7 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Gem, Pencil, Search, Trash2, RotateCcw, Loader2, Sparkles, Tag, Check, Download } from 'lucide-react';
+import {
+  Plus,
+  Gem,
+  Pencil,
+  Search,
+  Trash2,
+  RotateCcw,
+  Loader2,
+  Sparkles,
+  Tag,
+  Check,
+  Download,
+  MoreVertical,
+  type LucideIcon,
+} from 'lucide-react';
 import { apiUrl, urlConToken } from '../../lib/api';
 import {
   productsApi,
@@ -31,6 +46,83 @@ const PESTANAS: { valor: 'ACTIVOS' | 'BAJA'; texto: string }[] = [
 function margenPct(product: Product): number | null {
   if (product.costoUnitario === undefined || product.precioUnitario <= 0) return null;
   return ((product.precioUnitario - product.costoUnitario) / product.precioUnitario) * 100;
+}
+
+interface AccionMenu {
+  label: string;
+  icono: LucideIcon;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+/**
+ * Acciones secundarias del encabezado (exportar, categorias, limpiar
+ * duplicados) agrupadas en un menu: en celular, ponerlas como botones
+ * sueltos ocupaba 2 filas completas antes de llegar al listado.
+ */
+function MenuAcciones({ acciones }: { acciones: AccionMenu[] }) {
+  const [abierto, setAbierto] = useState(false);
+  const [posicion, setPosicion] = useState<{ top: number; right: number } | null>(null);
+  const contenedor = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!abierto || !contenedor.current) return;
+    const r = contenedor.current.getBoundingClientRect();
+    setPosicion({ top: r.bottom + 4, right: window.innerWidth - r.right });
+  }, [abierto]);
+
+  useEffect(() => {
+    if (!abierto) return;
+    function alClickFuera(e: MouseEvent) {
+      const objetivo = e.target as Node;
+      if (contenedor.current?.contains(objetivo) || panel.current?.contains(objetivo)) return;
+      setAbierto(false);
+    }
+    function alEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setAbierto(false);
+    }
+    document.addEventListener('mousedown', alClickFuera);
+    document.addEventListener('keydown', alEscape);
+    return () => {
+      document.removeEventListener('mousedown', alClickFuera);
+      document.removeEventListener('keydown', alEscape);
+    };
+  }, [abierto]);
+
+  return (
+    <div ref={contenedor}>
+      <Button size="sm" variant="secondary" onClick={() => setAbierto((a) => !a)} title="Más acciones">
+        <MoreVertical size={16} />
+      </Button>
+
+      {abierto &&
+        posicion &&
+        createPortal(
+          <div
+            ref={panel}
+            style={{ top: posicion.top, right: posicion.right }}
+            className="fixed z-50 w-60 rounded-xl bg-porcelain-100 py-1 shadow-neu"
+          >
+            {acciones.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                disabled={a.disabled}
+                onClick={() => {
+                  setAbierto(false);
+                  a.onClick();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-porcelain-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <a.icono size={15} /> {a.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }
 
 export default function Products() {
@@ -228,25 +320,28 @@ export default function Products() {
         title="Productos"
         subtitle="Catalogo con codigo unico y foto por pieza"
         action={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={exportarCsv}>
-              <Download size={16} /> Exportar Excel
-            </Button>
-            <Button variant="secondary" onClick={() => setShowCategorias(true)}>
-              <Tag size={16} /> Categorias
-            </Button>
-            {esAdmin && (
-              <Button
-                variant="secondary"
-                onClick={() => cargarVistaPrevia.mutate()}
-                disabled={cargarVistaPrevia.isPending}
-              >
-                <Sparkles size={16} /> {cargarVistaPrevia.isPending ? 'Revisando...' : 'Limpiar duplicados'}
-              </Button>
-            )}
-            <Button onClick={() => setShowForm(true)}>
+          <div className="flex flex-nowrap items-center gap-2">
+            <Button size="sm" onClick={() => setShowForm(true)}>
               <Plus size={16} /> Nuevo producto
             </Button>
+            <Button size="sm" variant="secondary" onClick={() => setShowCategorias(true)}>
+              <Tag size={16} /> Categorias
+            </Button>
+            <MenuAcciones
+              acciones={[
+                { label: 'Exportar Excel', icono: Download, onClick: exportarCsv },
+                ...(esAdmin
+                  ? [
+                      {
+                        label: cargarVistaPrevia.isPending ? 'Revisando...' : 'Limpiar duplicados',
+                        icono: Sparkles,
+                        onClick: () => cargarVistaPrevia.mutate(),
+                        disabled: cargarVistaPrevia.isPending,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </div>
         }
       />
