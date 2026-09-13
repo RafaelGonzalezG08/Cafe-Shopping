@@ -16,6 +16,26 @@
         android:layout_gravity="center"
         android:visibility="gone" />
 
+    <!-- La app no tiene Toolbar/ActionBar (tema NoActionBar), asi que el menu
+         de opciones del sistema (onCreateOptionsMenu) nunca se ve en pantalla.
+         Este boton es el unico punto de entrada real para "Cambiar direccion"
+         y "Olvidar certificado" una vez que la app ya esta conectada. -->
+    <Button
+        android:id="@+id/menuButton"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="10dp"
+        android:minWidth="0dp"
+        android:minHeight="0dp"
+        android:padding="0dp"
+        android:text="⋮"
+        android:textSize="20sp"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:background="@drawable/boton_menu_circular"
+        android:contentDescription="Opciones de conexión" />
+
     <LinearLayout
         android:id="@+id/setupOverlay"
         android:layout_width="match_parent"

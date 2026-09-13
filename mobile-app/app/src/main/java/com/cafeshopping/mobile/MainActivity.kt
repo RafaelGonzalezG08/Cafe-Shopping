@@ -19,6 +19,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var setupOverlay: LinearLayout
     private lateinit var addressInput: EditText
+    private lateinit var menuButton: Button
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var fotoCapturaPendiente: Uri? = null
@@ -87,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         progress = findViewById(R.id.progress)
         setupOverlay = findViewById(R.id.setupOverlay)
         addressInput = findViewById(R.id.addressInput)
+        menuButton = findViewById(R.id.menuButton)
 
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
@@ -101,6 +104,7 @@ class MainActivity : AppCompatActivity() {
         webView.webChromeClient = crearWebChromeClient()
 
         findViewById<Button>(R.id.connectButton).setOnClickListener { conectar() }
+        menuButton.setOnClickListener { mostrarMenuOpciones(it) }
 
         val guardada = prefs.getString(CLAVE_DIRECCION, null)
         if (guardada != null) {
@@ -128,7 +132,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
+        ejecutarAccionMenu(item.itemId)
+        return true
+    }
+
+    /**
+     * La app usa el tema NoActionBar (sin barra superior), asi que el menu de
+     * opciones de onCreateOptionsMenu no tiene donde mostrarse en la mayoria
+     * de los telefonos. Este boton flotante (arriba a la derecha del WebView)
+     * es el punto de entrada real a estas mismas opciones.
+     */
+    private fun mostrarMenuOpciones(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, MENU_CAMBIAR_DIRECCION, 0, "Cambiar dirección")
+        popup.menu.add(0, MENU_OLVIDAR_CERTIFICADO, 1, "Olvidar certificado de confianza")
+        popup.setOnMenuItemClickListener { item -> ejecutarAccionMenu(item.itemId) }
+        popup.show()
+    }
+
+    private fun ejecutarAccionMenu(itemId: Int): Boolean {
+        when (itemId) {
             MENU_CAMBIAR_DIRECCION -> {
                 prefs.edit().remove(CLAVE_DIRECCION).apply()
                 mostrarConfiguracion()
@@ -148,6 +171,7 @@ class MainActivity : AppCompatActivity() {
     private fun mostrarConfiguracion() {
         setupOverlay.visibility = View.VISIBLE
         webView.visibility = View.GONE
+        menuButton.visibility = View.GONE
         val actual = prefs.getString(CLAVE_DIRECCION, null)
         if (actual != null) addressInput.setText(actual)
     }
@@ -166,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     private fun mostrarWebView(direccion: String) {
         setupOverlay.visibility = View.GONE
         webView.visibility = View.VISIBLE
+        menuButton.visibility = View.VISIBLE
         webView.loadUrl(direccion)
     }
 
