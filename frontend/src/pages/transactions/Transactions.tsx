@@ -223,7 +223,9 @@ export default function Transactions() {
               {p.label}
             </button>
           ))}
-          <span className="mx-1 h-5 w-px bg-porcelain-300" />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={from}
