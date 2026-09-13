@@ -134,6 +134,20 @@ select {
     @apply rounded-lg bg-porcelain-100 text-ink;
     box-shadow: inset 2px 2px 5px rgb(var(--neu-lo)), inset -2px -2px 5px rgb(var(--neu-hi));
   }
+  /*
+   * Un input/textarea es de los pocos elementos HTML que NO respeta el ancho
+   * de su contenedor por defecto: si el panel se achica (celular, ventana
+   * angosta) y el campo tiene un ancho fijo (w-16, w-24...) o esta dentro de
+   * una fila flex, se sale por el borde en vez de encogerse. max-width:100%
+   * lo tope al ancho disponible; min-width:0 deja que un input flex-1 se
+   * encoja mas alla de su tamaño "de contenido" cuando comparte fila con
+   * otros campos. Es global para no tener que acordarse en cada pantalla.
+   */
+  input,
+  textarea {
+    max-width: 100%;
+    min-width: 0;
+  }
   input:where(:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])):focus,
   textarea:focus {
     outline: none;

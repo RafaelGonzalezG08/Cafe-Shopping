@@ -324,8 +324,14 @@ export default function Products() {
             <Button size="sm" onClick={() => setShowForm(true)}>
               <Plus size={16} /> Nuevo producto
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => setShowCategorias(true)}>
-              <Tag size={16} /> Categorias
+            <Button
+              size="sm"
+              variant="secondary"
+              className="!px-2.5"
+              onClick={() => setShowCategorias(true)}
+              title="Categorias"
+            >
+              <Tag size={16} />
             </Button>
             <MenuAcciones
               acciones={[

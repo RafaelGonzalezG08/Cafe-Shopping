@@ -56,8 +56,13 @@ export default function Expenses() {
     <div>
       <PageHeader title="Gastos" subtitle="Registro de gastos operativos del negocio" />
 
+      {/* En celular (una sola columna) el orden del DOM es el orden visual:
+          el formulario va primero (order-1) para que se pueda registrar un
+          gasto sin bajar antes por toda la tabla. En escritorio (lg+) el
+          order-2/order-1 lo regresa a tabla-izquierda + form-derecha, como
+          ya estaba. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        <div>
+        <div className="order-2 lg:order-1">
           {isLoading ? (
             <Skeleton />
           ) : expenses.length === 0 ? (
@@ -89,7 +94,7 @@ export default function Expenses() {
           )}
         </div>
 
-        <Card className="h-fit p-4">
+        <Card className="order-1 h-fit p-4 lg:order-2">
           <h2 className="mb-3 font-display text-sm font-bold uppercase tracking-wide text-muted">
             Nuevo gasto
           </h2>
