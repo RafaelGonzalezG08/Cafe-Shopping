@@ -18,7 +18,7 @@ import {
   Receipt,
   Copy,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { ordersApi } from '../../api/orders.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDateTime, ESTADO_PEDIDO_LABEL, ESTADO_PEDIDO_WEB_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState, ConfirmPasswordModal, Skeleton } from '../../components/ui';
@@ -89,8 +89,7 @@ function PedidosTienda() {
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['orders', filtro],
-    queryFn: async () =>
-      (await api.get('/orders', { params: { estado: filtro === 'TODOS' ? undefined : filtro } })).data,
+    queryFn: () => ordersApi.list(filtro),
   });
 
   function refrescar() {
@@ -99,8 +98,8 @@ function PedidosTienda() {
   }
 
   const actualizar = useMutation({
-    mutationFn: async ({ id, cambios }: { id: string; cambios: Record<string, unknown> }) =>
-      (await api.patch(`/orders/${id}`, cambios)).data,
+    mutationFn: ({ id, cambios }: { id: string; cambios: Record<string, unknown> }) =>
+      ordersApi.update(id, cambios),
     onSuccess: (_data, variables) => {
       if (variables.cambios.estado === 'ENTREGADO') {
         toast.success('Pedido entregado. La factura queda como registro de la venta.');
@@ -113,7 +112,7 @@ function PedidosTienda() {
   });
 
   const cancelar = useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/orders/${id}`)).data,
+    mutationFn: (id: string) => ordersApi.cancel(id),
     onSuccess: () => {
       toast.success('Pedido cancelado. La venta y su factura no se tocaron.');
       refrescar();
@@ -330,8 +329,7 @@ function PedidosWeb() {
 
   const { data: pedidos = [], isLoading } = useQuery<WebOrder[]>({
     queryKey: ['web-orders', filtro],
-    queryFn: async () =>
-      (await api.get('/web-orders', { params: { estado: filtro === 'TODOS' ? undefined : filtro } })).data,
+    queryFn: () => ordersApi.listWeb(filtro),
   });
 
   function refrescar() {
@@ -344,7 +342,7 @@ function PedidosWeb() {
   }
 
   const crear = useMutation({
-    mutationFn: async (mensaje: string) => (await api.post('/web-orders', { texto: mensaje })).data as WebOrder,
+    mutationFn: (mensaje: string) => ordersApi.createWeb(mensaje),
     onSuccess: (pedido) => {
       toast.success(`Pedido ${pedido.codigo} creado.`);
       setTexto('');
@@ -356,8 +354,7 @@ function PedidosWeb() {
   });
 
   const actualizar = useMutation({
-    mutationFn: async ({ id, estado }: { id: string; estado: EstadoPedidoWeb }) =>
-      (await api.patch(`/web-orders/${id}`, { estado })).data,
+    mutationFn: ({ id, estado }: { id: string; estado: EstadoPedidoWeb }) => ordersApi.updateWeb(id, estado),
     onSuccess: () => {
       toast.success('Pedido actualizado.');
       refrescar();
@@ -365,13 +362,7 @@ function PedidosWeb() {
   });
 
   const eliminar = useMutation({
-    mutationFn: async (password: string) =>
-      (
-        await api.delete(`/web-orders/${aEliminar!.id}`, {
-          data: { password },
-          skipErrorToast: true,
-        })
-      ).data,
+    mutationFn: (password: string) => ordersApi.deleteWeb(aEliminar!.id, password),
     onSuccess: () => {
       toast.success('Pedido eliminado.');
       setAEliminar(null);
@@ -561,17 +552,15 @@ function AtenderPedidoWebModal({
   const totalConDescuento = Math.round(pedido.total * (1 - descuento / 100) * 100) / 100;
 
   const atender = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post(`/web-orders/${pedido.id}/atender`, {
-          clientId: selectedClient?.id,
-          metodoPago,
-          fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
-          esPedido: esPedido || undefined,
-          fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
-          descuentoPct: descuento || undefined,
-        })
-      ).data as Sale,
+    mutationFn: () =>
+      ordersApi.atenderWeb(pedido.id, {
+        clientId: selectedClient?.id,
+        metodoPago,
+        fechaVencimiento: metodoPago === 'CREDITO' && fechaVencimiento ? fechaVencimiento : undefined,
+        esPedido: esPedido || undefined,
+        fechaEntrega: esPedido && fechaEntrega ? fechaEntrega : undefined,
+        descuentoPct: descuento || undefined,
+      }),
     onSuccess: (sale) => {
       toast.success(esPedido ? 'Factura creada y agregada a Pedidos.' : 'Factura creada.');
       setFacturaCreada(sale);
