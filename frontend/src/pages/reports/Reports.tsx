@@ -8,12 +8,60 @@ import { formatMoney, formatDate, ESTADO_DEUDA_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { ClientDebt } from '../../types';
 
+/** yyyy-mm-dd en hora LOCAL (no toISOString: eso pasa a UTC y en RD -4 puede
+ * adelantar la fecha un dia). Los <input type="date"> esperan este formato. */
+function fechaLocalISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function hoyISO(): string {
+  return fechaLocalISO(new Date());
+}
+function inicioDePeriodo(grupo: 'day' | 'week' | 'month' | 'year'): string {
+  const hoy = new Date();
+  switch (grupo) {
+    case 'day':
+      return fechaLocalISO(hoy);
+    case 'week': {
+      const dia = hoy.getDay(); // 0=domingo..6=sabado
+      const desdeLunes = dia === 0 ? -6 : 1 - dia;
+      const lunes = new Date(hoy);
+      lunes.setDate(hoy.getDate() + desdeLunes);
+      return fechaLocalISO(lunes);
+    }
+    case 'month':
+      return fechaLocalISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    case 'year':
+      return fechaLocalISO(new Date(hoy.getFullYear(), 0, 1));
+  }
+}
+
+type RangoPreset = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
+
 export default function Reports() {
   // Los filtros se recuerdan: al volver de revisar otra pantalla, el reporte
   // sigue en el mismo periodo en vez de resetearse a los ultimos 30 dias.
   const [group, setGroup] = usePersistedState<'day' | 'week' | 'month' | 'year'>('reportes:agrupar', 'day');
   const [from, setFrom] = usePersistedState('reportes:desde', '');
   const [to, setTo] = usePersistedState('reportes:hasta', '');
+  // Que boton se ve "encendido": los de Dia/Semana/Mes/Año ponen ademas el
+  // rango de fechas (de lo contrario solo cambiaban el agrupado del grafico
+  // de ventas, sin afectar Ingresos/Egresos/Saldo/Balance de arriba, que
+  // dependen del rango). "Todo" limpia el rango (historial completo) y
+  // "custom" es cuando el usuario toca las fechas a mano.
+  const [preset, setPreset] = usePersistedState<RangoPreset>('reportes:preset', 'all');
+
+  function elegirPeriodo(g: 'day' | 'week' | 'month' | 'year') {
+    setGroup(g);
+    setPreset(g);
+    setFrom(inicioDePeriodo(g));
+    setTo(hoyISO());
+  }
+
+  function elegirTodo() {
+    setPreset('all');
+    setFrom('');
+    setTo('');
+  }
 
   // Recharts pinta con atributos SVG, no con clases: los colores del grafico
   // se pasan a mano segun el tema.
@@ -67,21 +115,46 @@ export default function Reports() {
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => {
+            setFrom(e.target.value);
+            setPreset('custom');
+          }}
+          className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500"
+        />
         <span className="text-sm text-muted">a</span>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500" />
-        <div className="ml-2 flex gap-1">
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => {
+            setTo(e.target.value);
+            setPreset('custom');
+          }}
+          className="rounded-lg border border-porcelain-300 px-2.5 py-1.5 text-sm outline-none focus:border-copper-500"
+        />
+        <div className="ml-2 flex flex-wrap gap-1">
           {(['day', 'week', 'month', 'year'] as const).map((g) => (
             <button
               key={g}
-              onClick={() => setGroup(g)}
+              onClick={() => elegirPeriodo(g)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                group === g ? 'bg-copper-500 text-white' : 'bg-porcelain-200 text-muted'
+                preset === g ? 'bg-copper-500 text-white' : 'bg-porcelain-200 text-muted'
               }`}
             >
               {{ day: 'Dia', week: 'Semana', month: 'Mensual', year: 'Anual' }[g]}
             </button>
           ))}
+          <button
+            onClick={elegirTodo}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              preset === 'all' ? 'bg-copper-500 text-white' : 'bg-porcelain-200 text-muted'
+            }`}
+            title="Todo el historial, de principio a fin"
+          >
+            Todo
+          </button>
         </div>
       </div>
 
