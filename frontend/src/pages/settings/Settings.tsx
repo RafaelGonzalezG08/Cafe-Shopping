@@ -482,7 +482,7 @@ export default function Settings() {
 
       {restoreTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-          <Card className="w-full max-w-sm p-5">
+          <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
             <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-brick-600">
               <AlertTriangle size={16} /> Restaurar respaldo
             </h3>

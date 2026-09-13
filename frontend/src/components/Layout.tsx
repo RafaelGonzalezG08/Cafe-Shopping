@@ -195,7 +195,7 @@ export function Layout() {
 
       {confirmandoSalir && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-          <Card className="w-full max-w-sm p-5">
+          <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display font-bold text-ink">Cerrar sesion</h2>
               <button

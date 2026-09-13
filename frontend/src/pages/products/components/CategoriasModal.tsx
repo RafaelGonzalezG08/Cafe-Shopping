@@ -52,7 +52,7 @@ export function CategoriasModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-      <Card className="w-full max-w-sm p-5">
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
             <Tag size={16} /> Categorias de joyas

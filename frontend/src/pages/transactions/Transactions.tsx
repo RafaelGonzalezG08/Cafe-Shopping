@@ -453,7 +453,7 @@ function TransaccionDetailModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="w-full max-w-sm p-5">
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
         <div className="mb-3 flex items-center justify-between">
           <Badge tone={TONE_BY_TIPO[t.tipo]}>{TIPOS.find((x) => x.value === t.tipo)?.label}</Badge>
           <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
