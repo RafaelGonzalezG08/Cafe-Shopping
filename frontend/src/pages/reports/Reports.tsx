@@ -1,35 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Download } from 'lucide-react';
-import { api } from '../../lib/api';
+import { reportsApi, type SalesPeriod, type ExpensesReport, type Cashflow } from '../../api/reports.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { useTheme } from '../../lib/useTheme';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState } from '../../components/ui';
 import type { ClientDebt } from '../../types';
-
-interface SalesPeriod {
-  periodo: string;
-  ventas: number;
-  subtotal: number;
-  impuestos: number;
-  total: number;
-}
-
-interface ExpensesReport {
-  total: number;
-  categorias: { categoria: string; monto: number }[];
-}
-
-interface Cashflow {
-  ingresos: number;
-  egresos: number;
-  neto: number;
-  /** Contado + abonos cobrados - gastos. Dinero que de verdad entro a la caja. */
-  saldoEnCaja: number;
-  /** Todas las ventas (contado y credito) - gastos. Foto contable del periodo. */
-  balanceTotal: number;
-}
 
 export default function Reports() {
   // Los filtros se recuerdan: al volver de revisar otra pantalla, el reporte
@@ -49,30 +26,27 @@ export default function Reports() {
 
   const { data: salesReport = [] } = useQuery<SalesPeriod[]>({
     queryKey: ['reports', 'sales', group, from, to],
-    queryFn: async () => (await api.get('/reports/sales', { params: { ...params, group } })).data,
+    queryFn: () => reportsApi.sales({ ...params, group }),
   });
 
   const { data: debts = [] } = useQuery<ClientDebt[]>({
     queryKey: ['reports', 'debts'],
-    queryFn: async () => (await api.get('/reports/clients/debts')).data,
+    queryFn: () => reportsApi.debts(),
   });
 
   const { data: expensesReport } = useQuery<ExpensesReport>({
     queryKey: ['reports', 'expenses', from, to],
-    queryFn: async () => (await api.get('/reports/expenses', { params })).data,
+    queryFn: () => reportsApi.expenses(params),
   });
 
   const { data: cashflow } = useQuery<Cashflow>({
     queryKey: ['reports', 'cashflow', from, to],
-    queryFn: async () => (await api.get('/reports/cashflow', { params })).data,
+    queryFn: () => reportsApi.cashflow(params),
   });
 
   async function exportCsv() {
-    const response = await api.get('/reports/sales/export', {
-      params: { ...params, group },
-      responseType: 'blob',
-    });
-    const url = URL.createObjectURL(response.data as Blob);
+    const blob = await reportsApi.exportSalesCsv({ ...params, group });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'reporte-ventas.csv';

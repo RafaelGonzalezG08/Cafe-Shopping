@@ -12,7 +12,7 @@ import {
   PiggyBank,
   Scale,
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { reportsApi } from '../api/reports.api';
 import { formatMoney, formatDate, ESTADO_PEDIDO_LABEL } from '../lib/format';
 import { Card, PageHeader, Badge, Skeleton } from '../components/ui';
 import type { DashboardSummary, OrdersSummary } from '../types';
@@ -27,7 +27,7 @@ function KpiCard({
   label: string;
   value: string;
   icon: typeof DollarSign;
-  tone: 'copper' | 'brick' | 'sage' | 'rose';
+  tone: 'copper' | 'brick' | 'sage' | 'rose' | 'amber';
   hint?: string;
 }) {
   const toneStyles = {
@@ -35,6 +35,7 @@ function KpiCard({
     brick: 'bg-brick-100 text-brick-600',
     sage: 'bg-sage-100 text-sage-600',
     rose: 'bg-rose-100 text-rose-600',
+    amber: 'bg-amber-100 text-amber-700',
   }[tone];
 
   return (
@@ -60,7 +61,7 @@ function KpiCard({
 function PedidosDestacados() {
   const { data } = useQuery<OrdersSummary>({
     queryKey: ['orders', 'summary'],
-    queryFn: async () => (await api.get('/orders/summary')).data,
+    queryFn: () => reportsApi.ordersSummary(),
     refetchInterval: 60_000,
   });
 
@@ -137,7 +138,7 @@ function PedidosDestacados() {
 export default function Dashboard() {
   const { data, isLoading } = useQuery<DashboardSummary>({
     queryKey: ['dashboard'],
-    queryFn: async () => (await api.get('/reports/dashboard')).data,
+    queryFn: () => reportsApi.dashboard(),
     refetchInterval: 60_000,
   });
 
@@ -148,14 +149,14 @@ export default function Dashboard() {
       <PedidosDestacados />
 
       {isLoading || !data ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard
               label="Ventas de hoy"
               value={`RD$ ${formatMoney(data.ventasHoy.total)}`}
@@ -172,7 +173,7 @@ export default function Dashboard() {
               label="Deuda pendiente"
               value={`RD$ ${formatMoney(data.deudaTotalPendiente)}`}
               icon={AlertCircle}
-              tone="brick"
+              tone="amber"
             />
             <KpiCard
               label="Gastos del mes"
@@ -191,7 +192,7 @@ export default function Dashboard() {
               label="Balance del mes"
               value={`RD$ ${formatMoney(data.balanceTotalMes)}`}
               icon={Scale}
-              tone={data.balanceTotalMes < 0 ? 'brick' : 'rose'}
+              tone={data.balanceTotalMes < 0 ? 'brick' : 'sage'}
               hint="Todas las ventas − gastos"
             />
           </div>

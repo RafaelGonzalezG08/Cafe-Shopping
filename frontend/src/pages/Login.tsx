@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gem, Loader2 } from 'lucide-react';
-import { api } from '../lib/api';
+import { authApi } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
 import { Button } from '../components/ui';
 
@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.post('/auth/login', { email, password });
+      const data = await authApi.login(email, password);
       login(data.accessToken, data.user);
       navigate('/');
     } catch {
@@ -29,7 +29,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-porcelain-100 px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-porcelain-100 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-copper-400 to-copper-600 shadow-neu-sm">
