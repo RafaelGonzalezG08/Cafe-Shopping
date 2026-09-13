@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { X, Banknote, MessageCircle, Loader2, Trash2 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { cobrosApi } from '../../api/cobros.api';
+import { salesApi } from '../../api/sales.api';
 import { formatMoney, formatDate, formatDateTime, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal, Skeleton } from '../../components/ui';
 import { FacturaImagen } from '../../components/FacturaImagen';
@@ -30,7 +31,7 @@ export default function Cobros() {
 
   const { data: debts = [], isLoading } = useQuery<ClientDebt[]>({
     queryKey: ['client-debts', status],
-    queryFn: async () => (await api.get('/client-debts', { params: { status: status || undefined } })).data,
+    queryFn: () => cobrosApi.list(status),
   });
 
   const totalPendiente = debts.reduce(
@@ -164,8 +165,7 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
   const queryClient = useQueryClient();
 
   const sendReminder = useMutation({
-    mutationFn: async () =>
-      (await api.post(`/client-debts/${debt.id}/remind`, undefined, { skipErrorToast: true })).data,
+    mutationFn: () => cobrosApi.remind(debt.id),
     onSuccess: () => {
       toast.success('Recordatorio en cola. Se enviará por WhatsApp en unos segundos.');
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });
@@ -205,7 +205,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
 
   const { data: sale, isLoading } = useQuery<Sale>({
     queryKey: ['sale', saleId],
-    queryFn: async () => (await api.get(`/sales/${saleId}`)).data,
+    queryFn: () => salesApi.get(saleId!),
     enabled: Boolean(saleId),
   });
 
@@ -221,8 +221,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
   const saldo = Math.max(0, total - pagado);
 
   const registerPayment = useMutation({
-    mutationFn: async () =>
-      (await api.post(`/client-debts/${debt.id}/payments`, { amount: Number(amount), metodo })).data,
+    mutationFn: () => cobrosApi.registerPayment(debt.id, Number(amount), metodo),
     onSuccess: () => {
       toast.success('Abono registrado. La factura se actualizo con el nuevo saldo.');
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });
@@ -233,13 +232,7 @@ function DebtDetailModal({ debt, onClose }: { debt: ClientDebt; onClose: () => v
   });
 
   const deletePayment = useMutation({
-    mutationFn: async (password: string) =>
-      (
-        await api.delete(`/client-debts/payments/${abonoAEliminar!.id}`, {
-          data: { password },
-          skipErrorToast: true,
-        })
-      ).data,
+    mutationFn: (password: string) => cobrosApi.deletePayment(abonoAEliminar!.id, password),
     onSuccess: () => {
       toast.success('Abono eliminado. El saldo de la cuenta se actualizo.');
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });

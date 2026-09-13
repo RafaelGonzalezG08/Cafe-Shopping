@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Search, X, Check, UserPlus } from 'lucide-react';
-import { api } from '../lib/api';
+import { clientsApi } from '../api/clients.api';
 import { Card, Button } from './ui';
 import type { Client } from '../types';
 
@@ -84,17 +84,11 @@ function ClientSearchModal({ onSelect, onClose }: { onSelect: (client: Client) =
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', search],
-    queryFn: async () => (await api.get('/clients', { params: { search: search || undefined } })).data,
+    queryFn: () => clientsApi.search(search),
   });
 
   const crearCliente = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post('/clients', {
-          nombre: nombreNuevo.trim(),
-          telefono: telefonoNuevo.trim(),
-        })
-      ).data as Client,
+    mutationFn: () => clientsApi.create({ nombre: nombreNuevo.trim(), telefono: telefonoNuevo.trim() }),
     onSuccess: (cliente) => {
       toast.success('Cliente creado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });

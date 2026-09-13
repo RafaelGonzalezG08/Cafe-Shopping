@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Download, Search, ArrowDownCircle, ArrowUpCircle, Scale, Trash2, FileText, X } from 'lucide-react';
-import { api } from '../../lib/api';
+import { transactionsApi } from '../../api/transactions.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL, ESTADO_FACTURA_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Select, ConfirmPasswordModal, Skeleton } from '../../components/ui';
@@ -120,7 +120,7 @@ export default function Transactions() {
 
   const { data, isLoading } = useQuery<TransaccionesResponse>({
     queryKey: ['reports', 'transactions', params],
-    queryFn: async () => (await api.get('/reports/transactions', { params })).data,
+    queryFn: () => transactionsApi.list(params),
   });
 
   const items = data?.items ?? [];
@@ -128,7 +128,7 @@ export default function Transactions() {
   const eliminar = useMutation({
     mutationFn: async (password: string) => {
       const { url, body } = endpointDeBorrado(aEliminar!);
-      return (await api.delete(url, { data: body(password), skipErrorToast: true })).data;
+      return transactionsApi.eliminarPorUrl(url, body(password));
     },
     onSuccess: () => {
       toast.success('Transaccion eliminada.');
@@ -148,8 +148,8 @@ export default function Transactions() {
   });
 
   async function exportarCsv() {
-    const response = await api.get('/reports/transactions/export', { params, responseType: 'blob' });
-    const url = URL.createObjectURL(response.data as Blob);
+    const blob = await transactionsApi.exportCsv(params);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'transacciones.csv';

@@ -1,5 +1,5 @@
 import { api } from '../lib/api';
-import type { ClientDebt, DashboardSummary, OrdersSummary } from '../types';
+import type { ClientDebt, CostsReport, DashboardSummary, OrdersSummary } from '../types';
 
 export interface SalesPeriod {
   periodo: string;
@@ -37,6 +37,7 @@ export const reportsApi = {
   debts: () => api.get<ClientDebt[]>('/reports/clients/debts').then((r) => r.data),
   expenses: (params: RangoFechas) => api.get<ExpensesReport>('/reports/expenses', { params }).then((r) => r.data),
   cashflow: (params: RangoFechas) => api.get<Cashflow>('/reports/cashflow', { params }).then((r) => r.data),
+  costs: (params: RangoFechas) => api.get<CostsReport>('/reports/costs', { params }).then((r) => r.data),
   exportSalesCsv: (params: RangoFechas & { group: 'day' | 'week' | 'month' | 'year' }) =>
     api.get('/reports/sales/export', { params, responseType: 'blob' }).then((r) => r.data as Blob),
 };

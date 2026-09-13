@@ -89,7 +89,7 @@ export default function Reports() {
         {from || to ? 'Usando el rango de fechas de arriba.' : 'Mostrando todo el historial.'}
       </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-sage-600">

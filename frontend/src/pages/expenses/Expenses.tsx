@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { expensesApi } from '../../api/expenses.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, formatDate } from '../../lib/format';
 import { Button, Card, PageHeader, EmptyState, ConfirmPasswordModal, Skeleton } from '../../components/ui';
@@ -16,12 +16,11 @@ export default function Expenses() {
 
   const { data: expenses = [], isLoading } = useQuery<Expense[]>({
     queryKey: ['expenses'],
-    queryFn: async () => (await api.get('/expenses')).data,
+    queryFn: () => expensesApi.list(),
   });
 
   const createExpense = useMutation({
-    mutationFn: async () =>
-      (await api.post('/expenses', { ...form, monto: Number(form.monto) })).data,
+    mutationFn: () => expensesApi.create({ ...form, monto: Number(form.monto) }),
     onSuccess: () => {
       toast.success('Gasto registrado.');
       setForm({ categoria: '', descripcion: '', monto: '' });
@@ -31,13 +30,7 @@ export default function Expenses() {
   });
 
   const deleteExpense = useMutation({
-    mutationFn: async (password: string) =>
-      (
-        await api.delete(`/expenses/${gastoAEliminar!.id}`, {
-          data: { password },
-          skipErrorToast: true,
-        })
-      ).data,
+    mutationFn: (password: string) => expensesApi.delete(gastoAEliminar!.id, password),
     onSuccess: () => {
       toast.success('Gasto eliminado.');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });

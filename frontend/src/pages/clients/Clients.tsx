@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download } from 'lucide-react';
-import { api } from '../../lib/api';
+import { clientsApi } from '../../api/clients.api';
+import { cobrosApi } from '../../api/cobros.api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
@@ -32,15 +33,11 @@ export default function Clients() {
 
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients', 'all', search],
-    queryFn: async () => (await api.get('/clients', { params: { search: search || undefined } })).data,
+    queryFn: () => clientsApi.search(search),
   });
 
   const bulkEliminar = useMutation({
-    mutationFn: async () =>
-      (await api.post('/clients/bulk/eliminar', { ids: [...seleccionados] })).data as {
-        eliminados: number;
-        omitidos: { id: string; nombre: string; motivo: string }[];
-      },
+    mutationFn: () => clientsApi.bulkDelete([...seleccionados]),
     onSuccess: (data) => {
       toast.success(
         data.omitidos.length > 0
@@ -56,12 +53,12 @@ export default function Clients() {
 
   const { data: selectedClient } = useQuery<Client>({
     queryKey: ['clients', selectedId],
-    queryFn: async () => (await api.get(`/clients/${selectedId}`)).data,
+    queryFn: () => clientsApi.get(selectedId!),
     enabled: Boolean(selectedId),
   });
 
   const createClient = useMutation({
-    mutationFn: async (payload: Partial<Client>) => (await api.post('/clients', payload)).data,
+    mutationFn: (payload: Partial<Client>) => clientsApi.create(payload),
     onSuccess: () => {
       toast.success('Cliente creado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -72,8 +69,8 @@ export default function Clients() {
   });
 
   async function exportarCsv() {
-    const response = await api.get('/clients/export', { responseType: 'blob' });
-    const url = URL.createObjectURL(response.data as Blob);
+    const blob = await clientsApi.exportXlsx();
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'clientes.xlsx';
@@ -207,7 +204,7 @@ function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => 
   // ventas o deudas — ese mensaje es el que se muestra tal cual, porque
   // explica exactamente por que no se puede.
   const deleteClient = useMutation({
-    mutationFn: async () => (await api.delete(`/clients/${client.id}`)).data,
+    mutationFn: () => clientsApi.delete(client.id),
     onSuccess: () => {
       toast.success('Cliente eliminado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -217,8 +214,8 @@ function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => 
   });
 
   const registerPayment = useMutation({
-    mutationFn: async ({ debtId, amount, metodo }: { debtId: string; amount: number; metodo: MetodoPago }) =>
-      (await api.post(`/client-debts/${debtId}/payments`, { amount, metodo })).data,
+    mutationFn: ({ debtId, amount, metodo }: { debtId: string; amount: number; metodo: MetodoPago }) =>
+      cobrosApi.registerPayment(debtId, amount, metodo),
     onSuccess: () => {
       toast.success('Abono registrado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });

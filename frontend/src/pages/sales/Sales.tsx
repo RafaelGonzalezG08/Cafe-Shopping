@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { MessageCircle, Download, Loader2, Eye, X, CreditCard, Banknote, Pencil, Trash2, Search, UserRound } from 'lucide-react';
-import { api, apiUrl, urlConToken } from '../../lib/api';
+import { apiUrl, urlConToken } from '../../lib/api';
+import { salesApi } from '../../api/sales.api';
+import { clientsApi } from '../../api/clients.api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, formatTime, formatDateTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Button, Skeleton } from '../../components/ui';
@@ -25,7 +27,7 @@ export default function Sales() {
 
   const { data: sales = [], isLoading } = useQuery<Sale[]>({
     queryKey: ['sales', from, to],
-    queryFn: async () => (await api.get('/sales', { params: { from: from || undefined, to: to || undefined } })).data,
+    queryFn: () => salesApi.list({ from: from || undefined, to: to || undefined }),
     // Si alguna factura está EN_COLA, refrescar cada 5s para ver cuándo pasa a
     // ENVIADA/ERROR (el envío corre en segundo plano).
     refetchInterval: (query) =>
@@ -33,7 +35,7 @@ export default function Sales() {
   });
 
   const sendWhatsapp = useMutation({
-    mutationFn: async (saleId: string) => (await api.post(`/sales/${saleId}/send-invoice-whatsapp`)).data,
+    mutationFn: (saleId: string) => salesApi.sendWhatsapp(saleId),
     onSuccess: () => {
       toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
       queryClient.invalidateQueries({ queryKey: ['sales'] });
@@ -343,8 +345,7 @@ function DeleteSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () =>
   const piezasDevueltas = sale.items.filter((i) => i.productId);
 
   const deleteSale = useMutation({
-    mutationFn: async () =>
-      (await api.delete(`/sales/${sale.id}`, { data: { adminPassword }, skipErrorToast: true })).data,
+    mutationFn: () => salesApi.delete(sale.id, adminPassword),
     onSuccess: () => {
       toast.success('Factura eliminada. Las piezas volvieron al inventario.');
       queryClient.invalidateQueries({ queryKey: ['sales'] });
@@ -459,7 +460,7 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
   const { data: clientes = [] } = useQuery<Client[]>({
     queryKey: ['clients', clientSearch],
-    queryFn: async () => (await api.get('/clients', { params: { search: clientSearch || undefined } })).data,
+    queryFn: () => clientsApi.search(clientSearch),
     enabled: buscandoCliente,
   });
 
@@ -477,25 +478,20 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
   }
 
   const saveEdit = useMutation({
-    mutationFn: async () => {
+    mutationFn: () => {
       if (lines.length === 0) throw new Error('La factura debe tener al menos un producto.');
-      const { data } = await api.put(
-        `/sales/${sale.id}`,
-        {
-          adminPassword,
-          // null = consumidor final. Se manda siempre (no solo si cambio) para
-          // que el backend no tenga que adivinar la intencion.
-          clientId: cliente?.id ?? null,
-          items: lines.map((l) => ({
-            productId: l.productId,
-            descripcion: l.descripcion,
-            cantidad: l.cantidad,
-            precioUnitario: l.precioUnitario,
-          })),
-        },
-        { skipErrorToast: true },
-      );
-      return data as Sale;
+      return salesApi.edit(sale.id, {
+        adminPassword,
+        // null = consumidor final. Se manda siempre (no solo si cambio) para
+        // que el backend no tenga que adivinar la intencion.
+        clientId: cliente?.id ?? null,
+        items: lines.map((l) => ({
+          productId: l.productId,
+          descripcion: l.descripcion,
+          cantidad: l.cantidad,
+          precioUnitario: l.precioUnitario,
+        })),
+      });
     },
     onSuccess: () => {
       toast.success('Factura corregida y regenerada.');

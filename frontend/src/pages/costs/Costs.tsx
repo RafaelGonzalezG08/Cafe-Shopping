@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Gem } from 'lucide-react';
-import { api } from '../../lib/api';
+import { reportsApi } from '../../api/reports.api';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
@@ -14,7 +14,7 @@ export default function Costs() {
 
   const { data, isLoading } = useQuery<CostsReport>({
     queryKey: ['reports', 'costs', from, to],
-    queryFn: async () => (await api.get('/reports/costs', { params })).data,
+    queryFn: () => reportsApi.costs(params),
   });
 
   const totales = data?.totales;
@@ -46,7 +46,7 @@ export default function Costs() {
         {from || to ? 'Usando el rango de fechas de arriba.' : 'Mostrando los ultimos 30 dias.'}
       </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase text-muted">Ingresos</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">
