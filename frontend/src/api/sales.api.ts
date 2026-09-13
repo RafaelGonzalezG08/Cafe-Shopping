@@ -1,5 +1,6 @@
 import { api } from '../lib/api';
-import type { MetodoPago, Sale } from '../types';
+import type { EnvioWhatsappDirecto } from '../lib/whatsappDirecto';
+import type { Invoice, MetodoPago, Sale } from '../types';
 
 export interface EditarVentaDto {
   adminPassword: string;
@@ -22,9 +23,14 @@ export const salesApi = {
   get: (id: string) => api.get<Sale>(`/sales/${id}`).then((r) => r.data),
   create: (dto: CrearVentaDto) => api.post<Sale>('/sales', dto).then((r) => r.data),
   // POS maneja su propio toast de error (skipErrorToast); Ventas usa el
-  // generico -- por eso el parametro es opcional en vez de fijo.
+  // generico -- por eso el parametro es opcional en vez de fijo. El
+  // resultado es la factura (modo agente, PC) o un EnvioWhatsappDirecto
+  // (modo directo, celular) segun de donde vino la peticion -- lo decide
+  // el backend, ver esConexionLocal.
   sendWhatsapp: (saleId: string, opts?: { skipErrorToast?: boolean }) =>
-    api.post(`/sales/${saleId}/send-invoice-whatsapp`, undefined, opts).then((r) => r.data),
+    api
+      .post<Invoice | EnvioWhatsappDirecto>(`/sales/${saleId}/send-invoice-whatsapp`, undefined, opts)
+      .then((r) => r.data),
   delete: (id: string, adminPassword: string) =>
     api.delete(`/sales/${id}`, { data: { adminPassword }, skipErrorToast: true }).then((r) => r.data),
   edit: (id: string, dto: EditarVentaDto) =>

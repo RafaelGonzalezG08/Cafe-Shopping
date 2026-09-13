@@ -90,8 +90,15 @@ export class InvoicesService {
    * al instante. El envio real lo hace WhatsappQueueService en segundo plano,
    * con reintentos. El frontend consulta `whatsappEstado` de la factura para
    * mostrar "en cola" / "enviada" / "error".
+   *
+   * Si la peticion NO vino de la propia PC (`esPc` en false, ver
+   * common/network.util.ts -> esConexionLocal), no se encola para el agente:
+   * ese agente pega el mensaje en el WhatsApp Desktop DE LA PC, no tiene
+   * ningun sentido si quien pidio el envio esta en su propio celular. En ese
+   * caso se devuelve el texto y la imagen para que el propio navegador del
+   * celular lo mande (ver respuestaEnvioDirecto).
    */
-  async sendWhatsapp(saleId: string, userId?: string) {
+  async sendWhatsapp(saleId: string, userId: string | undefined, esPc: boolean) {
     const sale = await this.prisma.sale.findUnique({
       where: { id: saleId },
       include: { client: true, invoice: true },
@@ -120,6 +127,9 @@ export class InvoicesService {
         ? `Hola ${sale.client.nombre}, gracias por su compra en ${business.nombre}. Adjuntamos su factura ${invoice.numero} por un total de ${Number(sale.total).toFixed(2)}.`
         : `¡Hola ${sale.client.nombre}! Gracias por su compra. Aquí tiene su factura ${invoice.numero}.\n\n${firma}`;
 
+    if (!esPc) {
+      return this.respuestaEnvioDirecto(mensaje, invoice.pngUrl, sale.client.telefono);
+    }
     return this.cola.encolar(saleId, mensaje, userId);
   }
 
@@ -135,7 +145,7 @@ export class InvoicesService {
    * PNG de la factura de la venta (generandolo si hiciera falta) junto con
    * el texto del recordatorio, en vez del link manual wa.me de antes.
    */
-  async sendDebtReminder(saleId: string, saldo: number, userId?: string) {
+  async sendDebtReminder(saleId: string, saldo: number, userId: string | undefined, esPc: boolean) {
     const sale = await this.prisma.sale.findUnique({
       where: { id: saleId },
       include: { client: true, invoice: true },
@@ -160,8 +170,23 @@ export class InvoicesService {
       `Le recordamos su saldo pendiente de RD$ ${saldo.toFixed(2)} (factura ${invoice.numero}). ` +
       `Cualquier duda, con gusto le ayudamos. ¡Gracias!`;
 
+    if (!esPc) {
+      return this.respuestaEnvioDirecto(mensaje, invoice.pngUrl, sale.client.telefono);
+    }
     await this.cola.encolar(saleId, mensaje, userId);
     return { ok: true, whatsappEstado: 'EN_COLA' as const };
+  }
+
+  /**
+   * Cuando quien pide el envio no esta en la propia PC, no tiene sentido
+   * encolar para el agente de AutoHotkey (ver comentario en sendWhatsapp):
+   * se le devuelve el mensaje y la imagen al frontend para que el navegador
+   * del celular lo mande el mismo (Web Share API con el PNG adjunto, o el
+   * link wa.me de solo texto como respaldo si el navegador no soporta
+   * compartir archivos).
+   */
+  private respuestaEnvioDirecto(mensaje: string, imagenUrl: string, telefono: string) {
+    return { modo: 'directo' as const, mensaje, imagenUrl, telefono };
   }
 
   /**

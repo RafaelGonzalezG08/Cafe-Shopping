@@ -4,6 +4,11 @@ import toast from 'react-hot-toast';
 import { MessageCircle, Download, Loader2, Eye } from 'lucide-react';
 import { apiUrl, urlConToken } from '../../lib/api';
 import { salesApi } from '../../api/sales.api';
+import {
+  abrirPestanaRespaldoSiHaceFalta,
+  enviarWhatsappDesdeCelular,
+  esEnvioDirecto,
+} from '../../lib/whatsappDirecto';
 import { formatMoney, formatDate, formatTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
 import { SaleDetailModal } from '../../components/SaleDetailModal';
@@ -32,12 +37,26 @@ export default function Sales() {
   });
 
   const sendWhatsapp = useMutation({
-    mutationFn: (saleId: string) => salesApi.sendWhatsapp(saleId),
-    onSuccess: () => {
-      toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
+    mutationFn: ({ saleId }: { saleId: string; pestanaRespaldo: Window | null }) =>
+      salesApi.sendWhatsapp(saleId),
+    onSuccess: async (resultado, variables) => {
+      if (esEnvioDirecto(resultado)) {
+        await enviarWhatsappDesdeCelular(resultado, variables.pestanaRespaldo);
+      } else {
+        variables.pestanaRespaldo?.close();
+        toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
+      }
       queryClient.invalidateQueries({ queryKey: ['sales'] });
     },
+    onError: (_error, variables) => {
+      variables.pestanaRespaldo?.close();
+    },
   });
+
+  function enviarPorWhatsapp(saleId: string) {
+    // Sincronico, dentro del click: ver comentario en abrirPestanaRespaldoSiHaceFalta.
+    sendWhatsapp.mutate({ saleId, pestanaRespaldo: abrirPestanaRespaldoSiHaceFalta() });
+  }
 
   return (
     <div>
@@ -108,14 +127,14 @@ export default function Sales() {
                     )}
                     {sale.client?.telefono && (
                       <button
-                        onClick={() => sendWhatsapp.mutate(sale.id)}
+                        onClick={() => enviarPorWhatsapp(sale.id)}
                         disabled={sendWhatsapp.isPending || sale.invoice?.whatsappEstado === 'EN_COLA'}
                         className={`rounded-lg p-1.5 hover:bg-sage-100 ${
                           sale.invoice?.whatsappEstado === 'ERROR' ? 'text-brick-600' : 'text-sage-600'
                         }`}
                         title="Enviar por WhatsApp"
                       >
-                        {(sendWhatsapp.isPending && sendWhatsapp.variables === sale.id) ||
+                        {(sendWhatsapp.isPending && sendWhatsapp.variables?.saleId === sale.id) ||
                         sale.invoice?.whatsappEstado === 'EN_COLA' ? (
                           <Loader2 size={15} className="animate-spin" />
                         ) : (
@@ -193,7 +212,7 @@ export default function Sales() {
                       )}
                       {sale.client?.telefono && (
                         <button
-                          onClick={() => sendWhatsapp.mutate(sale.id)}
+                          onClick={() => enviarPorWhatsapp(sale.id)}
                           disabled={sendWhatsapp.isPending || sale.invoice?.whatsappEstado === 'EN_COLA'}
                           className={`rounded-lg p-1.5 hover:bg-sage-100 ${
                             sale.invoice?.whatsappEstado === 'ERROR' ? 'text-brick-600' : 'text-sage-600'
@@ -208,7 +227,7 @@ export default function Sales() {
                                   : 'Enviar por WhatsApp'
                           }
                         >
-                          {(sendWhatsapp.isPending && sendWhatsapp.variables === sale.id) ||
+                          {(sendWhatsapp.isPending && sendWhatsapp.variables?.saleId === sale.id) ||
                           sale.invoice?.whatsappEstado === 'EN_COLA' ? (
                             <Loader2 size={15} className="animate-spin" />
                           ) : (

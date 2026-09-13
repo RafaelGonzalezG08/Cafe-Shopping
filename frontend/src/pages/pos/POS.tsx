@@ -6,6 +6,11 @@ import { apiUrl, urlConToken } from '../../lib/api';
 import { productsApi } from '../../api/products.api';
 import { settingsApi } from '../../api/settings.api';
 import { salesApi } from '../../api/sales.api';
+import {
+  abrirPestanaRespaldoSiHaceFalta,
+  enviarWhatsappDesdeCelular,
+  esEnvioDirecto,
+} from '../../lib/whatsappDirecto';
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
@@ -472,15 +477,21 @@ export function InvoicePreview({
   const waEstado = sale.invoice?.whatsappEstado;
 
   const sendWhatsapp = useMutation({
-    mutationFn: () => salesApi.sendWhatsapp(sale.id, { skipErrorToast: true }),
-    onSuccess: (invoice) => {
+    mutationFn: (pestanaRespaldo: Window | null) => salesApi.sendWhatsapp(sale.id, { skipErrorToast: true }),
+    onSuccess: async (resultado, pestanaRespaldo) => {
+      if (esEnvioDirecto(resultado)) {
+        await enviarWhatsappDesdeCelular(resultado, pestanaRespaldo);
+        return;
+      }
+      pestanaRespaldo?.close();
       queryClient.setQueryData<Sale>(['sale', sale.id], (prev) =>
-        prev ? { ...prev, invoice: { ...prev.invoice, ...invoice } } : prev,
+        prev ? { ...prev, invoice: { ...prev.invoice, ...resultado } } : prev,
       );
       queryClient.invalidateQueries({ queryKey: ['sale', sale.id] });
       toast.success('En cola de envío. Se enviará por WhatsApp en unos segundos.');
     },
-    onError: (error: any) => {
+    onError: (error: any, pestanaRespaldo) => {
+      pestanaRespaldo?.close();
       toast.error(error?.response?.data?.message ?? 'No se pudo poner la factura en cola.');
     },
   });
@@ -520,7 +531,7 @@ export function InvoicePreview({
           {sale.client?.telefono ? (
             <Button
               className="w-full"
-              onClick={() => sendWhatsapp.mutate()}
+              onClick={() => sendWhatsapp.mutate(abrirPestanaRespaldoSiHaceFalta())}
               disabled={sendWhatsapp.isPending || waEstado === 'EN_COLA'}
             >
               {sendWhatsapp.isPending ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}

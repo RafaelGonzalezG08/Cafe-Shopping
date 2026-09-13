@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { Role } from '../common/enums';
+import { esConexionLocal } from '../common/network.util';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -76,7 +78,11 @@ export class SalesController {
   }
 
   @Post(':id/send-invoice-whatsapp')
-  sendInvoiceWhatsapp(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.invoicesService.sendWhatsapp(id, user.userId);
+  sendInvoiceWhatsapp(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.invoicesService.sendWhatsapp(id, user.userId, esConexionLocal(req));
   }
 }

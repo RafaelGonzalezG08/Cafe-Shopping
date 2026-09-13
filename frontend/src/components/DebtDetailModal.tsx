@@ -4,6 +4,11 @@ import toast from 'react-hot-toast';
 import { X, Banknote, MessageCircle, Loader2, Trash2 } from 'lucide-react';
 import { cobrosApi } from '../api/cobros.api';
 import { salesApi } from '../api/sales.api';
+import {
+  abrirPestanaRespaldoSiHaceFalta,
+  enviarWhatsappDesdeCelular,
+  esEnvioDirecto,
+} from '../lib/whatsappDirecto';
 import { formatMoney, formatDateTime, METODO_PAGO_LABEL } from '../lib/format';
 import { Button, Card, Select, ConfirmPasswordModal, Skeleton } from './ui';
 import { FacturaImagen } from './FacturaImagen';
@@ -244,12 +249,18 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
   const queryClient = useQueryClient();
 
   const sendReminder = useMutation({
-    mutationFn: () => cobrosApi.remind(debt.id),
-    onSuccess: () => {
-      toast.success('Recordatorio en cola. Se enviará por WhatsApp en unos segundos.');
+    mutationFn: (_pestanaRespaldo: Window | null) => cobrosApi.remind(debt.id),
+    onSuccess: async (resultado, pestanaRespaldo) => {
+      if (esEnvioDirecto(resultado)) {
+        await enviarWhatsappDesdeCelular(resultado, pestanaRespaldo);
+      } else {
+        pestanaRespaldo?.close();
+        toast.success('Recordatorio en cola. Se enviará por WhatsApp en unos segundos.');
+      }
       queryClient.invalidateQueries({ queryKey: ['client-debts'] });
     },
-    onError: (error: any) => {
+    onError: (error: any, pestanaRespaldo) => {
+      pestanaRespaldo?.close();
       const msg = error?.response?.data?.message ?? 'No se pudo poner el recordatorio en cola.';
       toast.error(Array.isArray(msg) ? msg.join(' ') : msg);
     },
@@ -258,7 +269,7 @@ function ReminderButton({ debt, className }: { debt: ClientDebt; className: stri
   return (
     <div className={className}>
       <button
-        onClick={() => sendReminder.mutate()}
+        onClick={() => sendReminder.mutate(abrirPestanaRespaldoSiHaceFalta())}
         disabled={sendReminder.isPending}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-sage-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sage-600 disabled:cursor-not-allowed disabled:bg-porcelain-300 disabled:text-muted"
       >

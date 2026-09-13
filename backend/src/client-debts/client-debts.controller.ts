@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { EstadoDeuda, Role } from '../common/enums';
+import { esConexionLocal } from '../common/network.util';
 import { ClientDebtsService } from './client-debts.service';
 import { RegisterPaymentDto } from './dto/register-payment.dto';
 import { DeletePaymentDto } from './dto/delete-payment.dto';
@@ -46,7 +48,11 @@ export class ClientDebtsController {
   @Post(':id/remind')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.CAJERO, Role.CONTABILIDAD)
-  sendReminder(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.debtsService.sendReminder(id, user.userId);
+  sendReminder(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.debtsService.sendReminder(id, user.userId, esConexionLocal(req));
   }
 }
