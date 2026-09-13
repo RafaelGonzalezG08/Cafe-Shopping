@@ -215,19 +215,32 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
-/* Barra de scroll fina para el menu lateral (cuando la pantalla es baja y la
-   lista de secciones no cabe entera, para que el pie con "Cerrar sesion" /
-   Configuracion nunca quede fuera de alcance). */
-aside nav {
+/*
+ * Barra de scroll fina y del mismo tema en TODA la app -- sin esto, cualquier
+ * panel/modal con overflow-y-auto (el menu lateral, los modales con
+ * max-h-[90vh], las listas internas de duplicados/categorias) mostraba la
+ * barra gris por defecto del sistema, que desentona fuerte contra el fondo
+ * rosado/ciruela (mas todavia en modo oscuro). Al ser una regla global,
+ * cualquier contenedor scrolleable nuevo la hereda solo, sin acordarse de
+ * agregarle una clase.
+ */
+* {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--c-porcelain-300)) transparent;
 }
-aside nav::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
-aside nav::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
   background: rgb(var(--c-porcelain-300));
   border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-muted));
 }
 
 /* Mientras se cambia de tema (ver useTheme.ts): sin transiciones, para que el
