@@ -22,6 +22,11 @@
  *  3) Si no se sube la version, electron-builder sobreescribe el instalador
  *     anterior y el actualizador automatico no ofrece el cambio, porque
  *     compara numeros de version.
+ *
+ *  4) "vite build" borra frontend/dist entero, asi que el APK del celular
+ *     (mobile-app/compilar.js lo copia ahi para que se pueda descargar desde
+ *     la app) desaparecia en cada instalador nuevo aunque nadie hubiera
+ *     tocado el APK. Se vuelve a copiar aqui si ya existe uno compilado.
  */
 
 const { execSync } = require('child_process');
@@ -31,6 +36,7 @@ const path = require('path');
 const RAIZ = path.join(__dirname, '..');
 const BACKEND = path.join(RAIZ, 'backend');
 const FRONTEND = path.join(RAIZ, 'frontend');
+const APK_COMPILADO = path.join(RAIZ, 'mobile-app', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 
 function paso(titulo) {
   console.log(`\n=== ${titulo} ===`);
@@ -81,6 +87,14 @@ const indice = path.join(FRONTEND, 'dist', 'index.html');
 if (!fs.existsSync(indice)) {
   console.error('\nERROR: no se genero frontend/dist. Revisa los errores de arriba.');
   process.exit(1);
+}
+// "vite build" borra frontend/dist entero antes de generarlo de nuevo, asi
+// que el APK del celular (mobile-app/compilar.js lo deja ahi para poder
+// descargarlo desde la app) desaparece en cada compilada. Si ya existe un
+// APK compilado, se vuelve a copiar aqui -- no hace falta recompilarlo con
+// Android/Gradle cada vez, solo copiar el que ya estaba.
+if (fs.existsSync(APK_COMPILADO)) {
+  fs.copyFileSync(APK_COMPILADO, path.join(FRONTEND, 'dist', 'cafe-shopping.apk'));
 }
 
 paso(`3/4  Version ${nueva}`);
