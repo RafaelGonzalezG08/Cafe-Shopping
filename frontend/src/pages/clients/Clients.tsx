@@ -1,14 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, Trash2, Loader2, Check, Download, ChevronRight } from 'lucide-react';
 import { clientsApi } from '../../api/clients.api';
-import { cobrosApi } from '../../api/cobros.api';
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney, formatDate, ESTADO_DEUDA_LABEL, METODO_PAGO_LABEL } from '../../lib/format';
 import { Button, Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
+import { DebtDetailModal } from '../../components/DebtDetailModal';
+import { SaleDetailModal } from '../../components/SaleDetailModal';
 import { useAuthStore } from '../../store/auth.store';
-import type { Client, MetodoPago } from '../../types';
+import type { Client, ClientDebt } from '../../types';
 
 export default function Clients() {
   const queryClient = useQueryClient();
@@ -106,98 +107,93 @@ export default function Clients() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <div>
-          <div className="buscador mb-4">
-            <Search size={16} className="shrink-0 text-muted" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre, telefono o correo..."
-            />
-          </div>
-
-          {modoSeleccion && seleccionados.size > 0 && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
-              <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionados</span>
-              <Button
-                size="sm"
-                className="ml-auto !bg-brick-600 hover:!bg-brick-700"
-                disabled={bulkEliminar.isPending}
-                onClick={() => bulkEliminar.mutate()}
-              >
-                {bulkEliminar.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Eliminar
-              </Button>
-            </div>
-          )}
-
-          {isLoading ? (
-            <Skeleton />
-          ) : clients.length === 0 ? (
-            <EmptyState title="Sin clientes" description="Registra tu primer cliente para empezar." />
-          ) : (
-            <Card className="divide-y divide-porcelain-200 overflow-hidden">
-              {clients.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => (modoSeleccion ? toggleSeleccion(c.id) : setSelectedId(c.id))}
-                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-porcelain-100 ${
-                    selectedId === c.id ? 'bg-copper-50' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {modoSeleccion && (
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
-                          seleccionados.has(c.id)
-                            ? 'border-copper-600 bg-copper-600 text-white'
-                            : 'border-porcelain-400'
-                        }`}
-                      >
-                        {seleccionados.has(c.id) && <Check size={13} strokeWidth={3} />}
-                      </span>
-                    )}
-                    <div>
-                      <p className="text-sm font-medium text-ink">{c.nombre}</p>
-                      <p className="flex items-center gap-1 text-xs text-muted">
-                        <Phone size={11} /> {c.telefono}
-                      </p>
-                    </div>
-                  </div>
-                  {Boolean(c.deudaPendiente) && (
-                    <Badge tone="brick">Debe RD$ {formatMoney(c.deudaPendiente!)}</Badge>
-                  )}
-                </button>
-              ))}
-            </Card>
-          )}
-        </div>
-
-        <div>
-          {selectedClient ? (
-            <ClientDetail client={selectedClient} onDeleted={() => setSelectedId(null)} />
-          ) : (
-            <Card className="p-6 text-center text-sm text-muted">
-              Selecciona un cliente para ver su historial y deudas.
-            </Card>
-          )}
-        </div>
+      <div className="buscador mb-4">
+        <Search size={16} className="shrink-0 text-muted" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre, telefono o correo..."
+        />
       </div>
+
+      {modoSeleccion && seleccionados.size > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
+          <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionados</span>
+          <Button
+            size="sm"
+            className="ml-auto !bg-brick-600 hover:!bg-brick-700"
+            disabled={bulkEliminar.isPending}
+            onClick={() => bulkEliminar.mutate()}
+          >
+            {bulkEliminar.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Eliminar
+          </Button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <Skeleton />
+      ) : clients.length === 0 ? (
+        <EmptyState title="Sin clientes" description="Registra tu primer cliente para empezar." />
+      ) : (
+        <Card className="divide-y divide-porcelain-200 overflow-hidden">
+          {clients.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => (modoSeleccion ? toggleSeleccion(c.id) : setSelectedId(c.id))}
+              className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-porcelain-100"
+            >
+              <div className="flex items-center gap-3">
+                {modoSeleccion && (
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                      seleccionados.has(c.id)
+                        ? 'border-copper-600 bg-copper-600 text-white'
+                        : 'border-porcelain-400'
+                    }`}
+                  >
+                    {seleccionados.has(c.id) && <Check size={13} strokeWidth={3} />}
+                  </span>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-ink">{c.nombre}</p>
+                  <p className="flex items-center gap-1 text-xs text-muted">
+                    <Phone size={11} /> {c.telefono}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {Boolean(c.deudaPendiente) && (
+                  <Badge tone="brick">Debe RD$ {formatMoney(c.deudaPendiente!)}</Badge>
+                )}
+                {!modoSeleccion && <ChevronRight size={16} className="shrink-0 text-muted" />}
+              </div>
+            </button>
+          ))}
+        </Card>
+      )}
 
       {showForm && (
         <NewClientModal onClose={() => setShowForm(false)} onSubmit={(payload) => createClient.mutate(payload)} />
       )}
+
+      {selectedClient && <ClientDetailModal client={selectedClient} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }
 
-function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => void }) {
+/**
+ * Todo lo del cliente en un solo panel: datos, deudas pendientes e historial
+ * de compras. Tocar una deuda o una venta abre su detalle completo (items,
+ * abonos, factura) con los mismos modales que usan Cobros y Ventas.
+ */
+function ClientDetailModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const esAdmin = user?.role === 'ADMIN';
-  const [abonoAmount, setAbonoAmount] = useState<Record<string, string>>({});
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<ClientDebt | null>(null);
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   // Borrar un cliente es solo de ADMIN (@Roles(Role.ADMIN) en
   // clients.controller.ts). El backend ademas se niega si el cliente ya tiene
@@ -208,138 +204,138 @@ function ClientDetail({ client, onDeleted }: { client: Client; onDeleted: () => 
     onSuccess: () => {
       toast.success('Cliente eliminado.');
       queryClient.invalidateQueries({ queryKey: ['clients'] });
-      onDeleted();
+      onClose();
     },
     onSettled: () => setConfirmandoBorrado(false),
-  });
-
-  const registerPayment = useMutation({
-    mutationFn: ({ debtId, amount, metodo }: { debtId: string; amount: number; metodo: MetodoPago }) =>
-      cobrosApi.registerPayment(debtId, amount, metodo),
-    onSuccess: () => {
-      toast.success('Abono registrado.');
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
-    },
   });
 
   const pendingDebts = (client.debts ?? []).filter((d) => d.status !== 'PAGADA');
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <p className="font-display font-bold text-ink">{client.nombre}</p>
-        <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
-          <Phone size={13} /> {client.telefono}
-        </p>
-        {client.email && (
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-            <Mail size={13} /> {client.email}
-          </p>
-        )}
-      </Card>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
+      <Card className="max-h-[85vh] w-full max-w-md overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-porcelain-200 p-5">
+          <div>
+            <p className="font-display font-bold text-ink">{client.nombre}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <Phone size={13} /> {client.telefono}
+            </p>
+            {client.email && (
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+                <Mail size={13} /> {client.email}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
+            <X size={18} />
+          </button>
+        </div>
 
-      {pendingDebts.length > 0 && (
-        <Card className="p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Deudas pendientes</h3>
-          <div className="space-y-3">
-            {pendingDebts.map((d) => {
-              const saldo = Number(d.amountTotal ?? 0) - Number(d.amountPaid ?? 0);
-              return (
-                <div key={d.id} className="rounded-lg border border-porcelain-200 p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <Badge tone={d.status === 'VENCIDA' ? 'brick' : 'copper'}>
-                      {ESTADO_DEUDA_LABEL[d.status]}
-                    </Badge>
-                    <span className="font-display font-bold tabular-nums text-ink">
-                      RD$ {formatMoney(saldo)}
-                    </span>
-                  </div>
-                  {d.dueDate && (
-                    <p className="mt-1 text-xs text-muted">Vence: {formatDate(d.dueDate)}</p>
-                  )}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="Monto"
-                      value={abonoAmount[d.id] ?? ''}
-                      onChange={(e) => setAbonoAmount((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                      className="w-24 rounded-lg border border-porcelain-300 px-2 py-1 text-xs outline-none focus:border-copper-500"
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        const amount = Number(abonoAmount[d.id]);
-                        if (!amount || amount <= 0) return toast.error('Ingresa un monto valido.');
-                        registerPayment.mutate({ debtId: d.id, amount, metodo: 'EFECTIVO' });
-                      }}
+        <div className="space-y-4 p-5">
+          {pendingDebts.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Deudas pendientes</h3>
+              <div className="divide-y divide-porcelain-200 rounded-lg border border-porcelain-200">
+                {pendingDebts.map((d) => {
+                  const saldo = Number(d.amountTotal ?? 0) - Number(d.amountPaid ?? 0);
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() =>
+                        setSelectedDebt({
+                          ...d,
+                          client: { id: client.id, nombre: client.nombre, telefono: client.telefono },
+                        })
+                      }
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-porcelain-100"
                     >
-                      Registrar abono
+                      <div>
+                        <Badge tone={d.status === 'VENCIDA' ? 'brick' : 'copper'}>
+                          {ESTADO_DEUDA_LABEL[d.status]}
+                        </Badge>
+                        {d.dueDate && <p className="mt-1 text-xs text-muted">Vence: {formatDate(d.dueDate)}</p>}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="font-display font-bold tabular-nums text-ink">
+                          RD$ {formatMoney(saldo)}
+                        </span>
+                        <ChevronRight size={16} className="text-muted" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Historial de compras</h3>
+            {!client.sales || client.sales.length === 0 ? (
+              <p className="text-sm text-muted">Sin compras registradas.</p>
+            ) : (
+              <div className="divide-y divide-porcelain-200 rounded-lg border border-porcelain-200">
+                {client.sales.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSaleId(s.id)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-porcelain-100"
+                  >
+                    <div>
+                      <p className="text-ink">{formatDate(s.fecha)}</p>
+                      <p className="text-xs text-muted">{METODO_PAGO_LABEL[s.metodoPago]}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="font-display font-semibold tabular-nums text-ink">
+                        RD$ {formatMoney(s.total)}
+                      </span>
+                      <ChevronRight size={16} className="text-muted" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {esAdmin && (
+            <div className="border-t border-porcelain-200 pt-3">
+              {confirmandoBorrado ? (
+                <>
+                  <p className="mb-2 text-sm font-semibold text-ink">Eliminar a {client.nombre}?</p>
+                  <p className="mb-3 text-xs text-muted">
+                    Esto no se puede deshacer. Si el cliente ya tiene ventas o deudas registradas, el sistema no lo
+                    va a dejar borrar (haria desaparecer el rastro de facturas a su nombre).
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoBorrado(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="flex-1"
+                      disabled={deleteClient.isPending}
+                      onClick={() => deleteClient.mutate()}
+                    >
+                      {deleteClient.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      Si, eliminar
                     </Button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Historial de compras</h3>
-        {!client.sales || client.sales.length === 0 ? (
-          <p className="text-sm text-muted">Sin compras registradas.</p>
-        ) : (
-          <div className="divide-y divide-porcelain-200">
-            {client.sales.map((s) => (
-              <div key={s.id} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <p className="text-ink">{formatDate(s.fecha)}</p>
-                  <p className="text-xs text-muted">{METODO_PAGO_LABEL[s.metodoPago]}</p>
-                </div>
-                <p className="font-display font-semibold tabular-nums text-ink">RD$ {formatMoney(s.total)}</p>
-              </div>
-            ))}
-          </div>
-        )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoBorrado(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium text-brick-500 hover:bg-brick-100"
+                >
+                  <Trash2 size={15} /> Eliminar cliente
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
-      {esAdmin && (
-        <Card className="p-4">
-          {confirmandoBorrado ? (
-            <>
-              <p className="mb-2 text-sm font-semibold text-ink">Eliminar a {client.nombre}?</p>
-              <p className="mb-3 text-xs text-muted">
-                Esto no se puede deshacer. Si el cliente ya tiene ventas o deudas registradas, el sistema no lo va a
-                dejar borrar (haria desaparecer el rastro de facturas a su nombre).
-              </p>
-              <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoBorrado(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  variant="danger"
-                  className="flex-1"
-                  disabled={deleteClient.isPending}
-                  onClick={() => deleteClient.mutate()}
-                >
-                  {deleteClient.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                  Si, eliminar
-                </Button>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmandoBorrado(true)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium text-brick-500 hover:bg-brick-100"
-            >
-              <Trash2 size={15} /> Eliminar cliente
-            </button>
-          )}
-        </Card>
-      )}
+      {selectedDebt && <DebtDetailModal debt={selectedDebt} onClose={() => setSelectedDebt(null)} />}
+      {selectedSaleId && <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />}
     </div>
   );
 }
