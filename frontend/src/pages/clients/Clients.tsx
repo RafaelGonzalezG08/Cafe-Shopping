@@ -45,9 +45,15 @@ export default function Clients() {
           ? `${data.eliminados} eliminados. ${data.omitidos.length} no se pudieron (ya tienen historial).`
           : `${data.eliminados} clientes eliminados.`,
       );
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      // Mismo cuidado que en deleteClient: si el detalle de alguno de estos
+      // seguia abierto, sacarlo del cache antes de invalidar la lista evita
+      // un 404 de fondo para un cliente que ya no existe.
+      if (selectedId && seleccionados.has(selectedId)) {
+        queryClient.removeQueries({ queryKey: ['clients', selectedId] });
+        setSelectedId(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ['clients', 'all'] });
       setSeleccionados(new Set());
-      if (selectedId && seleccionados.has(selectedId)) setSelectedId(null);
     },
     onError: () => toast.error('No se pudo completar la eliminacion.'),
   });
@@ -203,7 +209,13 @@ function ClientDetailModal({ client, onClose }: { client: Client; onClose: () =>
     mutationFn: () => clientsApi.delete(client.id),
     onSuccess: () => {
       toast.success('Cliente eliminado.');
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      // Saca del cache el detalle de ESTE cliente antes de invalidar la
+      // lista: si no, mientras el modal seguia montado (onClose recien se
+      // llama despues), React Query alcanzaba a repetir el GET de este
+      // mismo id -- que ya no existe -- y el interceptor mostraba un 404
+      // de "Cliente no encontrado" pisando el toast de exito.
+      queryClient.removeQueries({ queryKey: ['clients', client.id] });
+      queryClient.invalidateQueries({ queryKey: ['clients', 'all'] });
       onClose();
     },
     onSettled: () => setConfirmandoBorrado(false),
