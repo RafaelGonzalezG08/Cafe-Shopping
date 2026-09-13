@@ -52,7 +52,11 @@ export function CategoriasModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+        <div className="max-h-[90vh] overflow-y-auto p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide text-muted">
             <Tag size={16} /> Categorias de joyas
@@ -67,27 +71,32 @@ export function CategoriasModal({
           (ej. "Anillo solitario..." con la categoria "Anillo"), se le asigna automaticamente.
         </p>
 
-        <div className="mb-3 max-h-52 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
-          {categorias.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-muted">Todavia no hay categorias.</p>
-          ) : (
-            categorias.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                <span className="text-ink">{c.nombre}</span>
-                {esAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => eliminar.mutate(c.id)}
-                    disabled={eliminar.isPending}
-                    className="rounded p-1 text-muted hover:bg-brick-100 hover:text-brick-600"
-                    title="Eliminar categoria"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            ))
-          )}
+        {/* overflow-hidden afuera + scroll adentro: Chrome no recorta la
+            barra de scroll a las esquinas redondeadas cuando ambos van en el
+            mismo elemento. */}
+        <div className="mb-3 max-h-52 overflow-hidden rounded-lg border border-porcelain-200">
+          <div className="max-h-52 divide-y divide-porcelain-200 overflow-y-auto">
+            {categorias.length === 0 ? (
+              <p className="px-3 py-3 text-sm text-muted">Todavia no hay categorias.</p>
+            ) : (
+              categorias.map((c) => (
+                <div key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-ink">{c.nombre}</span>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => eliminar.mutate(c.id)}
+                      disabled={eliminar.isPending}
+                      className="rounded p-1 text-muted hover:bg-brick-100 hover:text-brick-600"
+                      title="Eliminar categoria"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <form
@@ -107,6 +116,7 @@ export function CategoriasModal({
             <Plus size={14} />
           </Button>
         </form>
+        </div>
       </Card>
     </div>
   );

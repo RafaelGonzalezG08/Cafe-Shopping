@@ -195,25 +195,31 @@ export function Layout() {
 
       {confirmandoSalir && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-          <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display font-bold text-ink">Cerrar sesion</h2>
-              <button
-                onClick={() => setConfirmandoSalir(false)}
-                className="rounded p-1 text-muted hover:bg-porcelain-200"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p className="mb-4 text-sm text-muted">Seguro que quieres cerrar tu sesion?</p>
-            <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoSalir(false)}>
-                Cancelar
-              </Button>
-              <Button variant="danger" className="flex-1" onClick={logout}>
-                <LogOut size={16} />
-                Cerrar sesion
-              </Button>
+          {/* El scroll va en el div de adentro, no en el Card: Chrome no
+              recorta la barra de scroll a las esquinas redondeadas cuando
+              overflow y border-radius estan en el mismo elemento -- se veia
+              un pedacito de barra recta saliendose de la curva. */}
+          <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+            <div className="max-h-[90vh] overflow-y-auto p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-display font-bold text-ink">Cerrar sesion</h2>
+                <button
+                  onClick={() => setConfirmandoSalir(false)}
+                  className="rounded p-1 text-muted hover:bg-porcelain-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="mb-4 text-sm text-muted">Seguro que quieres cerrar tu sesion?</p>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setConfirmandoSalir(false)}>
+                  Cancelar
+                </Button>
+                <Button variant="danger" className="flex-1" onClick={logout}>
+                  <LogOut size={16} />
+                  Cerrar sesion
+                </Button>
+              </div>
             </div>
           </Card>
         </div>

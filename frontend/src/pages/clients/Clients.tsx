@@ -225,7 +225,11 @@ function ClientDetailModal({ client, onClose }: { client: Client; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="max-h-[85vh] w-full max-w-md overflow-y-auto">
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="max-h-[85vh] w-full max-w-md overflow-hidden">
+        <div className="max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-porcelain-200 p-5">
           <div>
             <p className="font-display font-bold text-ink">{client.nombre}</p>
@@ -344,6 +348,7 @@ function ClientDetailModal({ client, onClose }: { client: Client; onClose: () =>
             </div>
           )}
         </div>
+        </div>
       </Card>
 
       {selectedDebt && <DebtDetailModal debt={selectedDebt} onClose={() => setSelectedDebt(null)} />}
@@ -385,7 +390,11 @@ function NewClientModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+        <div className="max-h-[90vh] overflow-y-auto p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display font-bold text-ink">Nuevo cliente</h2>
           <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
@@ -411,6 +420,7 @@ function NewClientModal({
             Guardar cliente
           </Button>
         </form>
+        </div>
       </Card>
     </div>
   );

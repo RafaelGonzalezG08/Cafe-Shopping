@@ -420,7 +420,11 @@ export default function Settings() {
               : 'Los respaldos se guardan solo en esta computadora: no se detecto OneDrive para hacer una copia fuera de ella.'}
           </p>
           {backups?.files && backups.files.length > 0 ? (
-            <div className="max-h-64 divide-y divide-porcelain-200 overflow-y-auto rounded-lg border border-porcelain-200">
+            // overflow-hidden afuera + scroll adentro: Chrome no recorta la
+            // barra de scroll a las esquinas redondeadas cuando ambos van en
+            // el mismo elemento.
+            <div className="max-h-64 overflow-hidden rounded-lg border border-porcelain-200">
+             <div className="max-h-64 divide-y divide-porcelain-200 overflow-y-auto">
               {backups.files.slice(0, 10).map((f) => (
                 <div key={f.name} className="px-3 py-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
@@ -461,6 +465,7 @@ export default function Settings() {
                   )}
                 </div>
               ))}
+             </div>
             </div>
           ) : (
             <p className="text-xs text-muted">Sin respaldos generados todavia.</p>
@@ -482,7 +487,11 @@ export default function Settings() {
 
       {restoreTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-          <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
+          {/* El scroll va en el div de adentro, no en el Card: Chrome no
+              recorta la barra de scroll a las esquinas redondeadas cuando
+              overflow y border-radius estan en el mismo elemento. */}
+          <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+            <div className="max-h-[90vh] overflow-y-auto p-5">
             <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-brick-600">
               <AlertTriangle size={16} /> Restaurar respaldo
             </h3>
@@ -505,6 +514,7 @@ export default function Settings() {
               >
                 {restoreBackup.isPending ? 'Restaurando...' : 'Si, restaurar'}
               </Button>
+            </div>
             </div>
           </Card>
         </div>

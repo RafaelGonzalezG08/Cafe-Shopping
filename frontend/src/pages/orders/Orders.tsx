@@ -274,7 +274,11 @@ function ConfirmarEntrega({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+        <div className="max-h-[90vh] overflow-y-auto p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display font-bold text-ink">Confirmar entrega</h2>
           <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
@@ -301,6 +305,7 @@ function ConfirmarEntrega({
           <Button className="flex-1" onClick={onConfirm} disabled={isPending}>
             <CalendarClock size={15} /> {isPending ? 'Entregando...' : 'Si, entregado'}
           </Button>
+        </div>
         </div>
       </Card>
     </div>
@@ -582,7 +587,11 @@ function AtenderPedidoWebModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto p-5">
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden">
+        <div className="max-h-[90vh] overflow-y-auto p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-1.5 font-display font-bold text-ink">
             Atender {pedido.codigo}
@@ -692,6 +701,7 @@ function AtenderPedidoWebModal({
           {atender.isPending ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
           Crear factura {formatMoney(totalConDescuento)}
         </Button>
+        </div>
       </Card>
     </div>
   );

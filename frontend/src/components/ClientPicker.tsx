@@ -156,26 +156,31 @@ function ClientSearchModal({ onSelect, onClose }: { onSelect: (client: Client) =
               placeholder="Nombre o telefono..."
               className="mb-3 w-full rounded-lg border border-porcelain-300 px-3 py-2 text-sm outline-none focus:border-copper-500"
             />
-            <div className="flex-1 overflow-y-auto rounded-lg border border-porcelain-200">
-              {isLoading ? (
-                <p className="px-3 py-3 text-sm text-muted">Buscando...</p>
-              ) : clients.length === 0 ? (
-                <p className="px-3 py-3 text-sm text-muted">
-                  {search ? 'Sin resultados.' : 'Escribe para buscar un cliente.'}
-                </p>
-              ) : (
-                clients.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onSelect(c)}
-                    className="block w-full border-b border-porcelain-100 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-porcelain-100"
-                  >
-                    <span className="font-medium text-ink">{c.nombre}</span>{' '}
-                    <span className="text-xs text-muted">{c.telefono}</span>
-                  </button>
-                ))
-              )}
+            {/* overflow-hidden afuera + scroll adentro: Chrome no recorta la
+                barra de scroll a las esquinas redondeadas cuando ambos van
+                en el mismo elemento. */}
+            <div className="flex-1 overflow-hidden rounded-lg border border-porcelain-200">
+              <div className="h-full overflow-y-auto">
+                {isLoading ? (
+                  <p className="px-3 py-3 text-sm text-muted">Buscando...</p>
+                ) : clients.length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-muted">
+                    {search ? 'Sin resultados.' : 'Escribe para buscar un cliente.'}
+                  </p>
+                ) : (
+                  clients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onSelect(c)}
+                      className="block w-full border-b border-porcelain-100 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-porcelain-100"
+                    >
+                      <span className="font-medium text-ink">{c.nombre}</span>{' '}
+                      <span className="text-xs text-muted">{c.telefono}</span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
             <button
               type="button"

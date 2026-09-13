@@ -61,38 +61,43 @@ export function LimpiarDuplicadosModal({
               reactivar despues, una por una, desde Productos.
             </p>
 
-            <div className="flex-1 overflow-y-auto rounded-lg border border-porcelain-200">
-              {vistaPrevia.grupos.map((g, i) => (
-                <div key={i} className="border-b border-porcelain-100 px-3 py-2 text-xs last:border-b-0">
-                  <p className="font-medium text-ink">
-                    {g.nombre} · {formatMoney(g.precioUnitario)}
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-1 text-muted">
-                    <span className="rounded bg-sage-100 px-1.5 py-0.5 font-mono text-sage-700">
-                      {g.mantiene.sku}
-                    </span>
-                    se conserva
-                    {g.elimina.map((p) => (
-                      <span key={p.id} className="flex items-center gap-1">
-                        <ArrowRight size={10} />
-                        <span className="rounded bg-brick-100 px-1.5 py-0.5 font-mono text-brick-600">{p.sku}</span>
+            {/* overflow-hidden afuera + scroll adentro: Chrome no recorta la
+                barra de scroll a las esquinas redondeadas cuando ambos van
+                en el mismo elemento. */}
+            <div className="flex-1 overflow-hidden rounded-lg border border-porcelain-200">
+              <div className="h-full overflow-y-auto">
+                {vistaPrevia.grupos.map((g, i) => (
+                  <div key={i} className="border-b border-porcelain-100 px-3 py-2 text-xs last:border-b-0">
+                    <p className="font-medium text-ink">
+                      {g.nombre} · {formatMoney(g.precioUnitario)}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-muted">
+                      <span className="rounded bg-sage-100 px-1.5 py-0.5 font-mono text-sage-700">
+                        {g.mantiene.sku}
                       </span>
-                    ))}
-                  </p>
-                </div>
-              ))}
-              {vistaPrevia.sinFoto.length > 0 && (
-                <div className="px-3 py-2 text-xs">
-                  <p className="mb-1 font-medium text-ink">Sin foto:</p>
-                  <p className="flex flex-wrap gap-1">
-                    {vistaPrevia.sinFoto.map((p) => (
-                      <span key={p.id} className="rounded bg-brick-100 px-1.5 py-0.5 font-mono text-brick-600">
-                        {p.sku}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              )}
+                      se conserva
+                      {g.elimina.map((p) => (
+                        <span key={p.id} className="flex items-center gap-1">
+                          <ArrowRight size={10} />
+                          <span className="rounded bg-brick-100 px-1.5 py-0.5 font-mono text-brick-600">{p.sku}</span>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                ))}
+                {vistaPrevia.sinFoto.length > 0 && (
+                  <div className="px-3 py-2 text-xs">
+                    <p className="mb-1 font-medium text-ink">Sin foto:</p>
+                    <p className="flex flex-wrap gap-1">
+                      {vistaPrevia.sinFoto.map((p) => (
+                        <span key={p.id} className="rounded bg-brick-100 px-1.5 py-0.5 font-mono text-brick-600">
+                          {p.sku}
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}

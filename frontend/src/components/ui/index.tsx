@@ -158,24 +158,29 @@ export function Select({
           <div
             ref={panel}
             style={{ top: posicion.top, left: posicion.left, minWidth: posicion.width }}
-            className="fixed z-50 max-h-64 w-max max-w-[calc(100vw-16px)] overflow-y-auto rounded-xl bg-porcelain-100 py-1 shadow-neu"
+            // overflow-hidden afuera + scroll adentro: Chrome no recorta la
+            // barra de scroll a las esquinas redondeadas cuando ambos van en
+            // el mismo elemento.
+            className="fixed z-50 max-h-64 w-max max-w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-porcelain-100 shadow-neu"
           >
-            {options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  onChange(o.value);
-                  setAbierto(false);
-                }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                  o.value === value ? 'bg-copper-100 font-semibold text-copper-700' : 'text-ink hover:bg-porcelain-200'
-                }`}
-              >
-                {o.label}
-                {o.value === value && <Check size={14} className="shrink-0" />}
-              </button>
-            ))}
+            <div className="max-h-64 overflow-y-auto py-1">
+              {options.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(o.value);
+                    setAbierto(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                    o.value === value ? 'bg-copper-100 font-semibold text-copper-700' : 'text-ink hover:bg-porcelain-200'
+                  }`}
+                >
+                  {o.label}
+                  {o.value === value && <Check size={14} className="shrink-0" />}
+                </button>
+              ))}
+            </div>
           </div>,
           document.body,
         )}
@@ -219,41 +224,46 @@ export function ConfirmPasswordModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
-      <Card className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display font-bold text-ink">{titulo}</h2>
-          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
-            <X size={18} />
-          </button>
-        </div>
+      {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
+          la barra de scroll a las esquinas redondeadas cuando overflow y
+          border-radius estan en el mismo elemento. */}
+      <Card className="max-h-[90vh] w-full max-w-sm overflow-hidden">
+        <div className="max-h-[90vh] overflow-y-auto p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display font-bold text-ink">{titulo}</h2>
+            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-porcelain-200">
+              <X size={18} />
+            </button>
+          </div>
 
-        {mensaje && <div className="mb-4 rounded-lg bg-brick-100 p-3 text-sm text-brick-700 shadow-neu-inset">{mensaje}</div>}
+          {mensaje && <div className="mb-4 rounded-lg bg-brick-100 p-3 text-sm text-brick-700 shadow-neu-inset">{mensaje}</div>}
 
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
-          {etiquetaClave}
-        </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Confirma tu clave"
-          autoFocus
-          className="mb-4 w-full rounded-lg px-3 py-2 text-sm outline-none"
-        />
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
+            {etiquetaClave}
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Confirma tu clave"
+            autoFocus
+            className="mb-4 w-full rounded-lg px-3 py-2 text-sm outline-none"
+          />
 
-        <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            variant="danger"
-            className="flex-1"
-            disabled={!password || pendiente}
-            onClick={() => onConfirm(password)}
-          >
-            {pendiente ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-            {pendiente ? 'Eliminando...' : textoBoton}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              className="flex-1"
+              disabled={!password || pendiente}
+              onClick={() => onConfirm(password)}
+            >
+              {pendiente ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              {pendiente ? 'Eliminando...' : textoBoton}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>
