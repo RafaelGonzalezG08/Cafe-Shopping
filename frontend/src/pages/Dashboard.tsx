@@ -43,7 +43,10 @@ function KpiCard({
       <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-neu-sm ${toneStyles}`}>
         <Icon size={18} />
       </div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
+      {/* tracking-[0.14em] (mas ancho que el "widest" de Tailwind) hacia que
+          etiquetas de 2 palabras como "Transacciones hoy" llegaran casi al
+          borde del panel en celular, donde el contenido tiene poco ancho. */}
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 font-display text-2xl font-bold tabular-nums text-ink">{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
     </Card>
