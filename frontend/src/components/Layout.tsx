@@ -227,7 +227,12 @@ export function Layout() {
 
       <main className="flex-1 overflow-y-auto">
         <div
-          className="sticky top-0 z-10 flex items-center gap-3 border-b border-porcelain-200 bg-porcelain-100 px-4 pb-3 md:hidden"
+          // z-40: por debajo de los modales (z-50) pero por encima de
+          // cualquier cosa sticky/absolute dentro de una pagina (insignias de
+          // "seleccionado" en tarjetas, barras de seleccion multiple...). Con
+          // z-10 empataba con esas y, al hacer scroll, la insignia terminaba
+          // pintandose ENCIMA de esta barra en vez de quedar tapada por ella.
+          className="sticky top-0 z-40 flex items-center gap-3 border-b border-porcelain-200 bg-porcelain-100 px-4 pb-3 md:hidden"
           style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
         >
           <button

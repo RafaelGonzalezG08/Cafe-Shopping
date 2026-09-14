@@ -408,34 +408,45 @@ function EditSaleModal({ sale, onClose, onDone }: { sale: Sale; onClose: () => v
 
           <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted">Piezas</p>
           {lines.map((line, index) => (
-            <div key={index} className="flex items-center gap-2 rounded-lg border border-porcelain-200 p-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-ink">{line.descripcion}</p>
+            // El nombre va en su propia fila arriba: al lado de dos inputs de
+            // numero (cantidad, precio) casi no le quedaba espacio y quedaba
+            // truncado casi por completo.
+            <div key={index} className="rounded-lg border border-porcelain-200 p-2.5">
+              <p className="mb-2 text-sm text-ink">{line.descripcion}</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Cantidad
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={line.cantidad}
+                    onChange={(e) => updateLine(index, { cantidad: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full rounded-lg border border-porcelain-300 px-2 py-1 text-right text-sm outline-none focus:border-copper-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Precio
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={line.precioUnitario}
+                    onChange={(e) => updateLine(index, { precioUnitario: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-full rounded-lg border border-porcelain-300 px-2 py-1 text-right text-sm outline-none focus:border-copper-500"
+                  />
+                </div>
+                <button
+                  onClick={() => removeLine(index)}
+                  className="mt-3.5 shrink-0 rounded-lg p-1.5 text-brick-500 hover:bg-brick-100"
+                  title="Quitar esta linea"
+                >
+                  <Trash2 size={15} />
+                </button>
               </div>
-              <input
-                type="number"
-                min={1}
-                value={line.cantidad}
-                onChange={(e) => updateLine(index, { cantidad: Math.max(1, Number(e.target.value) || 1) })}
-                className="w-16 rounded-lg border border-porcelain-300 px-2 py-1 text-right text-sm outline-none focus:border-copper-500"
-                title="Cantidad"
-              />
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={line.precioUnitario}
-                onChange={(e) => updateLine(index, { precioUnitario: Math.max(0, Number(e.target.value) || 0) })}
-                className="w-24 rounded-lg border border-porcelain-300 px-2 py-1 text-right text-sm outline-none focus:border-copper-500"
-                title="Precio unitario"
-              />
-              <button
-                onClick={() => removeLine(index)}
-                className="rounded-lg p-1.5 text-brick-500 hover:bg-brick-100"
-                title="Quitar esta linea"
-              >
-                <Trash2 size={15} />
-              </button>
             </div>
           ))}
 
