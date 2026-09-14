@@ -101,19 +101,14 @@ export default function POS() {
     };
   }, [cart, tasaImpuesto, descuentoPct]);
 
-  function addProduct(product: Product) {
+  // Picar una pieza del catalogo la agrega; picar la misma pieza de nuevo la
+  // QUITA del carrito (toggle), en vez de sumarle cantidad -- para subir la
+  // cantidad de algo que ya esta en el carrito estan los botones +/- de ahi.
+  function toggleProduct(product: Product) {
     setCart((prev) => {
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
-        // Avisa aqui en vez de dejar que la venta falle al cobrar: el backend
-        // rechaza la venta si no hay stock suficiente (ver descontarStock en
-        // sales.service.ts), y descubrirlo recien al cobrar, con el cliente
-        // enfrente, es la peor forma de enterarse.
-        if (existing.cantidad >= product.stock) {
-          toast.error(`Solo quedan ${product.stock} de "${product.nombre}".`);
-          return prev;
-        }
-        return prev.map((l) => (l.productId === product.id ? { ...l, cantidad: l.cantidad + 1 } : l));
+        return prev.filter((l) => l.productId !== product.id);
       }
       if (product.stock < 1) {
         toast.error(`"${product.nombre}" no tiene stock disponible.`);
@@ -149,8 +144,8 @@ export default function POS() {
   function updateQty(key: string, delta: number) {
     setCart((prev) => {
       const line = prev.find((l) => l.key === key);
-      // Mismo limite de stock que addProduct: el boton "+" del carrito es otra
-      // via para pasarse de las existencias reales.
+      // Mismo limite de stock que toggleProduct: el boton "+" del carrito es
+      // otra via para pasarse de las existencias reales.
       if (line?.productId && delta > 0) {
         const product = products.find((p) => p.id === line.productId);
         if (product && line.cantidad + delta > product.stock) {
@@ -236,7 +231,7 @@ export default function POS() {
             return (
             <button
               key={product.id}
-              onClick={() => addProduct(product)}
+              onClick={() => toggleProduct(product)}
               className={`relative flex flex-col items-start overflow-hidden rounded-xl2 text-left transition-all ${
                 enCarrito
                   ? 'bg-sage-100 shadow-neu-inset ring-1 ring-sage-500/40'

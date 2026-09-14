@@ -17,13 +17,21 @@
     <meta name="apple-mobile-web-app-title" content="Cafe Shopping" />
     <script>
       // Aplica el tema ANTES de pintar, para que no haya un parpadeo claro
-      // al abrir en modo oscuro. La misma clave que usa src/lib/useTheme.ts.
+      // al abrir en modo oscuro. La misma clave y logica que usa
+      // src/lib/useTheme.ts -- si se toca una, tocar la otra igual.
       (function () {
         try {
           var t = localStorage.getItem('cafe-shopping-tema');
-          var oscuro =
-            t === 'oscuro' ||
-            (t !== 'claro' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (t === 'oscuro') {
+            document.documentElement.classList.add('dark');
+            return;
+          }
+          if (t === 'claro') return;
+          // Sin preferencia guardada: en el celular arranca en claro sin
+          // importar el tema del sistema operativo (Android casi siempre
+          // trae "oscuro" de fabrica). En PC si se respeta el tema de Windows.
+          var esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+          var oscuro = !esMovil && window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (oscuro) document.documentElement.classList.add('dark');
         } catch (e) {}
       })();

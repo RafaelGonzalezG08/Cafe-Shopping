@@ -9,6 +9,10 @@ import { create } from 'zustand';
 const CLAVE = 'cafe-shopping-tema';
 export type Tema = 'claro' | 'oscuro';
 
+function esMovil(): boolean {
+  return typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function leerInicial(): Tema {
   try {
     const guardado = localStorage.getItem(CLAVE);
@@ -16,6 +20,12 @@ function leerInicial(): Tema {
   } catch {
     /* localStorage bloqueado: se usa la preferencia del sistema */
   }
+  // Sin preferencia guardada: en el celular arranca en claro sin importar el
+  // tema del sistema operativo (Android casi siempre trae "oscuro" de
+  // fabrica, y eso no debe decidir el tema de esta app). En PC (Electron) si
+  // se respeta el tema de Windows. La misma logica vive duplicada en
+  // index.html (se aplica antes de que cargue este modulo) -- tocar las dos.
+  if (esMovil()) return 'claro';
   return typeof window !== 'undefined' &&
     window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'oscuro'

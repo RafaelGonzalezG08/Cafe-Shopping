@@ -393,7 +393,13 @@ export default function Products() {
       </div>
 
       {seleccionados.size > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2">
+        // Fijo al bajar la pantalla (sticky, no fixed: solo se pega dentro
+        // del area que scrollea) -- con muchas piezas dadas de baja, sin esto
+        // habia que subir hasta arriba para encontrar "Eliminar de verdad".
+        // top-[61px] deja lugar a la barra movil (hamburguesa + nombre) que
+        // ya es sticky arriba; en escritorio esa barra no existe (md:hidden)
+        // asi que ahi va pegado del todo arriba (md:top-0).
+        <div className="sticky top-[61px] z-20 mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-copper-300 bg-copper-50 px-3 py-2 shadow-neu-sm md:top-0">
           <span className="text-sm font-semibold text-copper-700">{seleccionados.size} seleccionadas</span>
           <div className="ml-auto flex flex-wrap gap-1.5">
             {pestana === 'ACTIVOS' ? (
