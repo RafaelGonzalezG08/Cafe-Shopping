@@ -128,28 +128,43 @@ function projectDir() {
   return app.isPackaged ? path.join(process.resourcesPath, 'app-project') : path.join(__dirname, '..');
 }
 
+// Adaptadores que NO son la red real de la casa/negocio: Hyper-V (el "Default
+// Switch" que trae Windows activado por WSL/Docker Desktop aunque el usuario
+// nunca lo haya pedido), VMs de VirtualBox/VMware, VPNs, loopback de captura.
+// Windows los suele reportar CON una IP en el mismo rango privado
+// (172.16-31.x.x o hasta 192.168.x.x) que el Wi-Fi real, y el orden en que
+// os.networkInterfaces() los entrega no es fiable -- en al menos un caso real
+// el adaptador de Hyper-V salio primero y el celular nunca pudo conectarse
+// porque esa IP no existe fuera de la PC. Se descartan por nombre antes de
+// mirar la IP.
+const NOMBRE_ADAPTADOR_VIRTUAL = /virtual|vEthernet|Hyper-V|VMware|VirtualBox|Npcap|TAP-|Tailscale|ZeroTier|WSL/i;
+
 /**
  * IP de esta PC en la red local (para usar la app desde el celular en la
- * misma WiFi). Se queda con la primera IPv4 no interna en un rango privado
- * comun -- si la PC tiene varias tarjetas de red (VPN, adaptadores
- * virtuales de VirtualBox/Hyper-V, etc.) casi siempre es la que de verdad
- * importa. Sin red (o sin nada que calce), null: la app sigue funcionando
- * solo en esta PC, como hasta ahora.
+ * misma WiFi). Junta todas las IPv4 no internas en un rango privado comun,
+ * descarta las de adaptadores virtuales conocidos y, si quedan varias,
+ * prefiere la que se vea como Wi-Fi/Ethernet real por nombre. Sin red (o sin
+ * nada que calce), null: la app sigue funcionando solo en esta PC, como hasta
+ * ahora.
  */
 function obtenerIpLan() {
   const interfaces = os.networkInterfaces();
+  const candidatas = [];
   for (const nombre of Object.keys(interfaces)) {
+    if (NOMBRE_ADAPTADOR_VIRTUAL.test(nombre)) continue;
     for (const iface of interfaces[nombre] || []) {
       if (
         iface.family === 'IPv4' &&
         !iface.internal &&
         /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(iface.address)
       ) {
-        return iface.address;
+        candidatas.push({ nombre, address: iface.address });
       }
     }
   }
-  return null;
+  if (candidatas.length === 0) return null;
+  const preferida = candidatas.find((c) => /wi-?fi|wlan|ethernet/i.test(c.nombre));
+  return (preferida || candidatas[0]).address;
 }
 
 function puertoAbierto(port) {
