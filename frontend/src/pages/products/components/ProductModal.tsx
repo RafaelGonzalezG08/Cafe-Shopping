@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, ImagePlus, Eye, X, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { Plus, ImagePlus, Eye, Copy, X, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import { usePersistedState } from '../../../lib/usePersistedState';
 import { Button, Card } from '../../../components/ui';
 import type { ProductFormValues } from '../../../api/products.api';
@@ -109,6 +109,30 @@ export function ProductModal({
   // hacer, asi que abre directo el selector de archivos.
   const ofreceVerFoto = !!initial && !!photoToShow;
 
+  // El portapapeles del navegador solo acepta image/png de forma fiable; las
+  // fotos guardadas suelen ser webp/jpg, asi que se redibujan a PNG antes.
+  async function copiarFoto() {
+    if (!photoToShow) return;
+    try {
+      const blob = await (await fetch(photoToShow)).blob();
+      let png = blob;
+      if (blob.type !== 'image/png') {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+        png = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('sin imagen'))), 'image/png'),
+        );
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      toast.success('Foto copiada al portapapeles.');
+    } catch {
+      toast.error('No se pudo copiar la foto en este dispositivo.');
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
       {/* El scroll va en el div de adentro, no en el Card: Chrome no recorta
@@ -174,6 +198,18 @@ export function ProductModal({
                     }}
                   >
                     <Eye size={15} /> Ver foto
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuFoto(false);
+                      void copiarFoto();
+                    }}
+                  >
+                    <Copy size={15} /> Copiar foto
                   </Button>
                 </div>
               )}
