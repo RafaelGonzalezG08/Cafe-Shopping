@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, ImagePlus, X, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { Plus, ImagePlus, Eye, X, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import { usePersistedState } from '../../../lib/usePersistedState';
 import { Button, Card } from '../../../components/ui';
 import type { ProductFormValues } from '../../../api/products.api';
@@ -63,6 +63,9 @@ export function ProductModal({
   const [texto, setTexto] = initial ? local : persisted;
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const inputFoto = useRef<HTMLInputElement>(null);
+  const [menuFoto, setMenuFoto] = useState(false);
+  const [viendoFoto, setViendoFoto] = useState(false);
 
   const form: ProductFormValues = { ...texto, file };
   const setForm = (updater: (f: ProductFormValues) => ProductFormValues) => {
@@ -101,6 +104,10 @@ export function ProductModal({
   }
 
   const photoToShow = preview ?? currentImage ?? null;
+  // Al EDITAR una pieza que ya tiene foto, picar la casilla ofrece elegir
+  // entre cambiarla o verla; sin foto (o al crear) solo hay una cosa que
+  // hacer, asi que abre directo el selector de archivos.
+  const ofreceVerFoto = !!initial && !!photoToShow;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso-950/50 p-4">
@@ -118,22 +125,59 @@ export function ProductModal({
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Foto</label>
-            <label className="group relative flex h-32 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-porcelain-300 bg-porcelain-100">
-              {photoToShow ? (
-                <img src={photoToShow} alt="Vista previa" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex flex-col items-center gap-1 text-muted">
-                  <ImagePlus size={22} />
-                  <span className="text-xs">Subir foto</span>
-                </span>
-              )}
+            <div className="relative h-32 w-full overflow-hidden rounded-lg border border-dashed border-porcelain-300 bg-porcelain-100">
+              <button
+                type="button"
+                onClick={() => (ofreceVerFoto ? setMenuFoto(true) : inputFoto.current?.click())}
+                className="flex h-full w-full cursor-pointer items-center justify-center"
+              >
+                {photoToShow ? (
+                  <img src={photoToShow} alt="Vista previa" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex flex-col items-center gap-1 text-muted">
+                    <ImagePlus size={22} />
+                    <span className="text-xs">Subir foto</span>
+                  </span>
+                )}
+              </button>
               <input
+                ref={inputFoto}
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
               />
-            </label>
+              {menuFoto && (
+                <div
+                  className="absolute inset-0 flex flex-wrap items-center justify-center gap-2 bg-espresso-950/60 p-2"
+                  onClick={() => setMenuFoto(false)}
+                >
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuFoto(false);
+                      inputFoto.current?.click();
+                    }}
+                  >
+                    <ImagePlus size={15} /> Agregar foto
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuFoto(false);
+                      setViendoFoto(true);
+                    }}
+                  >
+                    <Eye size={15} /> Ver foto
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
           {!initial && (
             <p className="text-xs text-muted">
@@ -309,6 +353,23 @@ export function ProductModal({
         )}
         </div>
       </Card>
+
+      {viendoFoto && photoToShow && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-espresso-950/85 p-4"
+          onClick={() => setViendoFoto(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setViendoFoto(false)}
+            aria-label="Cerrar foto"
+            className="absolute right-4 top-4 rounded-full bg-porcelain-100 p-2 text-ink shadow-neu-sm"
+          >
+            <X size={18} />
+          </button>
+          <img src={photoToShow} alt="Foto de la pieza" className="max-h-full max-w-full rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   );
 }
