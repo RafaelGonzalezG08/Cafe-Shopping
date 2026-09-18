@@ -4,6 +4,10 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { BootstrapService } from '../src/prisma/bootstrap.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaClient } from '@prisma/client';
+import { readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const request = require('supertest');
@@ -192,5 +196,49 @@ describe('AppModule (e2e)', () => {
     expect(r.body).toHaveProperty('balanceTotal');
     // Hubo ventas de contado en los tests anteriores.
     expect(r.body.cobrado).toBeGreaterThan(0);
+  });
+
+  it('importar productos trae la categoría (por nombre) y las tallas', async () => {
+    const sku = `IMP-${Date.now()}`;
+    const rutaOrigen = join(tmpdir(), `origen-e2e-${Date.now()}.sqlite`).replace(/\\/g, '/');
+    // El "archivo de la otra computadora": una copia de esta misma base, en
+    // la que solo queda activa la pieza de prueba (con categoria y tallas).
+    await prisma.$executeRawUnsafe(`VACUUM INTO '${rutaOrigen}'`);
+    const origen = new PrismaClient({ datasources: { db: { url: `file:${rutaOrigen}` } } });
+    try {
+      const cat = await origen.category.create({ data: { nombre: `Anillo Import ${Date.now()}` } });
+      await origen.product.updateMany({ data: { activo: false } });
+      await origen.product.create({
+        data: {
+          sku,
+          nombre: 'Anillo importado',
+          precioUnitario: 900,
+          stock: 3,
+          tallas: JSON.stringify(['6', '7']),
+          categoriaId: cat.id,
+        },
+      });
+      await origen.$disconnect();
+
+      const r = await auth(request(app.getHttpServer()).post('/api/data-import/productos')).attach(
+        'file',
+        readFileSync(rutaOrigen),
+        'origen.sqlite',
+      );
+      expect(r.status).toBe(201);
+      expect(r.body.agregados).toBe(1);
+
+      const importado = await prisma.product.findUnique({
+        where: { sku },
+        include: { categoria: true },
+      });
+      expect(importado).not.toBeNull();
+      // La categoria no existia aqui: se crea con el mismo nombre.
+      expect(importado!.categoria?.nombre).toBe(cat.nombre);
+      expect(JSON.parse(importado!.tallas!)).toEqual(['6', '7']);
+      expect(await prisma.category.count({ where: { nombre: cat.nombre } })).toBe(1);
+    } finally {
+      rmSync(rutaOrigen, { force: true });
+    }
   });
 });

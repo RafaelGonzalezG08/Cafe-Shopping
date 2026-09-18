@@ -8,6 +8,7 @@ import { exec } from 'child_process';
 import { tmpdir } from 'os';
 import { join, extname } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizarTexto } from '../common/texto.util';
 import { ProductsService } from '../products/products.service';
 import { AuditService } from '../audit/audit.service';
 import { CatalogoService } from '../catalogo/catalogo.service';
@@ -99,6 +100,16 @@ export class DataImportService {
         );
       }
 
+      // Categoria (la "etiqueta" de cada pieza) y tallas: se leen aparte para
+      // que un respaldo de una version vieja, sin esas columnas, siga
+      // importando el resto tal como antes en vez de rechazarse completo.
+      const extrasPorSku = await this.leerCategoriasYTallas(origen);
+      const categoriaPorNombre = new Map<string, string>();
+      for (const c of await this.prisma.category.findMany({ select: { id: true, nombre: true } })) {
+        categoriaPorNombre.set(normalizarTexto(c.nombre), c.id);
+      }
+      let categoriasCreadas = 0;
+
       const renumerados: ProductoRenumerado[] = [];
       let agregados = 0;
       let omitidos = 0;
@@ -116,6 +127,22 @@ export class DataImportService {
         const existente = await this.prisma.product.findUnique({ where: { sku: p.sku } });
         const skuFinal = existente ? await this.products.generateSku(p.nombre) : p.sku;
 
+        // La categoria viaja por NOMBRE, no por id (el id era de la otra
+        // base). Si aqui ya existe una con ese nombre se reusa; si no, se
+        // crea -- es una fila nueva, no toca nada de lo que ya habia.
+        const extras = extrasPorSku.get(p.sku);
+        let categoriaId: string | null = null;
+        if (extras?.categoria) {
+          const clave = normalizarTexto(extras.categoria);
+          categoriaId = categoriaPorNombre.get(clave) ?? null;
+          if (!categoriaId) {
+            const nueva = await this.prisma.category.create({ data: { nombre: extras.categoria.trim() } });
+            categoriaPorNombre.set(clave, nueva.id);
+            categoriaId = nueva.id;
+            categoriasCreadas++;
+          }
+        }
+
         const creado = await this.prisma.product.create({
           data: {
             sku: skuFinal,
@@ -124,6 +151,8 @@ export class DataImportService {
             costoUnitario: p.costoUnitario as any,
             material: p.material,
             stock: p.stock,
+            tallas: extras?.tallas ?? null,
+            categoriaId,
             imageUrl: null,
             activo: true,
           },
@@ -150,6 +179,7 @@ export class DataImportService {
         renumerados: renumerados.length,
         omitidos,
         conFoto,
+        categoriasCreadas,
       });
 
       if (agregados + renumerados.length > 0) {
@@ -165,6 +195,35 @@ export class DataImportService {
       await origen?.$disconnect().catch(() => undefined);
       await fs.rm(carpetaTemp, { recursive: true, force: true }).catch(() => undefined);
     }
+  }
+
+  /**
+   * Categoria (por nombre) y tallas de cada producto del archivo, indexadas
+   * por SKU. Si el respaldo viene de una version vieja que no tenia esas
+   * columnas/tabla, devuelve vacio: los productos se importan igual, sin
+   * categoria ni tallas.
+   */
+  private async leerCategoriasYTallas(
+    origen: PrismaClient,
+  ): Promise<Map<string, { categoria: string | null; tallas: string | null }>> {
+    const resultado = new Map<string, { categoria: string | null; tallas: string | null }>();
+    try {
+      const categorias = await origen.category.findMany({ select: { id: true, nombre: true } });
+      const nombrePorId = new Map(categorias.map((c) => [c.id, c.nombre]));
+      const productos = await origen.product.findMany({
+        where: { activo: true },
+        select: { sku: true, categoriaId: true, tallas: true },
+      });
+      for (const p of productos) {
+        resultado.set(p.sku, {
+          categoria: p.categoriaId ? (nombrePorId.get(p.categoriaId) ?? null) : null,
+          tallas: p.tallas,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`El archivo importado no trae categorias/tallas legibles: ${error}`);
+    }
+    return resultado;
   }
 
   /**
