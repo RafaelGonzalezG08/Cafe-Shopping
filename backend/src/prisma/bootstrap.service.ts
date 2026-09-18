@@ -8,6 +8,14 @@ export const ADMIN_INICIAL_EMAIL = 'admin@cafeshopping.com';
 export const ADMIN_INICIAL_PASSWORD = 'cafe1234';
 
 /**
+ * Usuario de sistema (no inicia sesion) al que se atribuyen las ventas del
+ * catalogo web. Lo inserta la migracion 20260905120100_usuario_ventas_web en
+ * TODA base, incluida una recien creada -- por eso no cuenta como "ya hay
+ * usuarios" al decidir si crear el administrador inicial.
+ */
+export const EMAIL_USUARIO_VENTAS_WEB = 'ventas-web@cafeshopping.local';
+
+/**
  * Deja la base utilizable la primera vez que se abre la aplicacion.
  *
  * Sin esto, una instalacion nueva arrancaba con la base vacia: no habia
@@ -26,7 +34,12 @@ export class BootstrapService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ensureInitialData(): Promise<void> {
-    const usuarios = await this.prisma.user.count();
+    // Sin contar al usuario de sistema de ventas web: la migracion lo crea en
+    // una base nueva, y con el conteo a secas una instalacion nueva quedaba
+    // sin administrador (nadie podia iniciar sesion).
+    const usuarios = await this.prisma.user.count({
+      where: { email: { not: EMAIL_USUARIO_VENTAS_WEB } },
+    });
     if (usuarios === 0) {
       await this.prisma.user.create({
         data: {

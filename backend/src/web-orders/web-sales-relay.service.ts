@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger } from '@nes
 import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EMAIL_USUARIO_VENTAS_WEB } from '../prisma/bootstrap.service';
 import { SalesService } from '../sales/sales.service';
 import { ClientsService } from '../clients/clients.service';
 import { WebOrdersService } from './web-orders.service';
@@ -27,8 +28,6 @@ interface VentaRelevo {
   creado: number;
 }
 
-/** Email fijo del usuario de sistema al que se atribuyen las ventas web. */
-const EMAIL_USUARIO_VENTAS_WEB = 'ventas-web@cafeshopping.local';
 /** Cuantas ventas web procesa la app de una sola vez (cada 3 min). */
 const MAX_POR_CICLO = 15;
 /** Techo de ventas web creadas automaticamente en un dia. */
