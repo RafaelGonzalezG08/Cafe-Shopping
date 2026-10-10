@@ -20,6 +20,7 @@ describe('AppModule (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let token: string;
+  let estadoInicial: boolean;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,10 +38,15 @@ describe('AppModule (e2e)', () => {
     prisma = app.get(PrismaService);
     await app.get(BootstrapService).ensureInitialData();
 
-    const login = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: 'admin@cafeshopping.com', password: 'cafe1234' });
-    token = login.body.accessToken;
+    // Base recien migrada = instalacion nueva: no hay administrador hasta que
+    // el dueño lo crea en la pantalla de primer arranque.
+    const estado = await request(app.getHttpServer()).get('/api/auth/setup-status');
+    estadoInicial = estado.body.necesitaConfiguracion;
+
+    const setup = await request(app.getHttpServer())
+      .post('/api/auth/setup')
+      .send({ nombre: 'Administrador', email: 'admin@cafeshopping.com', password: 'cafe1234' });
+    token = setup.body.accessToken;
   });
 
   afterAll(async () => {
@@ -48,6 +54,35 @@ describe('AppModule (e2e)', () => {
   });
 
   const auth = (r: any) => r.set('Authorization', `Bearer ${token}`);
+
+  it('una instalacion nueva pide crear el administrador, y la sesion queda iniciada', async () => {
+    // El usuario de sistema "ventas-web" lo crea la migracion y NO cuenta.
+    expect(estadoInicial).toBe(true);
+    expect(token).toBeTruthy();
+    const yo = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@cafeshopping.com', password: 'cafe1234' });
+    expect(yo.status).toBe(201);
+    expect(yo.body.user.role).toBe('ADMIN');
+  });
+
+  it('ya configurada (p. ej. tras actualizar la app) no vuelve a pedir ni permite otro setup', async () => {
+    const estado = await request(app.getHttpServer()).get('/api/auth/setup-status');
+    expect(estado.body.necesitaConfiguracion).toBe(false);
+
+    const intento = await request(app.getHttpServer())
+      .post('/api/auth/setup')
+      .send({ nombre: 'Intruso', email: 'intruso@x.com', password: 'secreto1' });
+    expect(intento.status).toBe(409);
+    expect(await prisma.user.count({ where: { email: 'intruso@x.com' } })).toBe(0);
+  });
+
+  it('el setup valida los datos', async () => {
+    const r = await request(app.getHttpServer())
+      .post('/api/auth/setup')
+      .send({ nombre: 'A', email: 'no-es-correo', password: '123' });
+    expect(r.status).toBe(400);
+  });
 
   it('rechaza credenciales inválidas con 401', async () => {
     const r = await request(app.getHttpServer())

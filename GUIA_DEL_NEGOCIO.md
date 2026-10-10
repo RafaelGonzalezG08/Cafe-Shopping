@@ -60,20 +60,19 @@ levantar.
 
 ### 3.1 Entrar por primera vez
 
-La primera vez, el programa crea automáticamente un usuario administrador:
+La primera vez que abres el programa en una computadora, te pide **crear tu
+usuario administrador**: escribes tu nombre, tu correo y una contraseña (dos
+veces) y entras directo. No hay un usuario ni una clave de fábrica.
 
-| | |
-|---|---|
-| Correo | `admin@cafeshopping.com` |
-| Clave | `cafe1234` |
+Esta pantalla **solo aparece una vez**: cuando actualices el programa a una
+versión nueva, tus datos y tu usuario se conservan y entras con el login de
+siempre. Solo se puede hacer desde la computadora donde está instalado, no
+desde el celular.
 
-### 3.2 Cambia la clave de inmediato
+### 3.2 Guarda bien tu clave
 
-**Esta clave es pública** (está escrita en esta guía, que cualquiera puede
-leer). Cámbiala antes de registrar la primera venta:
-
-**Configuración** → **Cambiar mi clave** → escribe la actual (`cafe1234`), la
-nueva dos veces, y guarda.
+Anótala en un lugar seguro: es con la que entrarás cada vez. Si más adelante
+quieres cambiarla: **Configuración** → **Cambiar mi clave**.
 
 ### 3.3 Datos de tu negocio
 

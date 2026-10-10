@@ -89,6 +89,14 @@ no tocan `dev.db`. El instalador se publica al empujar un tag `vX.Y.Z`
 
 ## Trampas conocidas
 
+- **No hay usuario por defecto.** El administrador lo crea el dueño en la
+  pantalla de primer arranque (`Login.tsx` → `POST /auth/setup`, solo desde
+  loopback y solo si no hay usuarios reales). "Usuarios reales" excluye a
+  `ventas-web@cafeshopping.local`, que la migración inserta en TODA base: si lo
+  contaras, una instalación nueva nunca pediría crear el administrador. Al
+  actualizar la app la base se conserva, así que no vuelve a pedirse. Los
+  usuarios demo de `prisma/seed.ts` son solo para desarrollo.
+
 - El **carrito del POS se guarda en localStorage** (`usePersistedState`, clave
   con prefijo `cafe-shopping:borrador:`, TTL 12h). Si se borran productos
   después (limpiar duplicados, importar inventario), el carrito guarda IDs
