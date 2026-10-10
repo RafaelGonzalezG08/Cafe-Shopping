@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Gem, Loader2 } from 'lucide-react';
 import { authApi } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
+import {
+  borrarAvisoSesionExpirada,
+  hayAvisoSesionExpirada,
+  guardarUltimoCorreo,
+  leerUltimoCorreo,
+  MINUTOS_INACTIVIDAD,
+} from '../lib/sesion';
 import { Button } from '../components/ui';
 
 function Encabezado({ subtitulo }: { subtitulo: string }) {
@@ -50,21 +57,33 @@ export default function Login() {
 function IniciarSesion() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
+  // El ultimo correo con el que se entro: asi solo se pide la contraseña.
+  // "Usar otro correo" lo suelta por si entra otro usuario (cajero, etc.).
+  const [recordado, setRecordado] = useState(leerUltimoCorreo);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sesionExpirada] = useState(hayAvisoSesionExpirada);
+  // Se borra en un efecto, no al leerla: en desarrollo React ejecuta los
+  // inicializadores de useState dos veces y la segunda ya no la encontraba.
+  useEffect(() => {
+    borrarAvisoSesionExpirada();
+  }, []);
+
+  const correoUsado = recordado || email.trim();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const data = await authApi.login(email.trim(), password);
+      const data = await authApi.login(correoUsado, password);
+      guardarUltimoCorreo(correoUsado);
       login(data.accessToken, data.user);
       navigate('/');
     } catch {
-      setError('Correo o contraseña incorrectos.');
+      setError(recordado ? 'Contraseña incorrecta.' : 'Correo o contraseña incorrectos.');
     } finally {
       setLoading(false);
     }
@@ -73,24 +92,56 @@ function IniciarSesion() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-porcelain-100 px-4">
       <div className="w-full max-w-sm">
-        <Encabezado subtitulo="Inicia sesion para continuar" />
+        <Encabezado
+          subtitulo={recordado ? 'Escribe tu contraseña para continuar' : 'Inicia sesion para continuar'}
+        />
 
         <form onSubmit={handleSubmit} className="rounded-xl2 bg-porcelain-100 p-6 shadow-neu">
-          <label className={ETIQUETA}>Correo</label>
-          <input
-            type="email"
-            required
-            autoFocus
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mb-4 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
-            placeholder="tucorreo@ejemplo.com"
-          />
+          {sesionExpirada && (
+            <p className="mb-4 rounded-lg bg-copper-100 px-3 py-2 text-xs text-copper-700">
+              Cerramos tu sesion por {MINUTOS_INACTIVIDAD} minutos sin actividad. Escribe tu contraseña para
+              seguir donde estabas.
+            </p>
+          )}
+
+          {recordado ? (
+            <div className="mb-4">
+              <label className={ETIQUETA}>Usuario</label>
+              <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 shadow-neu-inset">
+                <span className="min-w-0 truncate text-sm text-ink">{recordado}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecordado('');
+                    setPassword('');
+                    setError(null);
+                  }}
+                  className="shrink-0 text-xs font-semibold text-copper-600 hover:text-copper-700"
+                >
+                  Usar otro correo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <label className={ETIQUETA}>Correo</label>
+              <input
+                type="email"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mb-4 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
+                placeholder="tucorreo@ejemplo.com"
+              />
+            </>
+          )}
 
           <label className={ETIQUETA}>Contraseña</label>
           <input
             type="password"
             required
+            autoFocus={Boolean(recordado)}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mb-2 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
@@ -139,6 +190,7 @@ function CrearAdministrador() {
     setLoading(true);
     try {
       const data = await authApi.configurar({ nombre: nombre.trim(), email: email.trim(), password });
+      guardarUltimoCorreo(email);
       login(data.accessToken, data.user);
       navigate('/');
     } catch (err: any) {

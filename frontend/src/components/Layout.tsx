@@ -25,6 +25,7 @@ import { useAuthStore } from '../store/auth.store';
 import { api, apiUrl, urlConToken } from '../lib/api';
 import { useTheme } from '../lib/useTheme';
 import { useConexionPc } from '../lib/useConexionPc';
+import { useCierrePorInactividad } from '../lib/useCierrePorInactividad';
 import { Button, Card } from './ui';
 import type { BusinessProfile, Role } from '../types';
 
@@ -59,6 +60,7 @@ export function Layout() {
   /** En celular el menu lateral empieza escondido; en PC (md+) siempre se ve, sin importar esto. */
   const [menuAbierto, setMenuAbierto] = useState(false);
   const conectado = useConexionPc();
+  useCierrePorInactividad();
 
   const { data: profile } = useQuery<BusinessProfile>({
     queryKey: ['settings', 'business-profile'],
