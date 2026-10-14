@@ -28,6 +28,8 @@ import {
 import { usePersistedState, limpiarBorrador } from '../../lib/usePersistedState';
 import { formatMoney } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
+import { usePaginacion } from '../../lib/usePaginacion';
+import { Paginador } from '../../components/Paginador';
 import { Button, Card, PageHeader, EmptyState, Badge, Select, Skeleton } from '../../components/ui';
 import { useAuthStore } from '../../store/auth.store';
 import type { Category, Product } from '../../types';
@@ -170,6 +172,7 @@ export default function Products() {
   const filteredProducts = productosPestana
     .filter((product) => coincideBusqueda(`${product.nombre} ${product.sku}`, search))
     .filter((product) => !filtroCategoria || product.categoriaId === filtroCategoria);
+  const pag = usePaginacion(filteredProducts, [search, pestana, filtroCategoria]);
 
   const createProduct = useMutation({
     mutationFn: (values: ProductFormValues) => productsApi.create(values),
@@ -470,7 +473,7 @@ export default function Products() {
         <EmptyState title="Sin resultados" description={`No hay productos que coincidan con "${search}".`} />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {filteredProducts.map((product) => (
+          {pag.visibles.map((product) => (
             <Card
               key={product.id}
               className={`overflow-hidden ${seleccionados.has(product.id) ? 'ring-2 ring-copper-500' : ''}`}
@@ -551,6 +554,7 @@ export default function Products() {
           ))}
         </div>
       )}
+      <Paginador p={pag} etiqueta="piezas" />
 
       {showForm && (
         <ProductModal

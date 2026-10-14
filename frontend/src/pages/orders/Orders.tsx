@@ -25,6 +25,8 @@ import { Button, Card, PageHeader, Badge, EmptyState, ConfirmPasswordModal, Skel
 import { useAuthStore } from '../../store/auth.store';
 import { InvoicePreview } from '../pos/POS';
 import { ClientPicker } from '../../components/ClientPicker';
+import { usePaginacion } from '../../lib/usePaginacion';
+import { Paginador } from '../../components/Paginador';
 import type { Client, EstadoPedido, EstadoPedidoWeb, MetodoPago, Order, Sale, UrgenciaPedido, WebOrder } from '../../types';
 
 const METODOS_ATENDER: MetodoPago[] = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'CREDITO', 'OTRO'];
@@ -91,6 +93,7 @@ function PedidosTienda() {
     queryKey: ['orders', filtro],
     queryFn: () => ordersApi.list(filtro),
   });
+  const pag = usePaginacion(orders, [filtro]);
 
   function refrescar() {
     queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -144,7 +147,7 @@ function PedidosTienda() {
         />
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => {
+          {pag.visibles.map((order) => {
             const urgencia = URGENCIA[order.urgencia];
             return (
               <Card
@@ -244,6 +247,7 @@ function PedidosTienda() {
           })}
         </div>
       )}
+      <Paginador p={pag} etiqueta="pedidos" />
 
       {entregando && (
         <ConfirmarEntrega
@@ -336,6 +340,7 @@ function PedidosWeb() {
     queryKey: ['web-orders', filtro],
     queryFn: () => ordersApi.listWeb(filtro),
   });
+  const pagWeb = usePaginacion(pedidos, [filtro]);
 
   function refrescar() {
     queryClient.invalidateQueries({ queryKey: ['web-orders'] });
@@ -431,7 +436,7 @@ function PedidosWeb() {
         />
       ) : (
         <div className="space-y-3">
-          {pedidos.map((pedido) => (
+          {pagWeb.visibles.map((pedido) => (
             <Card key={pedido.id} className="p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -500,6 +505,7 @@ function PedidosWeb() {
           ))}
         </div>
       )}
+      <Paginador p={pagWeb} etiqueta="pedidos web" />
 
       {atendiendo && (
         <AtenderPedidoWebModal

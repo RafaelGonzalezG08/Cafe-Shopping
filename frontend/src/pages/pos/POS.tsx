@@ -14,6 +14,8 @@ import {
 import { usePersistedState } from '../../lib/usePersistedState';
 import { formatMoney, METODO_PAGO_LABEL } from '../../lib/format';
 import { coincideBusqueda } from '../../lib/search';
+import { usePaginacion } from '../../lib/usePaginacion';
+import { Paginador } from '../../components/Paginador';
 import { Button, Card } from '../../components/ui';
 import { FacturaImagen } from '../../components/FacturaImagen';
 import { ClientPicker } from '../../components/ClientPicker';
@@ -87,6 +89,7 @@ export default function POS() {
     () => products.filter((p) => coincideBusqueda(`${p.nombre} ${p.sku}`, search)),
     [products, search],
   );
+  const pag = usePaginacion(filteredProducts, [search]);
 
   const totals = useMemo(() => {
     const bruto = cart.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0);
@@ -222,7 +225,7 @@ export default function POS() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {filteredProducts.map((product) => {
+          {pag.visibles.map((product) => {
             // Misma señal visual que el cliente seleccionado (verde + palomita):
             // si el producto ya esta en la factura, se nota aunque el cajero
             // llegue a el buscando otra cosa, en vez de agregarlo dos veces
@@ -269,6 +272,7 @@ export default function POS() {
             );
           })}
         </div>
+        <Paginador p={pag} etiqueta="piezas" />
 
         <Card className="mt-4 p-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">

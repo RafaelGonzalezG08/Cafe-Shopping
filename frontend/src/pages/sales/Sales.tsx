@@ -12,6 +12,8 @@ import {
 import { formatMoney, formatDate, formatTime, METODO_PAGO_LABEL } from '../../lib/format';
 import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui';
 import { SaleDetailModal } from '../../components/SaleDetailModal';
+import { usePaginacion } from '../../lib/usePaginacion';
+import { Paginador } from '../../components/Paginador';
 import type { EstadoFactura, Sale } from '../../types';
 
 const ESTADO_TONE: Record<EstadoFactura, 'neutral' | 'copper' | 'sage' | 'brick'> = {
@@ -35,6 +37,7 @@ export default function Sales() {
     refetchInterval: (query) =>
       query.state.data?.some((s) => s.invoice?.whatsappEstado === 'EN_COLA') ? 5000 : false,
   });
+  const pag = usePaginacion(sales, [from, to]);
 
   const sendWhatsapp = useMutation({
     mutationFn: ({ saleId }: { saleId: string; pestanaRespaldo: Window | null }) =>
@@ -81,7 +84,7 @@ export default function Sales() {
         <>
           {/* Celular: tarjetas. El detalle completo (items, factura) vive en SaleDetailModal. */}
           <div className="space-y-2 md:hidden">
-            {sales.map((sale) => (
+            {pag.visibles.map((sale) => (
               <Card
                 key={sale.id}
                 className="cursor-pointer p-3.5 active:shadow-neu-pressed"
@@ -162,7 +165,7 @@ export default function Sales() {
               </tr>
             </thead>
             <tbody className="divide-y divide-porcelain-200">
-              {sales.map((sale) => (
+              {pag.visibles.map((sale) => (
                 <tr
                   key={sale.id}
                   onClick={() => setSelectedSaleId(sale.id)}
@@ -242,6 +245,7 @@ export default function Sales() {
             </tbody>
           </table>
           </Card>
+          <Paginador p={pag} etiqueta="ventas" />
         </>
       )}
 
